@@ -1,0 +1,148 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "staff"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Brand": {
+      "title": "Brand",
+      "description": "A restaurant brand",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "logo": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "A specific branch of a brand",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "image": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["brandId", "ownerId", "name"]
+    },
+    "Kitchen": {
+      "title": "Kitchen",
+      "description": "A kitchen within a branch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["branchId", "name"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Menu category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "name": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["branchId", "name"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "An item on the menu",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "kitchenId": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "image": { "type": "string" },
+        "optionGroupIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["branchId", "categoryId", "name", "price"]
+    },
+    "OptionGroup": {
+      "title": "OptionGroup",
+      "description": "A group of options (e.g., Sweet Level)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "name": { "type": "string" },
+        "minSelect": { "type": "number" },
+        "maxSelect": { "type": "number" }
+      },
+      "required": ["branchId", "name"]
+    },
+    "OptionChoice": {
+      "title": "OptionChoice",
+      "description": "A specific choice within an option group",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "optionGroupId": { "type": "string" },
+        "name": { "type": "string" },
+        "additionalPrice": { "type": "number" }
+      },
+      "required": ["optionGroupId", "name", "additionalPrice"]
+    },
+    "Zone": {
+      "title": "Zone",
+      "description": "A seating area (e.g., Indoor)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["branchId", "name"]
+    },
+    "Table": {
+      "title": "Table",
+      "description": "A specific table in a zone",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "zoneId": { "type": "string" },
+        "branchId": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "occupied"] }
+      },
+      "required": ["zoneId", "branchId", "name", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/brands/{brandId}": { "schema": "Brand", "description": "Restaurant brands" },
+    "/branches/{branchId}": { "schema": "Branch", "description": "Restaurant branches" },
+    "/kitchens/{kitchenId}": { "schema": "Kitchen", "description": "Kitchens" },
+    "/categories/{categoryId}": { "schema": "Category", "description": "Menu categories" },
+    "/menu_items/{menuItemId}": { "schema": "MenuItem", "description": "Menu items" },
+    "/option_groups/{groupId}": { "schema": "OptionGroup", "description": "Option groups" },
+    "/option_choices/{choiceId}": { "schema": "OptionChoice", "description": "Option choices" },
+    "/zones/{zoneId}": { "schema": "Zone", "description": "Seating zones" },
+    "/tables/{tableId}": { "schema": "Table", "description": "Tables" }
+  }
+}

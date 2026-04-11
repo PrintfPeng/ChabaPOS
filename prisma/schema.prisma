@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DB_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  brands    Brand[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Brand {
+  id        Int      @id @default(autoincrement())
+  name      String
+  imageUrl  String?
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  branches  Branch[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Branch {
+  id         Int        @id @default(autoincrement())
+  name       String
+  imageUrl   String?
+  brandId    Int
+  brand      Brand      @relation(fields: [brandId], references: [id])
+  categories Category[]
+  menuItems  MenuItem[]
+  kitchens     Kitchen[]
+  zones        Zone[]
+  optionGroups OptionGroup[]
+  createdAt    DateTime      @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([brandId])
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String
+  branchId  Int
+  branch    Branch     @relation(fields: [branchId], references: [id])
+  items     MenuItem[]
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([branchId])
+}
+
+model MenuItem {
+  id           Int           @id @default(autoincrement())
+  name         String
+  price        Float
+  imageUrl     String?
+  categoryId   Int
+  category     Category      @relation(fields: [categoryId], references: [id])
+  branchId     Int
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  kitchenId    Int?
+  kitchen      Kitchen?      @relation(fields: [kitchenId], references: [id])
+  optionGroups OptionGroup[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([categoryId])
+  @@index([branchId])
+}
+
+model OptionGroup {
+  id        Int        @id @default(autoincrement())
+  name      String
+  branchId  Int
+  branch    Branch     @relation(fields: [branchId], references: [id])
+  menuItems MenuItem[]
+  options   Option[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([branchId])
+}
+
+model Option {
+  id            Int         @id @default(autoincrement())
+  name          String
+  price         Float       @default(0)
+  optionGroupId Int
+  optionGroup   OptionGroup @relation(fields: [optionGroupId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([optionGroupId])
+}
+
+model Kitchen {
+  id        Int        @id @default(autoincrement())
+  name      String
+  branchId  Int
+  branch    Branch     @relation(fields: [branchId], references: [id])
+  items     MenuItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([branchId])
+}
+
+model Zone {
+  id        Int      @id @default(autoincrement())
+  name      String
+  branchId  Int
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  tables    Table[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+}
+
+model Table {
+  id        Int      @id @default(autoincrement())
+  name      String
+  qrCode    String   @unique @default(uuid())
+  zoneId    Int
+  zone      Zone     @relation(fields: [zoneId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([zoneId])
+}

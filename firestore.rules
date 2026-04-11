@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.ownerId;
+    }
+
+    function isNewDocOwner() {
+      return isAuthenticated() && request.auth.uid == request.resource.data.ownerId;
+    }
+
+    function isValidString(val, min, max) {
+      return val is string && val.size() >= min && val.size() <= max;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid == request.auth.uid &&
+             data.email is string;
+    }
+
+    function isValidBrand(data) {
+      return data.keys().hasAll(['ownerId', 'name']) &&
+             data.ownerId == request.auth.uid &&
+             isValidString(data.name, 1, 100);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /brands/{brandId} {
+      allow read: if isDocOwner();
+      allow create: if isNewDocOwner() && isValidBrand(request.resource.data);
+      allow update: if isDocOwner() && isValidBrand(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /branches/{branchId} {
+      allow read: if isDocOwner();
+      allow create: if isNewDocOwner();
+      allow update: if isDocOwner();
+      allow delete: if isDocOwner();
+    }
+
+    match /kitchens/{kitchenId} {
+      allow read, write: if isAuthenticated(); // Simplified for now, should ideally check branch ownership
+    }
+
+    match /categories/{categoryId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /menu_items/{menuItemId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /option_groups/{groupId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /option_choices/{choiceId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /zones/{zoneId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /tables/{tableId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
