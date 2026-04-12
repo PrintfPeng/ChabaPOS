@@ -5,7 +5,6 @@ import { UpdateOptionGroupDto, UpdateOptionDto } from './dto/update-option.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('options')
-@UseGuards(JwtAuthGuard)
 export class OptionsController {
   constructor(@Inject(OptionsService) private readonly optionsService: OptionsService) {}
 

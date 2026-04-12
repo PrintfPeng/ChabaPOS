@@ -1,15 +1,21 @@
 import "reflect-metadata";
-import { NestFactory } from "@nestjs/core";
+import { NestFactory, HttpAdapterHost } from "@nestjs/core";
 import { ValidationPipe, Logger } from "@nestjs/common";
 import { AppModule } from "./src/backend/app.module";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import express from "express";
 import helmet from "helmet";
+import { Reflector } from "@nestjs/core";
+import { JwtAuthGuard } from "./src/backend/auth/jwt-auth.guard";
+import { PrismaClientExceptionFilter } from "./src/backend/prisma/prisma-exception.filter";
 
 async function startServer() {
   const logger = new Logger("Bootstrap");
   const app = await NestFactory.create(AppModule);
+
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapter));
 
   // Production Hardening
   app.use(helmet({
@@ -23,6 +29,9 @@ async function startServer() {
     forbidNonWhitelisted: true,
     transform: true,
   }));
+
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new JwtAuthGuard(reflector));
 
   const PORT = 3000;
 

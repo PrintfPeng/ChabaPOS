@@ -7,6 +7,7 @@ import { Plus, Trash2, Loader2, Edit2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Checkbox } from '../../components/ui/checkbox';
 import { toast } from 'sonner';
 
 export default function OptionManagement() {
@@ -15,6 +16,7 @@ export default function OptionManagement() {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup, createOption, updateOption, deleteOption } = useOptions(bid);
   
   const [newGroupName, setNewGroupName] = useState('');
+  const [isMultiple, setIsMultiple] = useState(false);
   const [newChoice, setNewChoice] = useState({ name: '', price: '', groupId: 0 });
   
   const [editingGroup, setEditingGroup] = useState<any | null>(null);
@@ -29,8 +31,10 @@ export default function OptionManagement() {
       await createGroup({
         branchId: bid,
         name: newGroupName,
+        isMultiple,
       });
       setNewGroupName('');
+      setIsMultiple(false);
       setIsGroupDialogOpen(false);
       toast.success('สร้างกลุ่มตัวเลือกสำเร็จ');
     } catch (error) {
@@ -44,9 +48,11 @@ export default function OptionManagement() {
       await updateGroup({
         id: editingGroup.id,
         name: newGroupName,
+        isMultiple,
       });
       setEditingGroup(null);
       setNewGroupName('');
+      setIsMultiple(false);
       setIsGroupDialogOpen(false);
       toast.success('อัปเดตกลุ่มตัวเลือกสำเร็จ');
     } catch (error) {
@@ -90,6 +96,7 @@ export default function OptionManagement() {
   const openEditGroup = (group: any) => {
     setEditingGroup(group);
     setNewGroupName(group.name);
+    setIsMultiple(group.isMultiple);
     setIsGroupDialogOpen(true);
   };
 
@@ -151,9 +158,21 @@ export default function OptionManagement() {
             <DialogHeader>
               <DialogTitle>{editingGroup ? 'แก้ไขกลุ่มตัวเลือก' : 'เพิ่มกลุ่มตัวเลือก'}</DialogTitle>
             </DialogHeader>
-            <div className="py-4">
-              <Label>ชื่อกลุ่ม</Label>
-              <Input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="เช่น ระดับความหวาน" />
+            <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <Label>ชื่อกลุ่ม</Label>
+                <Input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="เช่น ระดับความหวาน" />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="isMultiple" 
+                  checked={isMultiple} 
+                  onCheckedChange={(checked) => setIsMultiple(!!checked)} 
+                />
+                <Label htmlFor="isMultiple" className="text-sm font-medium leading-none cursor-pointer">
+                  เลือกได้หลายอย่าง (Multiple Selection)
+                </Label>
+              </div>
             </div>
             <DialogFooter>
               <Button onClick={editingGroup ? handleUpdateGroup : handleCreateGroup}>

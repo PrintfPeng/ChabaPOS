@@ -75,4 +75,27 @@ export class BranchesService {
       where: { id },
     });
   }
+
+  async getMenu(id: number) {
+    return this.prisma.branch.findUnique({
+      where: { id },
+      include: {
+        categories: {
+          include: {
+            items: {
+              include: {
+                optionGroups: {
+                  include: {
+                    options: true,
+                  },
+                },
+              },
+              orderBy: { id: 'asc' },
+            },
+          },
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+  }
 }

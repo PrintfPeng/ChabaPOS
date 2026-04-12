@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTables } from '../../hooks/useTables';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Plus, Trash2, LayoutGrid, Map, Loader2, QrCode, Edit2 } from 'lucide-react';
+import { Plus, Trash2, LayoutGrid, Map, Loader2, QrCode, Edit2, Printer, Utensils } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
+import api from '../../lib/api';
+import PrintableQRCode from '../../components/PrintableQRCode';
+import { useNavigate } from 'react-router-dom';
 
 export default function TableManagement() {
-  const { branchId } = useParams<{ branchId: string }>();
+  const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
+  const navigate = useNavigate();
   const bid = Number(branchId);
   const { zones, isLoading, createZone, updateZone, deleteZone, createTable, updateTable, deleteTable, getQRCode } = useTables(bid);
   
@@ -25,6 +29,20 @@ export default function TableManagement() {
   const [isTableDialogOpen, setIsTableDialogOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [isQrDialogOpen, setIsQrDialogOpen] = useState(false);
+  const [branchName, setBranchName] = useState('');
+  const [selectedTableForQr, setSelectedTableForQr] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchBranch = async () => {
+      try {
+        const res = await api.get(`/branches/${bid}`);
+        setBranchName(res.data.name);
+      } catch (error) {
+        console.error('Failed to fetch branch', error);
+      }
+    };
+    if (bid) fetchBranch();
+  }, [bid]);
 
   const handleCreateZone = async () => {
     if (!bid || !newZoneName) return;
@@ -122,10 +140,11 @@ export default function TableManagement() {
     }
   };
 
-  const handleShowQRCode = async (tableId: number) => {
+  const handleShowQRCode = async (table: any) => {
     try {
-      const url = await getQRCode(tableId);
+      const url = await getQRCode(table.id);
       setQrCodeUrl(url);
+      setSelectedTableForQr(table);
       setIsQrDialogOpen(true);
     } catch (error) {
       toast.error('ไม่สามารถสร้าง QR Code ได้');
@@ -246,16 +265,29 @@ export default function TableManagement() {
                     </div>
                     <p className="font-bold text-slate-900">{table.name}</p>
                     
-                    <div className="mt-4 flex justify-center gap-2">
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleShowQRCode(table.id)}>
-                        <QrCode className="w-4 h-4" />
+                    <div className="mt-4 flex flex-col gap-2">
+                      <Button 
+                        className="w-full gap-2" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/brands/${brandId}/branches/${branchId}/order/${table.id}`);
+                        }}
+                      >
+                        <Utensils className="w-4 h-4" />
+                        สั่งอาหาร
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditTable(table)}>
-                        <Edit2 className="w-4 h-4 text-slate-400" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteTable(table.id)}>
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
+                      <div className="flex justify-center gap-2">
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleShowQRCode(table); }}>
+                          <QrCode className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); openEditTable(table); }}>
+                          <Edit2 className="w-4 h-4 text-slate-400" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleDeleteTable(table.id); }}>
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -278,23 +310,41 @@ export default function TableManagement() {
       </div>
 
       <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>QR Code สำหรับสั่งอาหาร</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8">
             {qrCodeUrl && (
               <>
-                <img src={qrCodeUrl} alt="QR Code" className="w-64 h-64 border-8 border-white shadow-lg rounded-xl" />
-                <p className="mt-4 text-slate-500 text-sm">สแกนเพื่อสั่งอาหารจากโต๊ะนี้</p>
-                <Button className="mt-6" onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = qrCodeUrl;
-                  link.download = 'qrcode.png';
-                  link.click();
-                }}>
-                  ดาวน์โหลด QR Code
-                </Button>
+                <div className="bg-white p-4 rounded-xl shadow-inner mb-4">
+                  <img src={qrCodeUrl} alt="QR Code" className="w-64 h-64" />
+                </div>
+                <p className="text-slate-500 text-sm mb-6">สแกนเพื่อสั่งอาหารจากโต๊ะ {selectedTableForQr?.name}</p>
+                
+                <div className="grid grid-cols-2 gap-4 w-full">
+                  <Button variant="outline" onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = qrCodeUrl;
+                    link.download = `qrcode-${selectedTableForQr?.name}.png`;
+                    link.click();
+                  }}>
+                    ดาวน์โหลด
+                  </Button>
+                  <Button className="gap-2" onClick={() => window.print()}>
+                    <Printer className="w-4 h-4" />
+                    พิมพ์ใบสั่งอาหาร
+                  </Button>
+                </div>
+
+                {/* Hidden printable area */}
+                <div className="hidden">
+                  <PrintableQRCode 
+                    qrCodeUrl={qrCodeUrl} 
+                    tableName={selectedTableForQr?.name || ''} 
+                    branchName={branchName} 
+                  />
+                </div>
               </>
             )}
           </div>

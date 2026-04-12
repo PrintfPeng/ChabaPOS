@@ -11,6 +11,7 @@ export interface Option {
 export interface OptionGroup {
   id: number;
   name: string;
+  isMultiple: boolean;
   branchId: number;
   options: Option[];
   menuItems?: { id: number }[];
@@ -30,7 +31,7 @@ export function useOptions(branchId?: number) {
   });
 
   const createGroupMutation = useMutation({
-    mutationFn: async (newGroup: { name: string; branchId: number }) => {
+    mutationFn: async (newGroup: { name: string; branchId: number; isMultiple?: boolean }) => {
       const res = await api.post('/options/groups', newGroup);
       return res.data;
     },
@@ -40,7 +41,7 @@ export function useOptions(branchId?: number) {
   });
 
   const updateGroupMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: number; name?: string; menuItemIds?: number[] }) => {
+    mutationFn: async ({ id, ...data }: { id: number; name?: string; isMultiple?: boolean; menuItemIds?: number[] }) => {
       const res = await api.patch(`/options/groups/${id}`, data);
       return res.data;
     },

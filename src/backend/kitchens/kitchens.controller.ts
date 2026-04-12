@@ -5,7 +5,6 @@ import { UpdateKitchenDto } from './dto/update-kitchen.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('kitchens')
-@UseGuards(JwtAuthGuard)
 export class KitchensController {
   constructor(@Inject(KitchensService) private readonly kitchensService: KitchensService) {}
 

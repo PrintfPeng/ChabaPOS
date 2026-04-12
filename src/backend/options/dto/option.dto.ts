@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsInt, IsNumber, IsOptional, IsBoolean } from 'class-validator';
 
 export class CreateOptionGroupDto {
   @IsString()
@@ -6,6 +6,10 @@ export class CreateOptionGroupDto {
 
   @IsInt()
   branchId: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isMultiple?: boolean;
 }
 
 export class CreateOptionDto {

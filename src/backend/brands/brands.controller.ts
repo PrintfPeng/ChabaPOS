@@ -6,7 +6,6 @@ import { UpdateBrandDto } from './dto/update-brand.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('brands')
-@UseGuards(JwtAuthGuard)
 export class BrandsController {
   constructor(
     @Inject(BrandsService) private readonly brandsService: BrandsService,

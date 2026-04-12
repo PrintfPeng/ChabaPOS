@@ -7,13 +7,16 @@ import {
   Settings2, 
   Table as TableIcon,
   ChevronLeft,
-  LogOut
+  LogOut,
+  ChefHat
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import KitchenManagement from './dashboard/KitchenManagement';
+import KitchenDisplay from './dashboard/KitchenDisplay';
 import MenuManagement from './dashboard/MenuManagement';
 import OptionManagement from './dashboard/OptionManagement';
 import TableManagement from './dashboard/TableManagement';
+import StaffOrdering from './dashboard/StaffOrdering';
 import Overview from './dashboard/Overview';
 import { auth } from '../lib/firebase';
 
@@ -24,7 +27,8 @@ export default function Dashboard() {
 
   const navItems = [
     { name: 'ภาพรวม', path: '', icon: LayoutDashboard },
-    { name: 'ห้องครัว', path: 'kitchens', icon: UtensilsCrossed },
+    { name: 'หน้าจอครัว', path: 'kitchen-display', icon: ChefHat },
+    { name: 'จัดการครัว', path: 'kitchens', icon: UtensilsCrossed },
     { name: 'เมนู', path: 'menu', icon: MenuIcon },
     { name: 'ตัวเลือกเสริม', path: 'options', icon: Settings2 },
     { name: 'โต๊ะ', path: 'tables', icon: TableIcon },
@@ -86,10 +90,12 @@ export default function Dashboard() {
         <div className="p-8">
           <Routes>
             <Route index element={<Overview />} />
+            <Route path="kitchen-display" element={<KitchenDisplay />} />
             <Route path="kitchens" element={<KitchenManagement />} />
             <Route path="menu" element={<MenuManagement />} />
             <Route path="options" element={<OptionManagement />} />
             <Route path="tables" element={<TableManagement />} />
+            <Route path="order/:tableId" element={<StaffOrdering />} />
           </Routes>
         </div>
       </main>

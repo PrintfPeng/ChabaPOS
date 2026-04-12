@@ -3,9 +3,9 @@ import { BranchesService } from './branches.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Public } from '../auth/public.decorator';
 
 @Controller('branches')
-@UseGuards(JwtAuthGuard)
 export class BranchesController {
   constructor(@Inject(BranchesService) private readonly branchesService: BranchesService) {}
 
@@ -27,5 +27,11 @@ export class BranchesController {
   @Delete(':id')
   remove(@Request() req, @Param('id', ParseIntPipe) id: number) {
     return this.branchesService.remove(req.user.userId, id);
+  }
+
+  @Public()
+  @Get(':id/menu')
+  getMenu(@Param('id', ParseIntPipe) id: number) {
+    return this.branchesService.getMenu(id);
   }
 }

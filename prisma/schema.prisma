@@ -40,6 +40,7 @@ model Branch {
   kitchens     Kitchen[]
   zones        Zone[]
   optionGroups OptionGroup[]
+  orders       Order[]
   createdAt    DateTime      @default(now())
   updatedAt  DateTime   @updatedAt
 
@@ -71,6 +72,7 @@ model MenuItem {
   kitchenId    Int?
   kitchen      Kitchen?      @relation(fields: [kitchenId], references: [id])
   optionGroups OptionGroup[]
+  orderItems   OrderItem[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -81,6 +83,7 @@ model MenuItem {
 model OptionGroup {
   id        Int        @id @default(autoincrement())
   name      String
+  isMultiple Boolean    @default(false)
   branchId  Int
   branch    Branch     @relation(fields: [branchId], references: [id])
   menuItems MenuItem[]
@@ -97,6 +100,7 @@ model Option {
   price         Float       @default(0)
   optionGroupId Int
   optionGroup   OptionGroup @relation(fields: [optionGroupId], references: [id])
+  orderOptions  OrderItemOption[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -109,6 +113,7 @@ model Kitchen {
   branchId  Int
   branch    Branch     @relation(fields: [branchId], references: [id])
   items     MenuItem[]
+  orderItems OrderItem[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -133,8 +138,78 @@ model Table {
   qrCode    String   @unique @default(uuid())
   zoneId    Int
   zone      Zone     @relation(fields: [zoneId], references: [id])
+  orders    Order[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([zoneId])
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  SERVED
+  CANCELLED
+  COMPLETED
+}
+
+enum OrderSource {
+  CUSTOMER
+  STAFF
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  orderNumber String      @unique
+  status      OrderStatus @default(PENDING)
+  source      OrderSource @default(CUSTOMER)
+  totalAmount Float
+  branchId    Int
+  branch      Branch      @relation(fields: [branchId], references: [id])
+  tableId     Int?
+  table       Table?      @relation(fields: [tableId], references: [id])
+  items       OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([branchId])
+  @@index([tableId])
+}
+
+enum OrderItemStatus {
+  PENDING
+  COOKING
+  READY
+  SERVED
+}
+
+model OrderItem {
+  id         Int           @id @default(autoincrement())
+  orderId    Int
+  order      Order         @relation(fields: [orderId], references: [id])
+  menuItemId Int
+  menuItem   MenuItem      @relation(fields: [menuItemId], references: [id])
+  name       String
+  price      Float
+  quantity   Int
+  kitchenId  Int?
+  kitchen    Kitchen?      @relation(fields: [kitchenId], references: [id])
+  options    OrderItemOption[]
+  status     OrderItemStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+
+  @@index([orderId])
+  @@index([kitchenId])
+}
+
+model OrderItemOption {
+  id          Int       @id @default(autoincrement())
+  orderItemId Int
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+  optionId    Int
+  option      Option    @relation(fields: [optionId], references: [id])
+  name        String
+  price       Float
+
+  @@index([orderItemId])
 }

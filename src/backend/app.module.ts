@@ -8,6 +8,7 @@ import { MenusModule } from './menus/menus.module';
 import { OptionsModule } from './options/options.module';
 import { ZonesModule } from './zones/zones.module';
 import { TablesModule } from './tables/tables.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { TablesModule } from './tables/tables.module';
     MenusModule,
     OptionsModule,
     ZonesModule,
-    TablesModule
+    TablesModule,
+    OrdersModule
   ],
 })
 export class AppModule {}

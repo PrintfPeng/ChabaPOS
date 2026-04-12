@@ -5,7 +5,6 @@ import { UpdateCategoryDto, UpdateMenuItemDto } from './dto/update-menu.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('menus')
-@UseGuards(JwtAuthGuard)
 export class MenusController {
   constructor(@Inject(MenusService) private readonly menusService: MenusService) {}
 

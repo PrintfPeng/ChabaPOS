@@ -3,9 +3,9 @@ import { TablesService } from './tables.service';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Public } from '../auth/public.decorator';
 
 @Controller('tables')
-@UseGuards(JwtAuthGuard)
 export class TablesController {
   constructor(@Inject(TablesService) private readonly tablesService: TablesService) {}
 
@@ -17,6 +17,11 @@ export class TablesController {
   @Get()
   findAll(@Request() req, @Query('zoneId', ParseIntPipe) zoneId: number) {
     return this.tablesService.findAll(req.user.userId, zoneId);
+  }
+
+  @Get(':id')
+  findOne(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.tablesService.findOne(req.user.userId, id);
   }
 
   @Patch(':id')
@@ -33,5 +38,11 @@ export class TablesController {
   async getQRCode(@Request() req, @Param('id', ParseIntPipe) id: number) {
     const qrCode = await this.tablesService.generateQRCode(req.user.userId, id);
     return { qrCode };
+  }
+
+  @Public()
+  @Get('by-qrcode/:qrCode')
+  getByQrCode(@Param('qrCode') qrCode: string) {
+    return this.tablesService.findByQrCode(qrCode);
   }
 }

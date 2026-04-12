@@ -1,11 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { CartProvider } from './contexts/CartContext';
 import { Toaster } from './components/ui/sonner';
 import Auth from './pages/Auth';
 import BrandSelection from './pages/BrandSelection';
 import BranchSelection from './pages/BranchSelection';
 import Dashboard from './pages/Dashboard';
+import CustomerOrder from './pages/CustomerOrder';
+import OrderSuccess from './pages/OrderSuccess';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -16,11 +19,14 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 export default function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/auth" element={<Auth />} />
-          <Route 
-            path="/brands" 
+      <CartProvider>
+        <Router>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/order/:branchId/:tableId" element={<CustomerOrder />} />
+            <Route path="/order-success" element={<OrderSuccess />} />
+            <Route 
+              path="/brands" 
             element={
               <PrivateRoute>
                 <BrandSelection />
@@ -46,6 +52,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/brands" />} />
         </Routes>
       </Router>
+      </CartProvider>
       <Toaster />
     </AuthProvider>
   );

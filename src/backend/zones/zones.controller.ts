@@ -5,7 +5,6 @@ import { UpdateZoneDto } from './dto/update-zone.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('zones')
-@UseGuards(JwtAuthGuard)
 export class ZonesController {
   constructor(@Inject(ZonesService) private readonly zonesService: ZonesService) {}
 

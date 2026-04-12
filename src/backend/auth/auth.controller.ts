@@ -1,6 +1,7 @@
 import { Controller, Post, Body, UnauthorizedException, Logger, Inject } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
+import { Public } from './public.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -12,6 +13,7 @@ export class AuthController {
     }
   }
 
+  @Public()
   @Post('login')
   async login(@Body() body: LoginDto) {
     this.logger.log(`Login attempt for: ${body.email}`);
@@ -23,6 +25,7 @@ export class AuthController {
     return this.authService.login(user);
   }
 
+  @Public()
   @Post('register')
   async register(@Body() body: RegisterDto) {
     this.logger.log(`Registration attempt for: ${body.email}`);

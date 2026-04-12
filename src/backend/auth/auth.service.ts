@@ -1,21 +1,32 @@
-import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(JwtService) private readonly jwtService: JwtService,
-  ) {}
+  ) {
+    this.logger.log('AuthService initialized');
+  }
 
   async validateUser(email: string, pass: string): Promise<any> {
+    console.log(`[AuthService] Validating user: ${email}`);
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (user && await bcrypt.compare(pass, user.password)) {
+    if (!user) {
+      console.warn(`[AuthService] User not found: ${email}`);
+      return null;
+    }
+    const isMatch = await bcrypt.compare(pass, user.password);
+    if (isMatch) {
+      console.log(`[AuthService] Password match for: ${email}`);
       const { password, ...result } = user;
       return result;
     }
+    console.warn(`[AuthService] Password mismatch for: ${email}`);
     return null;
   }
 
