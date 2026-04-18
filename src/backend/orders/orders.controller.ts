@@ -36,6 +36,24 @@ export class OrdersController {
     return this.ordersService.findByBranchKitchenItems(branchId);
   }
 
+  @Get('branch/:branchId/unpaid')
+  findUnpaidByBranch(@Param('branchId', ParseIntPipe) branchId: number) {
+    return this.ordersService.findUnpaidByBranch(branchId);
+  }
+
+  @Get('table/:tableId/unpaid')
+  findUnpaidByTable(@Param('tableId', ParseIntPipe) tableId: number) {
+    return this.ordersService.findUnpaidByTable(tableId);
+  }
+
+  @Post('table/:tableId/pay')
+  completePayment(
+    @Param('tableId', ParseIntPipe) tableId: number,
+    @Body('paymentType') paymentType: 'CASH' | 'TRANSFER'
+  ) {
+    return this.ordersService.completePayment(tableId, paymentType);
+  }
+
   @Patch('items/:id/status')
   updateItemStatus(
     @Param('id', ParseIntPipe) itemId: number,

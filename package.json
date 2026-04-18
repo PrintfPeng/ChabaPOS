@@ -22,6 +22,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.18",
     "@prisma/client": "^6.2.1",
+    "@radix-ui/react-scroll-area": "^1.2.10",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.97.0",
     "@types/bcryptjs": "^2.4.6",

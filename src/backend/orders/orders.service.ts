@@ -77,7 +77,7 @@ export class OrdersService {
     }
 
     // 4. Create Order in Transaction
-    return this.prisma.order.create({
+    const order = await this.prisma.order.create({
       data: {
         orderNumber,
         totalAmount,
@@ -96,6 +96,16 @@ export class OrdersService {
         },
       },
     });
+
+    // 5. Update Table Status if tableId is present
+    if (dto.tableId) {
+      await this.prisma.table.update({
+        where: { id: dto.tableId },
+        data: { status: 'OCCUPIED' },
+      });
+    }
+
+    return order;
   }
 
   async findAllByBranch(branchId: number) {
@@ -160,9 +170,94 @@ export class OrdersService {
   }
 
   async updateItemStatus(itemId: number, status: any) {
-    return this.prisma.orderItem.update({
+    const updatedItem = await this.prisma.orderItem.update({
       where: { id: itemId },
       data: { status },
+      include: { order: { include: { items: true } } },
+    });
+
+    // Check if ALL items in the order are now SERVED
+    const allServed = updatedItem.order.items.every(item => item.status === 'SERVED');
+    if (allServed && updatedItem.order.status !== 'SERVED') {
+      await this.prisma.order.update({
+        where: { id: updatedItem.orderId },
+        data: { status: 'SERVED' },
+      });
+    }
+
+    return updatedItem;
+  }
+
+  async findUnpaidByTable(tableId: number) {
+    return this.prisma.order.findMany({
+      where: {
+        tableId,
+        status: { notIn: ['PAID', 'CANCELLED'] },
+      },
+      include: {
+        items: {
+          include: {
+            options: true,
+          },
+        },
+        table: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async findUnpaidByBranch(branchId: number) {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        branchId,
+        status: { notIn: ['PAID', 'CANCELLED'] },
+      },
+      include: {
+        table: true,
+        items: {
+          include: {
+            options: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Group by table for the UI
+    const grouped = orders.reduce((acc, order) => {
+      const tableId = order.tableId || 0;
+      if (!acc[tableId]) {
+        acc[tableId] = {
+          table: order.table,
+          orders: [],
+          totalAmount: 0,
+        };
+      }
+      acc[tableId].orders.push(order);
+      acc[tableId].totalAmount += order.totalAmount;
+      return acc;
+    }, {} as Record<number, any>);
+
+    return Object.values(grouped);
+  }
+
+  async completePayment(tableId: number, paymentType: 'CASH' | 'TRANSFER') {
+    // 1. Update all unpaid orders to PAID
+    await this.prisma.order.updateMany({
+      where: {
+        tableId,
+        status: { notIn: ['PAID', 'CANCELLED'] },
+      },
+      data: {
+        status: 'PAID',
+        paymentType,
+      },
+    });
+
+    // 2. Clear table status to AVAILABLE
+    return this.prisma.table.update({
+      where: { id: tableId },
+      data: { status: 'AVAILABLE' },
     });
   }
 }

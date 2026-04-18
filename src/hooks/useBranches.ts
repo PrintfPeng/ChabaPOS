@@ -5,7 +5,12 @@ export interface Branch {
   id: number;
   name: string;
   imageUrl?: string;
+  qrCodeUrl?: string;
   brandId: number;
+  brand?: {
+    id: number;
+    name: string;
+  };
 }
 
 export function useBranches(brandId?: number) {
@@ -62,6 +67,7 @@ export function useBranches(brandId?: number) {
 }
 
 export function useBranch(id?: number) {
+  const queryClient = useQueryClient();
   const branchQuery = useQuery({
     queryKey: ['branch', id],
     queryFn: async () => {
@@ -72,8 +78,19 @@ export function useBranch(id?: number) {
     enabled: !!id,
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async (data: Partial<Branch>) => {
+      const res = await api.patch(`/branches/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['branch', id] });
+    },
+  });
+
   return {
     branch: branchQuery.data,
     isLoading: branchQuery.isLoading,
+    updateBranch: updateMutation.mutateAsync,
   };
 }

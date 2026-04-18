@@ -41,6 +41,7 @@ model Branch {
   zones        Zone[]
   optionGroups OptionGroup[]
   orders       Order[]
+  qrCodeUrl    String?
   createdAt    DateTime      @default(now())
   updatedAt  DateTime   @updatedAt
 
@@ -139,10 +140,16 @@ model Table {
   zoneId    Int
   zone      Zone     @relation(fields: [zoneId], references: [id])
   orders    Order[]
+  status    TableStatus @default(AVAILABLE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([zoneId])
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
 }
 
 enum OrderStatus {
@@ -151,6 +158,12 @@ enum OrderStatus {
   SERVED
   CANCELLED
   COMPLETED
+  PAID
+}
+
+enum PaymentType {
+  CASH
+  TRANSFER
 }
 
 enum OrderSource {
@@ -164,6 +177,7 @@ model Order {
   status      OrderStatus @default(PENDING)
   source      OrderSource @default(CUSTOMER)
   totalAmount Float
+  paymentType PaymentType?
   branchId    Int
   branch      Branch      @relation(fields: [branchId], references: [id])
   tableId     Int?

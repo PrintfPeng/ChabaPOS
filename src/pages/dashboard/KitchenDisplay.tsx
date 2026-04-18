@@ -173,22 +173,16 @@ export default function KitchenDisplay() {
                   )}
 
                   <div className="flex gap-2 pt-2">
-                    {item.status === 'PENDING' && (
-                      <Button className="flex-1 gap-2" onClick={() => handleUpdateStatus(item.id, 'COOKING')}>
-                        <ChefHat className="w-4 h-4" />
-                        เริ่มปรุง
-                      </Button>
-                    )}
-                    {item.status === 'COOKING' && (
-                      <Button className="flex-1 gap-2 bg-green-600 hover:bg-green-700" onClick={() => handleUpdateStatus(item.id, 'READY')}>
+                    {item.status !== 'SERVED' && (
+                      <Button className="flex-1 gap-2 bg-green-600 hover:bg-green-700" onClick={() => handleUpdateStatus(item.id, 'SERVED')}>
                         <CheckCircle2 className="w-4 h-4" />
-                        เสร็จสิ้น
+                        เสร็จแล้ว
                       </Button>
                     )}
-                    {item.status === 'READY' && (
-                      <Button variant="outline" className="flex-1 gap-2" onClick={() => handleUpdateStatus(item.id, 'SERVED')}>
+                    {item.status === 'SERVED' && (
+                      <div className="flex-1 text-center py-2 text-green-600 font-bold text-sm bg-green-50 rounded border border-green-200">
                         เสิร์ฟแล้ว
-                      </Button>
+                      </div>
                     )}
                   </div>
                 </CardContent>
