@@ -163,265 +163,256 @@ export default function Payment() {
               setReceivedAmount('');
             }
           }}>
-          <DialogContent className="w-full h-full sm:h-[90vh] sm:max-w-5xl p-0 gap-0 border-none overflow-hidden sm:rounded-3xl shadow-2xl">
+          <DialogContent className="w-full h-full sm:h-[90vh] sm:max-w-6xl p-0 gap-0 border-none overflow-hidden sm:rounded-3xl shadow-2xl">
             <div className="flex flex-col sm:flex-row h-full">
-              {/* Left side: Bill Details - RESPONSIVE & GROUPED */}
-              <div className="w-full sm:w-[420px] h-1/2 sm:h-full flex flex-col bg-slate-50 border-r border-slate-200 overflow-hidden">
-                <div className="p-6 bg-white border-b shrink-0">
+              {/* Left Column: Bill Summary (Sticky Header/Footer + Flexible Scroll Area) */}
+              <div className="w-full sm:w-[400px] lg:w-[460px] shrink-0 h-[45%] sm:h-full flex flex-col bg-slate-50 border-r border-slate-200 overflow-hidden">
+                {/* Header: Shrink-0 */}
+                <div className="p-6 bg-white border-b shrink-0 z-10">
                   <DialogHeader>
                     <div className="flex items-center justify-between">
                       <DialogTitle className="text-xl flex items-center gap-2">
                         <Receipt className="w-6 h-6 text-primary" />
                         โต๊ะ {selectedBill?.table?.name}
                       </DialogTitle>
-                      <Badge variant="outline" className="text-slate-400">
-                        {unpaidBills.find(b => b.table?.id === selectedBill?.table?.id)?.orders.length || 0} ออเดอร์
+                      <Badge variant="outline" className="text-slate-400 font-mono">
+                         #{selectedBill?.id?.slice(-4)}
                       </Badge>
                     </div>
                   </DialogHeader>
                 </div>
 
-                <ScrollArea className="flex-1">
-                  <div className="p-6 space-y-8 pb-10">
-                    {(selectedBill?.orders || []).map((order: any) => (
-                      <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-4">
-                        <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                          <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Order ID</span>
-                            <span className="text-xs font-bold text-slate-600">#{order.orderNumber}</span>
+                {/* Items List: Flex-1 and Scrollable */}
+                <div className="flex-1 min-h-0 overflow-hidden relative">
+                  <ScrollArea className="h-full">
+                    <div className="p-6 space-y-4 pb-12">
+                      {(selectedBill?.orders || []).map((order: any) => (
+                        <div key={order.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                          <div className="flex items-center justify-between border-b border-slate-50 pb-3 mb-4">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-slate-400 uppercase">Order</span>
+                              <span className="text-xs font-bold text-slate-600">#{order.orderNumber}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] text-slate-400 block mb-1">
+                                {new Date(order.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <Badge className="text-[9px] h-5" variant={order.status === 'SERVED' ? 'success' : 'warning'}>
+                                {order.status === 'SERVED' ? 'เสิร์ฟแล้ว' : 'รออาหาร'}
+                              </Badge>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <span className="text-[10px] text-slate-400 block mb-1">
-                              {new Date(order.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            {/* Order Status Badge */}
-                            <Badge className="text-[9px] h-5" variant={order.status === 'SERVED' ? 'success' : 'warning'}>
-                              {order.status === 'SERVED' ? 'เสิร์ฟครบแล้ว' : 'กำลังดำเนินการ'}
-                            </Badge>
-                          </div>
-                        </div>
 
-                        <div className="space-y-4">
-                          {(order.items || []).map((item: any) => (
-                            <div key={item.id} className="flex justify-between items-start group">
-                              <div className="flex-1">
-                                <div className="flex items-start gap-2">
-                                  <div className="min-w-[24px] h-6 flex items-center justify-center bg-slate-100 rounded text-[11px] font-black text-slate-500">
+                          <div className="space-y-4">
+                            {(order.items || []).map((item: any) => (
+                              <div key={item.id} className="flex justify-between items-start gap-4">
+                                <div className="flex items-start gap-3 flex-1 min-w-0">
+                                  <div className="shrink-0 w-7 h-7 flex items-center justify-center bg-slate-100 rounded-lg text-xs font-black text-slate-600">
                                     {item.quantity}
                                   </div>
-                                  <div>
-                                    <p className="text-sm font-semibold text-slate-800 leading-tight">{item.name}</p>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-slate-800 truncate">{item.name}</p>
                                     <div className="flex flex-wrap gap-1 mt-1">
-                                      {item.status && (
-                                        <span className={cn(
-                                          "text-[9px] px-1 rounded-sm font-bold",
-                                          item.status === 'SERVED' ? "text-green-500 bg-green-50" : "text-orange-500 bg-orange-50"
-                                        )}>
-                                          {item.status}
-                                        </span>
-                                      )}
                                       {(item.options || []).map((o: any) => (
-                                        <span key={o.id} className="text-[9px] text-slate-400">
-                                          • {o.name}
-                                        </span>
+                                        <span key={o.id} className="text-[10px] text-slate-400">/ {o.name}</span>
                                       ))}
                                     </div>
                                   </div>
                                 </div>
+                                <span className="text-sm font-black text-slate-900 tabular-nums">
+                                  ฿{((item.price + (item.options || []).reduce((sum: number, o: any) => sum + o.price, 0)) * item.quantity).toLocaleString()}
+                                </span>
                               </div>
-                              <span className="text-sm font-bold text-slate-900 ml-2">
-                                ฿{((item.price + (item.options || []).reduce((sum: number, o: any) => sum + o.price, 0)) * item.quantity).toLocaleString()}
-                              </span>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-
-                <div className="p-6 bg-white border-t border-slate-200 shrink-0">
-                  <div className="flex justify-between items-center bg-slate-900 p-5 rounded-[22px] shadow-lg">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">ยอดรวมบิลนี้</span>
-                    <span className="text-3xl font-black text-white italic">฿{selectedBill?.totalAmount.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right side: Payment Logic */}
-              <div className="flex-1 flex flex-col bg-white overflow-hidden h-1/2 sm:h-full">
-                  <div className="p-8 flex-1 flex flex-col space-y-8">
-                    {/* Payment Mode Selector */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <button 
-                        onClick={() => setPaymentMode('CASH')}
-                        className={cn(
-                          "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all gap-3 group relative overflow-hidden",
-                          paymentMode === 'CASH' 
-                            ? "border-primary bg-primary/5 text-primary ring-4 ring-primary/10" 
-                            : "border-slate-100 hover:border-slate-300 hover:bg-slate-50"
-                        )}
-                      >
-                        <Banknote className={cn("w-10 h-10 transition-transform group-hover:scale-110", paymentMode === 'CASH' ? "text-primary" : "text-slate-400")} />
-                        <span className="font-bold text-lg">เงินสด (Cash)</span>
-                        {paymentMode === 'CASH' && <div className="absolute top-2 right-2 w-3 h-3 bg-primary rounded-full animate-pulse" />}
-                      </button>
-                      <button 
-                        onClick={() => setPaymentMode('TRANSFER')}
-                        className={cn(
-                          "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all gap-3 group relative overflow-hidden",
-                          paymentMode === 'TRANSFER' 
-                            ? "border-primary bg-primary/5 text-primary ring-4 ring-primary/10" 
-                            : "border-slate-100 hover:border-slate-300 hover:bg-slate-50"
-                        )}
-                      >
-                        <QrCode className={cn("w-10 h-10 transition-transform group-hover:scale-110", paymentMode === 'TRANSFER' ? "text-primary" : "text-slate-400")} />
-                        <span className="font-bold text-lg">โอนเงิน (Transfer)</span>
-                        {paymentMode === 'TRANSFER' && <div className="absolute top-2 right-2 w-3 h-3 bg-primary rounded-full animate-pulse" />}
-                      </button>
+                      ))}
                     </div>
+                  </ScrollArea>
+                </div>
 
-                    {paymentMode === 'CASH' && (
-                      <div className="flex-1 flex flex-col space-y-6">
-                        {/* Display Zone */}
-                        <div className="bg-slate-900 p-8 rounded-3xl text-right space-y-4 shadow-xl">
-                          <div>
-                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">จำนวนเงินที่รับมา</p>
-                            <div className="flex items-baseline justify-end gap-2">
-                              <span className="text-2xl text-slate-500 font-bold">฿</span>
-                              <p className="text-6xl font-mono font-black text-white">{parseFloat(receivedAmount || '0').toLocaleString()}</p>
-                            </div>
-                          </div>
-                          <div className="h-px bg-slate-800" />
-                          <div className="flex justify-between items-center text-green-400">
-                            <span className="text-sm font-bold uppercase tracking-wider">เงินทอน (Change)</span>
-                            <span className="text-4xl font-mono font-black">฿{change.toLocaleString()}</span>
-                          </div>
-                        </div>
-
-                        {/* Hybrid Keypad & Quick Cash Zone */}
-                        <div className="flex-1 grid grid-cols-4 gap-4 overflow-hidden min-h-[400px]">
-                          {/* Left: Numeric Keypad (75% width) */}
-                          <div className="col-span-3 grid grid-cols-3 gap-3 h-full">
-                            {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '00'].map(key => (
-                              <Button 
-                                key={key} 
-                                variant="outline" 
-                                className="h-full text-3xl font-black rounded-[24px] border-2 border-slate-100 hover:border-slate-300 active:scale-95 active:bg-slate-50 transition-all shadow-sm"
-                                onClick={() => appendDigit(key)}
-                              >
-                                {key}
-                              </Button>
-                            ))}
-                            <Button 
-                              variant="outline" 
-                              className="h-full rounded-[24px] text-red-500 border-2 border-red-50/50 hover:border-red-200 hover:bg-red-50 active:scale-95 transition-all shadow-sm flex items-center justify-center p-0" 
-                              onClick={deleteLastDigit}
-                            >
-                              <Delete className="w-9 h-9" />
-                            </Button>
-                          </div>
-
-                          {/* Right: Quick Cash Banknotes (25% width) */}
-                          <div className="col-span-1 grid grid-cols-1 gap-3 h-full">
-                            {[
-                              { label: '1,000', value: 1000, color: 'bg-slate-900 hover:bg-black' },
-                              { label: '500', value: 500, color: 'bg-purple-600 hover:bg-purple-700' },
-                              { label: '100', value: 100, color: 'bg-red-600 hover:bg-red-700' },
-                              { label: '50', value: 50, color: 'bg-blue-600 hover:bg-blue-700' },
-                              { label: '20', value: 20, color: 'bg-green-600 hover:bg-green-700' },
-                            ].map((btn) => (
-                              <Button
-                                key={btn.value}
-                                className={cn(
-                                  "h-full text-lg font-black rounded-[22px] shadow-lg text-white border-none transition-transform active:scale-95", 
-                                  btn.color
-                                )}
-                                onClick={() => handleQuickCash(btn.value)}
-                              >
-                                {btn.label}
-                              </Button>
-                            ))}
-                            <Button 
-                              variant="secondary" 
-                              className="h-full font-bold rounded-[22px] bg-slate-100 text-slate-500 hover:bg-slate-200 active:scale-95" 
-                              onClick={clearReceived}
-                            >
-                              ล้าง
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {paymentMode === 'TRANSFER' && (
-                      <div className="flex-1 flex flex-col items-center justify-center space-y-6">
-                        <div className="relative group">
-                          {branch?.qrCodeUrl ? (
-                            <div className="bg-white p-8 rounded-[40px] border-4 border-slate-100 shadow-2xl transition-transform group-hover:scale-105">
-                              <img 
-                                src={branch.qrCodeUrl} 
-                                alt="QR Code" 
-                                className="w-64 h-64 object-contain" 
-                                referrerPolicy="no-referrer"
-                              />
-                            </div>
-                          ) : (
-                            <div className="bg-slate-50 p-16 rounded-[40px] border-4 border-dashed border-slate-200 text-center space-y-4">
-                              <QrCode className="w-24 h-24 mx-auto text-slate-200" />
-                              <p className="text-slate-400 font-medium max-w-[200px]">กรุณาตั้งค่า QR Code ในส่วนจัดการสาขา</p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="bg-slate-50 px-8 py-4 rounded-full border border-slate-200">
-                          <p className="text-lg text-slate-600 font-bold">
-                            ยอดชำระ: <span className="text-2xl font-black text-primary">฿{selectedBill?.totalAmount.toLocaleString()}</span>
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {!paymentMode && (
-                      <div className="flex-1 flex flex-col items-center justify-center text-slate-300 space-y-4">
-                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
-                          <CreditCard className="w-10 h-10" />
-                        </div>
-                        <p className="text-lg font-medium italic">เลือกช่องทางชำระเงินเพื่อดำเนินการต่อ</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action Footer */}
-                  <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex gap-6">
-                    <Button 
-                      variant="ghost" 
-                      className="h-16 px-8 rounded-2xl font-bold text-slate-500 hover:bg-slate-100" 
-                      onClick={() => setSelectedBill(null)}
-                      disabled={isProcessing}
-                    >
-                      ยกเลิก
-                    </Button>
-                    <Button 
-                      className={cn(
-                        "flex-1 h-16 rounded-2xl text-xl font-black shadow-lg transition-all active:scale-[0.98]",
-                        paymentMode ? "bg-green-600 hover:bg-green-700" : "bg-slate-200 text-slate-400 pointer-events-none"
-                      )}
-                      disabled={!paymentMode || isProcessing}
-                      onClick={handlePayment}
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="w-6 h-6 animate-spin mr-3" />
-                      ) : (
-                        <CheckCircleRow className="w-6 h-6 mr-3" />
-                      )}
-                      {paymentMode === 'CASH' ? 'ยืนยันรับเงินสด' : 'ยืนยันและปิดโต๊ะ'}
-                    </Button>
+                {/* Footer: Shrink-0 (Always Visible) */}
+                <div className="p-6 bg-white border-t border-slate-200 shrink-0 shadow-[0_-8px_30px_rgba(0,0,0,0.04)] z-10">
+                  <div className="flex justify-between items-center bg-slate-900 p-5 rounded-[24px] shadow-xl text-white">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ยอดรวมสุทธิ</span>
+                      <span className="text-xs text-slate-500 italic">Total Amount</span>
+                    </div>
+                    <span className="text-4xl font-black italic tracking-tighter">฿{selectedBill?.totalAmount.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
-            </DialogContent>
-          </Dialog>
-        )}
+
+              {/* Right Column: Payment Logic (Fixed Heights + Bottom Aligned) */}
+              <div className="flex-1 flex flex-col h-[55%] sm:h-full bg-white overflow-hidden relative border-l border-slate-100">
+                <div className="flex-1 flex flex-col min-h-0 p-8 overflow-y-auto bg-white">
+                  {/* Payment Mode Selector */}
+                  <div className="grid grid-cols-2 gap-4 shrink-0 mb-8">
+                    <button 
+                      onClick={() => setPaymentMode('CASH')}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all gap-3 group relative overflow-hidden",
+                        paymentMode === 'CASH' 
+                          ? "border-primary bg-primary/5 text-primary ring-4 ring-primary/10" 
+                          : "border-slate-100 hover:border-slate-300 hover:bg-slate-50"
+                      )}
+                    >
+                      <Banknote className={cn("w-10 h-10 transition-transform group-hover:scale-110", paymentMode === 'CASH' ? "text-primary" : "text-slate-400")} />
+                      <span className="font-bold text-lg">เงินสด (Cash)</span>
+                      {paymentMode === 'CASH' && <div className="absolute top-2 right-2 w-3 h-3 bg-primary rounded-full animate-pulse" />}
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMode('TRANSFER')}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all gap-3 group relative overflow-hidden",
+                        paymentMode === 'TRANSFER' 
+                          ? "border-primary bg-primary/5 text-primary ring-4 ring-primary/10" 
+                          : "border-slate-100 hover:border-slate-300 hover:bg-slate-50"
+                      )}
+                    >
+                      <QrCode className={cn("w-10 h-10 transition-transform group-hover:scale-110", paymentMode === 'TRANSFER' ? "text-primary" : "text-slate-400")} />
+                      <span className="font-bold text-lg">โอนเงิน (Transfer)</span>
+                      {paymentMode === 'TRANSFER' && <div className="absolute top-2 right-2 w-3 h-3 bg-primary rounded-full animate-pulse" />}
+                    </button>
+                  </div>
+
+                  {paymentMode === 'CASH' && (
+                    <div className="flex-1 flex flex-col">
+                      {/* Display Zone */}
+                      <div className="bg-slate-950 p-7 rounded-[32px] text-right shrink-0 mb-6 shadow-2xl font-mono border border-white/5">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">รับเงินมา / Received</p>
+                          <div className="text-right">
+                            <p className="text-[10px] text-green-500 font-black uppercase tracking-[0.2em]">เงินทอน / Change</p>
+                            <p className="text-4xl font-black text-green-400 mt-1">฿{change.toLocaleString()}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-baseline justify-end gap-2 text-white">
+                          <span className="text-2xl text-slate-600 font-bold">฿</span>
+                          <p className="text-6xl font-black tracking-tighter tabular-nums">{parseFloat(receivedAmount || '0').toLocaleString()}</p>
+                        </div>
+                      </div>
+
+                      {/* Quick Cash Buttons - Fixed h-16 */}
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 shrink-0 mb-6">
+                        {[
+                          { l: '1,000', v: 1000, c: 'bg-slate-900 border-slate-700' },
+                          { l: '500', v: 500, c: 'bg-purple-700 border-purple-800' },
+                          { l: '100', v: 100, c: 'bg-red-700 border-red-800' },
+                          { l: '50', v: 50, c: 'bg-blue-700 border-blue-800' },
+                          { l: '20', v: 20, c: 'bg-emerald-700 border-emerald-800' },
+                        ].map((b) => (
+                          <Button 
+                            key={b.v} 
+                            className={cn("h-16 text-sm font-black rounded-2xl text-white shadow-lg border-b-4 transition-all active:translate-y-1 active:border-b-0", b.c)}
+                            onClick={() => handleQuickCash(b.v)}
+                          >
+                            {b.l}
+                          </Button>
+                        ))}
+                        <Button variant="outline" className="h-16 font-black rounded-2xl border-2 border-slate-100 hover:bg-slate-100 text-slate-500" onClick={clearReceived}>CLR</Button>
+                      </div>
+
+                      {/* Numpad + Action Group - Pushed to bottom */}
+                      <div className="mt-auto space-y-6">
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '00'].map(key => (
+                            <Button 
+                              key={key} 
+                              variant="outline" 
+                              className="h-20 w-full text-4xl font-black rounded-[28px] border-2 border-slate-100 hover:border-primary/30 hover:bg-primary/5 active:scale-95 transition-all shadow-sm"
+                              onClick={() => appendDigit(key)}
+                            >
+                              {key}
+                            </Button>
+                          ))}
+                          <Button 
+                            variant="outline" 
+                            className="h-20 w-full rounded-[28px] text-red-500 border-2 border-red-100 hover:bg-red-50 active:scale-95 transition-all shadow-sm flex items-center justify-center p-0" 
+                            onClick={deleteLastDigit}
+                          >
+                            <Delete className="w-10 h-10" />
+                          </Button>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-4">
+                          <Button 
+                            variant="ghost" 
+                            className="h-20 px-10 rounded-3xl font-bold text-slate-400 hover:text-slate-600" 
+                            onClick={() => setSelectedBill(null)} 
+                            disabled={isProcessing}
+                          >
+                            ยกเลิก
+                          </Button>
+                          <Button 
+                            className={cn(
+                              "flex-1 h-20 rounded-3xl text-2xl font-black shadow-2xl transition-all active:scale-[0.98]",
+                              parseFloat(receivedAmount || '0') >= selectedBill?.totalAmount 
+                                ? "bg-green-600 hover:bg-green-700 text-white" 
+                                : "bg-slate-100 text-slate-300 pointer-events-none"
+                            )} 
+                            disabled={isProcessing || parseFloat(receivedAmount || '0') < selectedBill?.totalAmount} 
+                            onClick={handlePayment}
+                          >
+                            {isProcessing ? (
+                              <Loader2 className="w-8 h-8 animate-spin" />
+                            ) : (
+                              <div className="flex items-center gap-4">
+                                <Banknote className="w-8 h-8" />
+                                <span>ยืนยันรับเงินสด</span>
+                              </div>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {paymentMode === 'TRANSFER' && (
+                    <div className="flex-1 flex flex-col">
+                      <div className="flex-1 flex flex-col items-center justify-center space-y-6 bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-100">
+                        {branch?.qrCodeUrl ? (
+                          <div className="bg-white p-8 rounded-[48px] shadow-2xl scale-110 sm:scale-125">
+                            <img src={branch.qrCodeUrl} alt="QR" className="w-56 h-56 object-contain" referrerPolicy="no-referrer" />
+                          </div>
+                        ) : (
+                          <div className="bg-slate-50 p-16 rounded-[40px] border-4 border-dashed border-slate-200 text-center">
+                            <QrCode className="w-24 h-24 mx-auto text-slate-200" />
+                            <p className="text-slate-400 mt-4">กรุณาตั้งค่า QR Code</p>
+                          </div>
+                        )}
+                        <div className="bg-white px-8 py-4 rounded-full border border-slate-100 shadow-sm">
+                          <p className="text-xl font-bold">ยอดชำระ: <span className="text-4xl font-black text-primary">฿{selectedBill?.totalAmount.toLocaleString()}</span></p>
+                        </div>
+                      </div>
+
+                      {/* Transfer Action Footer - Pushed to bottom */}
+                      <div className="mt-auto flex gap-4 pt-8 shrink-0">
+                        <Button variant="ghost" className="h-20 px-10 rounded-3xl font-bold text-slate-400" onClick={() => setSelectedBill(null)} disabled={isProcessing}>ยกเลิก</Button>
+                        <Button 
+                          className="flex-1 h-20 rounded-3xl bg-blue-600 hover:bg-blue-700 text-2xl font-black text-white shadow-xl transition-all active:scale-[0.98]"
+                          disabled={isProcessing} 
+                          onClick={handlePayment}
+                        >
+                          {isProcessing ? <Loader2 className="w-8 h-8 animate-spin" /> : 'ยืนยันการโอนเงิน'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!paymentMode && (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-300 space-y-4">
+                      <CreditCard className="w-16 h-16 opacity-20" />
+                      <p className="text-xl font-bold italic text-slate-400">เลือกช่องทางชำระเงิน</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
       </AnimatePresence>
     </div>
   );
