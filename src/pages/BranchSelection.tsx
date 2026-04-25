@@ -129,7 +129,7 @@ export default function BranchSelection() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {branches.map((branch) => (
+          {Array.isArray(branches) && branches.map((branch) => (
             <Card 
               key={branch.id} 
               className="hover:shadow-lg transition-shadow cursor-pointer group"
@@ -155,7 +155,7 @@ export default function BranchSelection() {
               </CardContent>
             </Card>
           ))}
-          {branches.length === 0 && (
+          {(!Array.isArray(branches) || branches.length === 0) && (
             <div className="col-span-full text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200">
               <MapPin className="w-12 h-12 mx-auto text-slate-300 mb-4" />
               <h3 className="text-lg font-medium text-slate-900">ยังไม่มีสาขา</h3>

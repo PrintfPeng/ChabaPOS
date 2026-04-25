@@ -16,8 +16,9 @@ export class OrdersService {
     });
     if (!branch) throw new NotFoundException('Branch not found');
 
-    // 2. Generate Order Number (e.g., A001)
+    // 2. Generate Order Number (e.g., 1-20240418-001)
     const today = new Date();
+    const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
     today.setHours(0, 0, 0, 0);
     
     const count = await this.prisma.order.count({
@@ -29,7 +30,7 @@ export class OrdersService {
       },
     });
     
-    const orderNumber = `A${(count + 1).toString().padStart(3, '0')}`;
+    const orderNumber = `${dto.branchId}-${dateStr}-${(count + 1).toString().padStart(3, '0')}`;
 
     // 3. Process Items and Calculate Total
     let totalAmount = 0;
@@ -82,7 +83,7 @@ export class OrdersService {
         orderNumber,
         totalAmount,
         branchId: dto.branchId,
-        tableId: dto.tableId,
+        tableId: dto.tableId === 0 ? null : dto.tableId,
         source: dto.source || 'CUSTOMER',
         items: {
           create: orderItemsData,
@@ -97,8 +98,8 @@ export class OrdersService {
       },
     });
 
-    // 5. Update Table Status if tableId is present
-    if (dto.tableId) {
+    // 5. Update Table Status if tableId is present and not 0
+    if (dto.tableId && dto.tableId !== 0) {
       await this.prisma.table.update({
         where: { id: dto.tableId },
         data: { status: 'OCCUPIED' },
@@ -228,6 +229,7 @@ export class OrdersService {
       const tableId = order.tableId || 0;
       if (!acc[tableId]) {
         acc[tableId] = {
+          tableId: tableId,
           table: order.table,
           orders: [],
           totalAmount: 0,
@@ -243,9 +245,10 @@ export class OrdersService {
 
   async completePayment(tableId: number, paymentType: 'CASH' | 'TRANSFER') {
     // 1. Update all unpaid orders to PAID
+    // If tableId is 0, we update orders where tableId is null
     await this.prisma.order.updateMany({
       where: {
-        tableId,
+        tableId: tableId === 0 ? null : tableId,
         status: { notIn: ['PAID', 'CANCELLED'] },
       },
       data: {
@@ -254,10 +257,14 @@ export class OrdersService {
       },
     });
 
-    // 2. Clear table status to AVAILABLE
-    return this.prisma.table.update({
-      where: { id: tableId },
-      data: { status: 'AVAILABLE' },
-    });
+    // 2. Clear table status to AVAILABLE only if it's a real table
+    if (tableId && tableId !== 0) {
+      return this.prisma.table.update({
+        where: { id: tableId },
+        data: { status: 'AVAILABLE' },
+      });
+    }
+    
+    return { success: true };
   }
 }

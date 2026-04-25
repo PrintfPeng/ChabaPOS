@@ -20,7 +20,7 @@ export class AuthController {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
       this.logger.warn(`Login failed for: ${body.email}`);
-      throw new UnauthorizedException('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+      throw new UnauthorizedException('ข้อมูลเข้าสู่ระบบหรือรหัสผ่านไม่ถูกต้อง');
     }
     return this.authService.login(user);
   }
@@ -29,6 +29,6 @@ export class AuthController {
   @Post('register')
   async register(@Body() body: RegisterDto) {
     this.logger.log(`Registration attempt for: ${body.email}`);
-    return this.authService.register(body.email, body.password);
+    return this.authService.register(body);
   }
 }

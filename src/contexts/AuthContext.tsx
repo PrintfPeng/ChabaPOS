@@ -4,13 +4,15 @@ import api from '../lib/api';
 interface User {
   id: number;
   email: string;
+  firstName: string;
+  lastName: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, pass: string) => Promise<void>;
-  register: (email: string, pass: string) => Promise<void>;
+  login: (identifier: string, pass: string) => Promise<void>;
+  register: (data: any) => Promise<void>;
   logout: () => void;
 }
 
@@ -32,7 +34,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
     if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error('Failed to parse user from localStorage', e);
+      }
     }
     setLoading(false);
   }, []);
@@ -45,8 +51,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(user);
   };
 
-  const register = async (email: string, password: string) => {
-    const res = await api.post('/auth/register', { email, password });
+  const register = async (data: any) => {
+    const res = await api.post('/auth/register', data);
     const { access_token, user } = res.data;
     localStorage.setItem('token', access_token);
     localStorage.setItem('user', JSON.stringify(user));

@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
+import { ImageUpload } from '../components/ImageUpload';
+import { uploadImageToSupabase } from '../lib/supabase-storage';
 
 export default function BrandSelection() {
   const { logout } = useAuth();
@@ -18,17 +20,27 @@ export default function BrandSelection() {
   const [newBrandName, setNewBrandName] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleCreateBrand = async () => {
     if (!newBrandName) return;
+    setIsUploading(true);
     try {
-      await createBrand({ name: newBrandName, imageUrl });
+      let finalImageUrl = imageUrl;
+      if (selectedFile) {
+        finalImageUrl = await uploadImageToSupabase(selectedFile, 'brands');
+      }
+      await createBrand({ name: newBrandName, imageUrl: finalImageUrl });
       setNewBrandName('');
       setImageUrl('');
+      setSelectedFile(null);
       setIsDialogOpen(false);
       toast.success('สร้างแบรนด์สำเร็จ');
-    } catch (error) {
-      toast.error('สร้างแบรนด์ไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.message || 'สร้างแบรนด์ไม่สำเร็จ');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -36,15 +48,23 @@ export default function BrandSelection() {
 
   const handleUpdateBrand = async () => {
     if (!editingBrand || !newBrandName) return;
+    setIsUploading(true);
     try {
-      await updateBrand({ id: editingBrand.id, name: newBrandName, imageUrl });
+      let finalImageUrl = imageUrl;
+      if (selectedFile) {
+        finalImageUrl = await uploadImageToSupabase(selectedFile, 'brands');
+      }
+      await updateBrand({ id: editingBrand.id, name: newBrandName, imageUrl: finalImageUrl });
       setEditingBrand(null);
       setNewBrandName('');
       setImageUrl('');
+      setSelectedFile(null);
       setIsDialogOpen(false);
       toast.success('อัปเดตแบรนด์สำเร็จ');
-    } catch (error) {
-      toast.error('อัปเดตแบรนด์ไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.message || 'อัปเดตแบรนด์ไม่สำเร็จ');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -100,18 +120,27 @@ export default function BrandSelection() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="logo">URL รูปภาพ (ไม่บังคับ)</Label>
-                    <Input 
-                      id="logo" 
+                    <ImageUpload 
                       value={imageUrl} 
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://example.com/logo.png"
+                      onChange={(url) => setImageUrl(url)}
+                      onFileSelect={(file) => setSelectedFile(file)}
+                      label="โลโก้แบรนด์"
                     />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button onClick={editingBrand ? handleUpdateBrand : handleCreateBrand}>
-                    {editingBrand ? 'บันทึกการแก้ไข' : 'สร้างแบรนด์'}
+                  <Button 
+                    onClick={editingBrand ? handleUpdateBrand : handleCreateBrand}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        กำลังบันทึก...
+                      </>
+                    ) : (
+                      editingBrand ? 'บันทึกการแก้ไข' : 'สร้างแบรนด์'
+                    )}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -124,7 +153,7 @@ export default function BrandSelection() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {brands.map((brand) => (
+          {Array.isArray(brands) && brands.map((brand) => (
             <Card 
               key={brand.id} 
               className="hover:shadow-lg transition-shadow cursor-pointer group"
@@ -151,7 +180,7 @@ export default function BrandSelection() {
               </CardContent>
             </Card>
           ))}
-          {brands.length === 0 && (
+          {(!Array.isArray(brands) || brands.length === 0) && (
             <div className="col-span-full text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200">
               <Store className="w-12 h-12 mx-auto text-slate-300 mb-4" />
               <h3 className="text-lg font-medium text-slate-900">ยังไม่มีแบรนด์</h3>

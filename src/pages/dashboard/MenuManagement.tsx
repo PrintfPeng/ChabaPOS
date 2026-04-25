@@ -12,6 +12,8 @@ import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
+import { ImageUpload } from '../../components/ImageUpload';
+import { uploadImageToSupabase } from '../../lib/supabase-storage';
 
 export default function MenuManagement() {
   const { branchId } = useParams<{ branchId: string }>();
@@ -36,6 +38,8 @@ export default function MenuManagement() {
 
   const [isCatDialogOpen, setIsCatDialogOpen] = useState(false);
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleCreateCategory = async () => {
     if (!bid || !newCategoryName) return;
@@ -70,42 +74,64 @@ export default function MenuManagement() {
 
   const handleCreateItem = async () => {
     if (!bid || !newItem.name || !newItem.price || !newItem.categoryId) return;
+    setIsUploading(true);
     try {
+      let finalImageUrl = newItem.imageUrl;
+      
+      // Upload to Supabase if a file was selected
+      if (selectedFile) {
+        finalImageUrl = await uploadImageToSupabase(selectedFile, 'items');
+      }
+
       await createMenuItem({
         branchId: bid,
         name: newItem.name,
         price: parseFloat(newItem.price),
         categoryId: Number(newItem.categoryId),
         kitchenId: newItem.kitchenId ? Number(newItem.kitchenId) : undefined,
-        imageUrl: newItem.imageUrl,
+        imageUrl: finalImageUrl,
         optionGroupIds: newItem.optionGroupIds,
       });
       setNewItem({ name: '', price: '', categoryId: '', kitchenId: '', imageUrl: '', optionGroupIds: [] });
+      setSelectedFile(null);
       setIsItemDialogOpen(false);
       toast.success('สร้างรายการเมนูสำเร็จ');
-    } catch (error) {
-      toast.error('สร้างรายการเมนูไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.message || 'สร้างรายการเมนูไม่สำเร็จ');
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleUpdateItem = async () => {
     if (!editingItem || !newItem.name || !newItem.price || !newItem.categoryId) return;
+    setIsUploading(true);
     try {
+      let finalImageUrl = newItem.imageUrl;
+      
+      // Upload to Supabase if a new file was selected
+      if (selectedFile) {
+        finalImageUrl = await uploadImageToSupabase(selectedFile, 'items');
+      }
+
       await updateMenuItem({
         id: editingItem.id,
         name: newItem.name,
         price: parseFloat(newItem.price),
         categoryId: Number(newItem.categoryId),
         kitchenId: newItem.kitchenId ? Number(newItem.kitchenId) : undefined,
-        imageUrl: newItem.imageUrl,
+        imageUrl: finalImageUrl,
         optionGroupIds: newItem.optionGroupIds,
       });
       setEditingItem(null);
       setNewItem({ name: '', price: '', categoryId: '', kitchenId: '', imageUrl: '', optionGroupIds: [] });
+      setSelectedFile(null);
       setIsItemDialogOpen(false);
       toast.success('อัปเดตรายการเมนูสำเร็จ');
-    } catch (error) {
-      toast.error('อัปเดตรายการเมนูไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.message || 'อัปเดตรายการเมนูไม่สำเร็จ');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -205,8 +231,12 @@ export default function MenuManagement() {
                   <Input type="number" value={newItem.price} onChange={(e) => setNewItem({...newItem, price: e.target.value})} />
                 </div>
                 <div>
-                  <Label>URL รูปภาพ (ไม่บังคับ)</Label>
-                  <Input value={newItem.imageUrl} onChange={(e) => setNewItem({...newItem, imageUrl: e.target.value})} placeholder="https://..." />
+                  <ImageUpload 
+                    value={newItem.imageUrl} 
+                    onChange={(url) => setNewItem({...newItem, imageUrl: url})} 
+                    onFileSelect={(file) => setSelectedFile(file)}
+                    label="รูปภาพรายการ"
+                  />
                 </div>
                 <div>
                   <Label>หมวดหมู่</Label>
@@ -215,7 +245,7 @@ export default function MenuManagement() {
                       <SelectValue placeholder="เลือกหมวดหมู่" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map(cat => (
+                      {Array.isArray(categories) && categories.map(cat => (
                         <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -228,7 +258,7 @@ export default function MenuManagement() {
                       <SelectValue placeholder="เลือกห้องครัว" />
                     </SelectTrigger>
                     <SelectContent>
-                      {kitchens.map(k => (
+                      {Array.isArray(kitchens) && kitchens.map(k => (
                         <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -237,7 +267,7 @@ export default function MenuManagement() {
                 <div>
                   <Label>ตัวเลือกเสริม</Label>
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    {optionGroups.map(og => (
+                    {Array.isArray(optionGroups) && optionGroups.map(og => (
                       <div key={og.id} className="flex items-center space-x-2">
                         <input 
                           type="checkbox" 
@@ -257,8 +287,18 @@ export default function MenuManagement() {
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={editingItem ? handleUpdateItem : handleCreateItem}>
-                  {editingItem ? 'บันทึกการแก้ไข' : 'สร้างรายการ'}
+                <Button 
+                  onClick={editingItem ? handleUpdateItem : handleCreateItem}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      กำลังบันทึก...
+                    </>
+                  ) : (
+                    editingItem ? 'บันทึกการแก้ไข' : 'สร้างรายการ'
+                  )}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -266,9 +306,9 @@ export default function MenuManagement() {
         </div>
       </div>
 
-      <Tabs defaultValue={categories[0]?.id?.toString()} className="w-full">
+      <Tabs defaultValue={Array.isArray(categories) && categories[0] ? categories[0].id.toString() : ""} className="w-full">
         <TabsList className="mb-8 flex-wrap h-auto p-1 bg-slate-100">
-          {categories.map(cat => (
+          {Array.isArray(categories) && categories.map(cat => (
             <div key={cat.id} className="flex items-center">
               <TabsTrigger value={cat.id.toString()} className="px-6 py-2">
                 {cat.name}
@@ -280,10 +320,10 @@ export default function MenuManagement() {
           ))}
         </TabsList>
 
-        {categories.map(cat => (
+        {Array.isArray(categories) && categories.map(cat => (
           <TabsContent key={cat.id} value={cat.id.toString()}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {menuItems.filter(item => item.categoryId === cat.id).map(item => (
+              {Array.isArray(menuItems) && menuItems.filter(item => item.categoryId === cat.id).map(item => (
                 <Card key={item.id} className="overflow-hidden">
                   <div className="h-32 bg-slate-100 flex items-center justify-center text-slate-400">
                     {item.imageUrl ? (
@@ -309,9 +349,9 @@ export default function MenuManagement() {
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">
-                        ห้องครัว: {kitchens.find(k => k.id === item.kitchenId)?.name || 'ไม่มี'}
+                        ห้องครัว: {Array.isArray(kitchens) && kitchens.find(k => k.id === item.kitchenId)?.name || 'ไม่มี'}
                       </span>
-                      {item.optionGroups?.map(og => (
+                      {Array.isArray(item.optionGroups) && item.optionGroups.map(og => (
                         <span key={og.id} className="text-xs bg-primary/10 px-2 py-1 rounded text-primary">
                           {og.name}
                         </span>
@@ -320,7 +360,7 @@ export default function MenuManagement() {
                   </CardContent>
                 </Card>
               ))}
-              {menuItems.filter(item => item.categoryId === cat.id).length === 0 && (
+              {(!Array.isArray(menuItems) || menuItems.filter(item => item.categoryId === cat.id).length === 0) && (
                 <div className="col-span-full text-center py-12 bg-white rounded-xl border-2 border-dashed border-slate-200">
                   <p className="text-slate-500">ยังไม่มีรายการในหมวดหมู่นี้</p>
                 </div>
@@ -328,7 +368,7 @@ export default function MenuManagement() {
             </div>
           </TabsContent>
         ))}
-        {categories.length === 0 && (
+        {(!Array.isArray(categories) || categories.length === 0) && (
           <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200">
             <List className="w-12 h-12 mx-auto text-slate-300 mb-4" />
             <h3 className="text-lg font-medium text-slate-900">ยังไม่มีหมวดหมู่</h3>

@@ -63,7 +63,8 @@ export default function Payment() {
 
     setIsProcessing(true);
     try {
-      await api.post(`/orders/table/${selectedBill?.table?.id}/pay`, {
+      const tableId = selectedBill.tableId ?? selectedBill.table?.id;
+      await api.post(`/orders/table/${tableId}/pay`, {
         paymentType: paymentMode === 'CASH' ? 'CASH' : 'TRANSFER'
       });
       toast.success('ชำระเงินเสร็จสิ้น');
@@ -109,9 +110,9 @@ export default function Payment() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence mode="popLayout">
-          {(unpaidBills || []).map((bill) => (
+          {Array.isArray(unpaidBills) && unpaidBills.map((bill) => (
             <motion.div
-              key={bill.table?.id || `unnamed-${Math.random()}`}
+              key={bill.tableId}
               layout
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -144,7 +145,7 @@ export default function Payment() {
           ))}
         </AnimatePresence>
 
-        {unpaidBills.length === 0 && (
+        {(!Array.isArray(unpaidBills) || unpaidBills.length === 0) && (
           <div className="col-span-full py-20 text-center bg-white rounded-xl border-2 border-dashed border-slate-200">
             <History className="w-12 h-12 mx-auto text-slate-300 mb-4" />
             <h3 className="text-lg font-medium text-slate-900">ไม่มีบิลค้างชำระ</h3>
@@ -186,7 +187,7 @@ export default function Payment() {
                 <div className="flex-1 min-h-0 overflow-hidden relative">
                   <ScrollArea className="h-full">
                     <div className="p-6 space-y-4 pb-12">
-                      {(selectedBill?.orders || []).map((order: any) => (
+                      {Array.isArray(selectedBill?.orders) && selectedBill.orders.map((order: any) => (
                         <div key={order.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
                           <div className="flex items-center justify-between border-b border-slate-50 pb-3 mb-4">
                             <div className="flex flex-col">
@@ -204,7 +205,7 @@ export default function Payment() {
                           </div>
 
                           <div className="space-y-4">
-                            {(order.items || []).map((item: any) => (
+                            {Array.isArray(order.items) && order.items.map((item: any) => (
                               <div key={item.id} className="flex justify-between items-start gap-4">
                                 <div className="flex items-start gap-3 flex-1 min-w-0">
                                   <div className="shrink-0 w-7 h-7 flex items-center justify-center bg-slate-100 rounded-lg text-xs font-black text-slate-600">
@@ -213,14 +214,14 @@ export default function Payment() {
                                   <div className="min-w-0">
                                     <p className="text-sm font-bold text-slate-800 truncate">{item.name}</p>
                                     <div className="flex flex-wrap gap-1 mt-1">
-                                      {(item.options || []).map((o: any) => (
+                                      {Array.isArray(item.options) && item.options.map((o: any) => (
                                         <span key={o.id} className="text-[10px] text-slate-400">/ {o.name}</span>
                                       ))}
                                     </div>
                                   </div>
                                 </div>
                                 <span className="text-sm font-black text-slate-900 tabular-nums">
-                                  ฿{((item.price + (item.options || []).reduce((sum: number, o: any) => sum + o.price, 0)) * item.quantity).toLocaleString()}
+                                  ฿{((item.price + (Array.isArray(item.options) ? item.options.reduce((sum: number, o: any) => sum + o.price, 0) : 0)) * item.quantity).toLocaleString()}
                                 </span>
                               </div>
                             ))}
@@ -243,168 +244,159 @@ export default function Payment() {
                 </div>
               </div>
 
-              {/* Right Column: Payment Logic (Fixed Heights + Bottom Aligned) */}
-              <div className="flex-1 flex flex-col h-[55%] sm:h-full bg-white overflow-hidden relative border-l border-slate-100">
-                <div className="flex-1 flex flex-col min-h-0 p-8 overflow-y-auto bg-white">
-                  {/* Payment Mode Selector */}
-                  <div className="grid grid-cols-2 gap-4 shrink-0 mb-8">
+              {/* Right Column: Payment Logic (Compact Design) */}
+              <div className="flex-1 flex flex-col h-fit max-h-[90vh] sm:max-h-full bg-white overflow-hidden relative border-l border-slate-100">
+                <div className="p-6 overflow-y-auto bg-white">
+                  {/* Payment Mode Selector - Compact */}
+                  <div className="grid grid-cols-2 gap-3 shrink-0 mb-6">
                     <button 
                       onClick={() => setPaymentMode('CASH')}
                       className={cn(
-                        "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all gap-3 group relative overflow-hidden",
+                        "flex items-center justify-center p-4 rounded-xl border-2 transition-all gap-2 group",
                         paymentMode === 'CASH' 
-                          ? "border-primary bg-primary/5 text-primary ring-4 ring-primary/10" 
-                          : "border-slate-100 hover:border-slate-300 hover:bg-slate-50"
+                          ? "border-primary bg-primary/5 text-primary" 
+                          : "border-slate-100 hover:border-slate-200"
                       )}
                     >
-                      <Banknote className={cn("w-10 h-10 transition-transform group-hover:scale-110", paymentMode === 'CASH' ? "text-primary" : "text-slate-400")} />
-                      <span className="font-bold text-lg">เงินสด (Cash)</span>
-                      {paymentMode === 'CASH' && <div className="absolute top-2 right-2 w-3 h-3 bg-primary rounded-full animate-pulse" />}
+                      <Banknote className={cn("w-6 h-6", paymentMode === 'CASH' ? "text-primary" : "text-slate-400")} />
+                      <span className="font-bold">เงินสด</span>
                     </button>
                     <button 
                       onClick={() => setPaymentMode('TRANSFER')}
                       className={cn(
-                        "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all gap-3 group relative overflow-hidden",
+                        "flex items-center justify-center p-4 rounded-xl border-2 transition-all gap-2 group",
                         paymentMode === 'TRANSFER' 
-                          ? "border-primary bg-primary/5 text-primary ring-4 ring-primary/10" 
-                          : "border-slate-100 hover:border-slate-300 hover:bg-slate-50"
+                          ? "border-primary bg-primary/5 text-primary" 
+                          : "border-slate-100 hover:border-slate-200"
                       )}
                     >
-                      <QrCode className={cn("w-10 h-10 transition-transform group-hover:scale-110", paymentMode === 'TRANSFER' ? "text-primary" : "text-slate-400")} />
-                      <span className="font-bold text-lg">โอนเงิน (Transfer)</span>
-                      {paymentMode === 'TRANSFER' && <div className="absolute top-2 right-2 w-3 h-3 bg-primary rounded-full animate-pulse" />}
+                      <QrCode className={cn("w-6 h-6", paymentMode === 'TRANSFER' ? "text-primary" : "text-slate-400")} />
+                      <span className="font-bold">โอนเงิน</span>
                     </button>
                   </div>
 
                   {paymentMode === 'CASH' && (
-                    <div className="flex-1 flex flex-col">
-                      {/* Display Zone */}
-                      <div className="bg-slate-950 p-7 rounded-[32px] text-right shrink-0 mb-6 shadow-2xl font-mono border border-white/5">
-                        <div className="flex justify-between items-start mb-2">
-                          <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">รับเงินมา / Received</p>
+                    <div className="space-y-4">
+                      {/* Compact Display Zone */}
+                      <div className="bg-slate-900 px-6 py-4 rounded-2xl text-white font-mono shadow-inner border border-white/5">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Received</span>
                           <div className="text-right">
-                            <p className="text-[10px] text-green-500 font-black uppercase tracking-[0.2em]">เงินทอน / Change</p>
-                            <p className="text-4xl font-black text-green-400 mt-1">฿{change.toLocaleString()}</p>
+                            <span className="text-[9px] text-green-500 font-bold uppercase tracking-widest mr-2">Change</span>
+                            <span className="text-xl font-bold text-green-400">฿{change.toLocaleString()}</span>
                           </div>
                         </div>
-                        <div className="flex items-baseline justify-end gap-2 text-white">
-                          <span className="text-2xl text-slate-600 font-bold">฿</span>
-                          <p className="text-6xl font-black tracking-tighter tabular-nums">{parseFloat(receivedAmount || '0').toLocaleString()}</p>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="text-lg text-slate-600">฿</span>
+                          <p className="text-4xl font-black tracking-tight">{parseFloat(receivedAmount || '0').toLocaleString()}</p>
                         </div>
                       </div>
 
-                      {/* Quick Cash Buttons - Fixed h-16 */}
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 shrink-0 mb-6">
+                      {/* Quick Cash Buttons - Compact h-11 */}
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                         {[
-                          { l: '1,000', v: 1000, c: 'bg-slate-900 border-slate-700' },
-                          { l: '500', v: 500, c: 'bg-purple-700 border-purple-800' },
-                          { l: '100', v: 100, c: 'bg-red-700 border-red-800' },
-                          { l: '50', v: 50, c: 'bg-blue-700 border-blue-800' },
-                          { l: '20', v: 20, c: 'bg-emerald-700 border-emerald-800' },
+                          { l: '1,000', v: 1000, c: 'bg-slate-800' },
+                          { l: '500', v: 500, c: 'bg-purple-800' },
+                          { l: '100', v: 100, c: 'bg-red-800' },
+                          { l: '50', v: 50, c: 'bg-blue-800' },
+                          { l: '20', v: 20, c: 'bg-emerald-800' },
                         ].map((b) => (
                           <Button 
                             key={b.v} 
-                            className={cn("h-16 text-sm font-black rounded-2xl text-white shadow-lg border-b-4 transition-all active:translate-y-1 active:border-b-0", b.c)}
+                            className={cn("h-11 text-xs font-black rounded-lg text-white shadow transition-transform active:scale-95", b.c)}
                             onClick={() => handleQuickCash(b.v)}
                           >
                             {b.l}
                           </Button>
                         ))}
-                        <Button variant="outline" className="h-16 font-black rounded-2xl border-2 border-slate-100 hover:bg-slate-100 text-slate-500" onClick={clearReceived}>CLR</Button>
+                        <Button variant="outline" className="h-11 text-xs font-black rounded-lg border-slate-100 hover:bg-slate-50 text-slate-500" onClick={clearReceived}>CLR</Button>
                       </div>
 
-                      {/* Numpad + Action Group - Pushed to bottom */}
-                      <div className="mt-auto space-y-6">
-                        <div className="grid grid-cols-3 gap-3 mb-4">
-                          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '00'].map(key => (
-                            <Button 
-                              key={key} 
-                              variant="outline" 
-                              className="h-20 w-full text-4xl font-black rounded-[28px] border-2 border-slate-100 hover:border-primary/30 hover:bg-primary/5 active:scale-95 transition-all shadow-sm"
-                              onClick={() => appendDigit(key)}
-                            >
-                              {key}
-                            </Button>
-                          ))}
+                      {/* Numpad - Compact h-14 */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '00'].map(key => (
                           <Button 
+                            key={key} 
                             variant="outline" 
-                            className="h-20 w-full rounded-[28px] text-red-500 border-2 border-red-100 hover:bg-red-50 active:scale-95 transition-all shadow-sm flex items-center justify-center p-0" 
-                            onClick={deleteLastDigit}
+                            className="h-14 w-full text-xl font-bold rounded-xl border-slate-100 hover:bg-slate-50 active:scale-95 shadow-sm"
+                            onClick={() => appendDigit(key)}
                           >
-                            <Delete className="w-10 h-10" />
+                            {key}
                           </Button>
-                        </div>
+                        ))}
+                        <Button 
+                          variant="outline" 
+                          className="h-14 w-full rounded-xl text-red-500 border-slate-100 hover:bg-red-50 active:scale-95 shadow-sm flex items-center justify-center" 
+                          onClick={deleteLastDigit}
+                        >
+                          <Delete className="w-6 h-6" />
+                        </Button>
+                      </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-4">
-                          <Button 
-                            variant="ghost" 
-                            className="h-20 px-10 rounded-3xl font-bold text-slate-400 hover:text-slate-600" 
-                            onClick={() => setSelectedBill(null)} 
-                            disabled={isProcessing}
-                          >
-                            ยกเลิก
-                          </Button>
-                          <Button 
-                            className={cn(
-                              "flex-1 h-20 rounded-3xl text-2xl font-black shadow-2xl transition-all active:scale-[0.98]",
-                              parseFloat(receivedAmount || '0') >= selectedBill?.totalAmount 
-                                ? "bg-green-600 hover:bg-green-700 text-white" 
-                                : "bg-slate-100 text-slate-300 pointer-events-none"
-                            )} 
-                            disabled={isProcessing || parseFloat(receivedAmount || '0') < selectedBill?.totalAmount} 
-                            onClick={handlePayment}
-                          >
-                            {isProcessing ? (
-                              <Loader2 className="w-8 h-8 animate-spin" />
-                            ) : (
-                              <div className="flex items-center gap-4">
-                                <Banknote className="w-8 h-8" />
-                                <span>ยืนยันรับเงินสด</span>
-                              </div>
-                            )}
-                          </Button>
-                        </div>
+                      {/* Action Buttons - Compact h-14 */}
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="ghost" 
+                          className="h-14 px-6 rounded-xl font-bold text-slate-400 hover:text-slate-600" 
+                          onClick={() => setSelectedBill(null)}
+                          disabled={isProcessing}
+                        >
+                          ยกเลิก
+                        </Button>
+                        <Button 
+                          className={cn(
+                            "flex-1 h-14 rounded-xl text-lg font-black shadow-lg transition-all active:scale-[0.98]",
+                            parseFloat(receivedAmount || '0') >= (selectedBill?.totalAmount || 0)
+                              ? "bg-green-600 hover:bg-green-700 text-white" 
+                              : "bg-slate-100 text-slate-300 pointer-events-none"
+                          )} 
+                          disabled={isProcessing || parseFloat(receivedAmount || '0') < (selectedBill?.totalAmount || 0)} 
+                          onClick={handlePayment}
+                        >
+                          {isProcessing ? (
+                            <Loader2 className="w-6 h-6 animate-spin" />
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <Banknote className="w-5 h-5" />
+                              <span>ยืนยันรับเงินสด</span>
+                            </div>
+                          )}
+                        </Button>
                       </div>
                     </div>
                   )}
 
                   {paymentMode === 'TRANSFER' && (
-                    <div className="flex-1 flex flex-col">
-                      <div className="flex-1 flex flex-col items-center justify-center space-y-6 bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-100">
+                    <div className="space-y-6">
+                      <div className="bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100 p-8 flex flex-col items-center justify-center">
                         {branch?.qrCodeUrl ? (
-                          <div className="bg-white p-8 rounded-[48px] shadow-2xl scale-110 sm:scale-125">
-                            <img src={branch.qrCodeUrl} alt="QR" className="w-56 h-56 object-contain" referrerPolicy="no-referrer" />
-                          </div>
+                          <img src={branch.qrCodeUrl} alt="QR" className="w-48 h-48 mb-4 object-contain shadow-lg rounded-xl bg-white p-2" referrerPolicy="no-referrer" />
                         ) : (
-                          <div className="bg-slate-50 p-16 rounded-[40px] border-4 border-dashed border-slate-200 text-center">
-                            <QrCode className="w-24 h-24 mx-auto text-slate-200" />
-                            <p className="text-slate-400 mt-4">กรุณาตั้งค่า QR Code</p>
-                          </div>
+                          <QrCode className="w-12 h-12 text-slate-200 mb-2" />
                         )}
-                        <div className="bg-white px-8 py-4 rounded-full border border-slate-100 shadow-sm">
-                          <p className="text-xl font-bold">ยอดชำระ: <span className="text-4xl font-black text-primary">฿{selectedBill?.totalAmount.toLocaleString()}</span></p>
+                        <div className="bg-white px-6 py-2 rounded-full border border-slate-100 shadow-sm text-center">
+                          <p className="font-bold">฿{selectedBill?.totalAmount.toLocaleString()}</p>
                         </div>
                       </div>
 
-                      {/* Transfer Action Footer - Pushed to bottom */}
-                      <div className="mt-auto flex gap-4 pt-8 shrink-0">
-                        <Button variant="ghost" className="h-20 px-10 rounded-3xl font-bold text-slate-400" onClick={() => setSelectedBill(null)} disabled={isProcessing}>ยกเลิก</Button>
+                      {/* Transfer Action Footer - Compact h-14 */}
+                      <div className="flex gap-2">
+                        <Button variant="ghost" className="h-14 px-6 rounded-xl font-bold text-slate-400" onClick={() => setSelectedBill(null)} disabled={isProcessing}>ยกเลิก</Button>
                         <Button 
-                          className="flex-1 h-20 rounded-3xl bg-blue-600 hover:bg-blue-700 text-2xl font-black text-white shadow-xl transition-all active:scale-[0.98]"
+                          className="flex-1 h-14 rounded-xl bg-blue-600 hover:bg-blue-700 text-lg font-black text-white shadow-lg transition-all active:scale-[0.98]"
                           disabled={isProcessing} 
                           onClick={handlePayment}
                         >
-                          {isProcessing ? <Loader2 className="w-8 h-8 animate-spin" /> : 'ยืนยันการโอนเงิน'}
+                          {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : 'ยืนยันการโอนเงิน'}
                         </Button>
                       </div>
                     </div>
                   )}
 
                   {!paymentMode && (
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-300 space-y-4">
-                      <CreditCard className="w-16 h-16 opacity-20" />
-                      <p className="text-xl font-bold italic text-slate-400">เลือกช่องทางชำระเงิน</p>
+                    <div className="py-20 flex flex-col items-center justify-center text-slate-300 space-y-4 rounded-2xl bg-slate-50/50">
+                      <CreditCard className="w-12 h-12 opacity-20" />
+                      <p className="font-bold text-slate-400 italic">เลือกวิธีการชำระเงิน</p>
                     </div>
                   )}
                 </div>

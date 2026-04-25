@@ -190,7 +190,7 @@ export default function CustomerOrder() {
         
         {/* Category Navigation */}
         <div className="flex overflow-x-auto no-scrollbar p-2 gap-2 bg-white/80 backdrop-blur-md">
-          {categories.map(category => (
+          {Array.isArray(categories) && categories.map(category => (
             <button
               key={category.id}
               onClick={() => scrollToCategory(category.id)}
@@ -208,7 +208,7 @@ export default function CustomerOrder() {
 
       {/* Menu Categories */}
       <div className="p-4 space-y-10">
-        {categories.map(category => (
+        {Array.isArray(categories) && categories.map(category => (
           <div 
             key={category.id} 
             className="scroll-mt-32"
@@ -222,7 +222,7 @@ export default function CustomerOrder() {
             </div>
             
             <div className="grid grid-cols-1 gap-4">
-              {category.items.map(item => (
+              {Array.isArray(category.items) && category.items.map(item => (
                 <Card 
                   key={item.id} 
                   className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer group" 
@@ -292,7 +292,7 @@ export default function CustomerOrder() {
                   <p className="text-lg font-bold text-primary">฿{selectedItem.price.toLocaleString()}</p>
                 </DialogHeader>
 
-                {selectedItem.optionGroups.map(group => (
+                {Array.isArray(selectedItem.optionGroups) && selectedItem.optionGroups.map(group => (
                   <div key={group.id} className="space-y-3">
                     <div className="flex justify-between items-center">
                       <h4 className="font-bold text-slate-900">{group.name}</h4>
@@ -301,8 +301,8 @@ export default function CustomerOrder() {
                       </span>
                     </div>
                     <div className="space-y-2">
-                      {group.options.map(option => {
-                        const isSelected = selectedOptions.find(o => o.id === option.id);
+                      {Array.isArray(group.options) && group.options.map(option => {
+                        const isSelected = Array.isArray(selectedOptions) && selectedOptions.find(o => o.id === option.id);
                         return (
                           <div 
                             key={option.id} 
@@ -368,11 +368,11 @@ export default function CustomerOrder() {
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {cart.map(item => (
+            {Array.isArray(cart) && cart.map(item => (
               <div key={item.id} className="flex gap-4 border-b pb-4 last:border-0">
                 <div className="flex-1 space-y-1">
                   <h4 className="font-bold text-slate-900">{item.name}</h4>
-                  {item.options.length > 0 && (
+                  {Array.isArray(item.options) && item.options.length > 0 && (
                     <p className="text-xs text-slate-500">
                       {item.options.map(o => o.name).join(', ')}
                     </p>

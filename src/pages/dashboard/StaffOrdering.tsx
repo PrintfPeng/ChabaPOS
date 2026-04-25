@@ -141,9 +141,10 @@ export default function StaffOrdering() {
     if (cart.length === 0) return;
     setIsSubmitting(true);
     try {
+      const tId = tableId ? Number(tableId) : null;
       await api.post('/orders', {
         branchId: Number(branchId),
-        tableId: Number(tableId),
+        tableId: tId && !isNaN(tId) ? tId : null,
         source: 'STAFF',
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
@@ -161,11 +162,11 @@ export default function StaffOrdering() {
     }
   };
 
-  const filteredCategories = categories.map(cat => ({
+  const filteredCategories = (Array.isArray(categories) ? categories : []).map(cat => ({
     ...cat,
-    items: cat.items.filter(item => 
+    items: Array.isArray(cat.items) ? cat.items.filter(item => 
       item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    ) : []
   })).filter(cat => cat.items.length > 0);
 
   if (isLoading) {
@@ -202,13 +203,13 @@ export default function StaffOrdering() {
         </div>
 
         <div className="flex-1 overflow-y-auto pr-2 space-y-8">
-          {filteredCategories.map(category => (
+          {Array.isArray(filteredCategories) && filteredCategories.map(category => (
             <div key={category.id} className="space-y-4">
               <h2 className="text-lg font-bold text-slate-800 border-l-4 border-primary pl-3">
                 {category.name}
               </h2>
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {category.items.map(item => (
+                {Array.isArray(category.items) && category.items.map(item => (
                   <Card 
                     key={item.id} 
                     className="overflow-hidden cursor-pointer hover:border-primary transition-colors group" 
@@ -241,11 +242,11 @@ export default function StaffOrdering() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {cart.map(item => (
+          {Array.isArray(cart) && cart.map(item => (
             <div key={item.cartItemId} className="flex gap-4 border-b pb-4 last:border-0">
               <div className="flex-1 space-y-1">
                 <h4 className="font-bold text-slate-900">{item.name}</h4>
-                {item.options.length > 0 && (
+                {Array.isArray(item.options) && item.options.length > 0 && (
                   <p className="text-xs text-slate-500">
                     {item.options.map((o: any) => o.name).join(', ')}
                   </p>
@@ -266,7 +267,7 @@ export default function StaffOrdering() {
               </div>
             </div>
           ))}
-          {cart.length === 0 && (
+          {(!Array.isArray(cart) || cart.length === 0) && (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2">
               <UtensilsCrossed className="w-12 h-12 opacity-20" />
               <p>ยังไม่มีรายการอาหาร</p>
@@ -300,7 +301,7 @@ export default function StaffOrdering() {
               </DialogHeader>
 
               <div className="space-y-6 py-4">
-                {selectedItem.optionGroups.map(group => (
+                {Array.isArray(selectedItem.optionGroups) && selectedItem.optionGroups.map(group => (
                   <div key={group.id} className="space-y-3">
                     <div className="flex justify-between items-center">
                       <h4 className="font-bold text-slate-900">{group.name}</h4>
@@ -309,8 +310,8 @@ export default function StaffOrdering() {
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      {group.options.map(option => {
-                        const isSelected = selectedOptions.find(o => o.id === option.id);
+                      {Array.isArray(group.options) && group.options.map(option => {
+                        const isSelected = Array.isArray(selectedOptions) && selectedOptions.find(o => o.id === option.id);
                         return (
                           <div 
                             key={option.id} 

@@ -221,7 +221,7 @@ export default function TableManagement() {
                       <SelectValue placeholder="เลือกโซน" />
                     </SelectTrigger>
                     <SelectContent>
-                      {zones.map(zone => (
+                      {Array.isArray(zones) && zones.map(zone => (
                         <SelectItem key={zone.id} value={zone.id.toString()}>{zone.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -239,7 +239,7 @@ export default function TableManagement() {
       </div>
 
       <div className="space-y-8">
-        {zones.map((zone) => (
+        {Array.isArray(zones) && zones.map((zone) => (
           <div key={zone.id} className="space-y-4">
             <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
               <Map className="w-5 h-5" />
@@ -254,7 +254,7 @@ export default function TableManagement() {
               </div>
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {zone.tables?.map(table => (
+              {Array.isArray(zone.tables) && zone.tables.map(table => (
                 <Card 
                   key={table.id} 
                   className="cursor-pointer transition-all hover:scale-105 bg-white group relative"
@@ -292,7 +292,7 @@ export default function TableManagement() {
                   </CardContent>
                 </Card>
               ))}
-              {zone.tables?.length === 0 && (
+              {(!Array.isArray(zone.tables) || zone.tables.length === 0) && (
                 <div className="col-span-full py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
                   <p className="text-sm text-slate-400">ยังไม่มีโต๊ะในโซนนี้</p>
                 </div>
@@ -300,7 +300,7 @@ export default function TableManagement() {
             </div>
           </div>
         ))}
-        {zones.length === 0 && (
+        {(!Array.isArray(zones) || zones.length === 0) && (
           <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200">
             <Map className="w-12 h-12 mx-auto text-slate-300 mb-4" />
             <h3 className="text-lg font-medium text-slate-900">ยังไม่มีโซน</h3>

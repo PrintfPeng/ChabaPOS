@@ -184,7 +184,7 @@ export default function OptionManagement() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {groups.map((group) => (
+        {Array.isArray(groups) && groups.map((group) => (
           <Card key={group.id}>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">{group.name}</CardTitle>
@@ -206,7 +206,7 @@ export default function OptionManagement() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {group.options?.map(choice => (
+                {Array.isArray(group.options) && group.options.map(choice => (
                   <div key={choice.id} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg">
                     <span className="text-sm font-medium">{choice.name}</span>
                     <div className="flex items-center gap-4">
@@ -222,7 +222,7 @@ export default function OptionManagement() {
                     </div>
                   </div>
                 ))}
-                {group.options?.length === 0 && (
+                {(!Array.isArray(group.options) || group.options.length === 0) && (
                   <p className="text-xs text-slate-400 text-center py-4 italic">ยังไม่มีตัวเลือก</p>
                 )}
               </div>

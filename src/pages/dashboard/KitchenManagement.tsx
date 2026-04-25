@@ -115,7 +115,7 @@ export default function KitchenManagement() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {kitchens.map((kitchen) => (
+        {Array.isArray(kitchens) && kitchens.map((kitchen) => (
           <Card key={kitchen.id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-bold">{kitchen.name}</CardTitle>
@@ -133,7 +133,7 @@ export default function KitchenManagement() {
             </CardContent>
           </Card>
         ))}
-        {kitchens.length === 0 && (
+        {(!Array.isArray(kitchens) || kitchens.length === 0) && (
           <div className="col-span-full text-center py-12 bg-white rounded-xl border-2 border-dashed border-slate-200">
             <p className="text-slate-500">ไม่พบห้องครัว เพิ่มห้องครัวเพื่อเริ่มต้น</p>
           </div>

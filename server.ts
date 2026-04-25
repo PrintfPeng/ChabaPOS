@@ -12,6 +12,13 @@ import { PrismaClientExceptionFilter } from "./src/backend/prisma/prisma-excepti
 
 async function startServer() {
   const logger = new Logger("Bootstrap");
+
+  // Ensure DATABASE_URL is never empty to prevent Prisma initialization errors
+  if (!process.env.DATABASE_URL || !process.env.DATABASE_URL.startsWith('postgres')) {
+    process.env.DATABASE_URL = 'postgresql://placeholder:placeholder@localhost:5432/placeholder';
+    logger.warn('DATABASE_URL is missing or invalid. Using placeholder to prevent crash. Please configure it in Settings.');
+  }
+
   const app = await NestFactory.create(AppModule);
 
   const { httpAdapter } = app.get(HttpAdapterHost);
