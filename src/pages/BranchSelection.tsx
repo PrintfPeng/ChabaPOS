@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
+import { ImageUpload } from '../components/ImageUpload';
+import { uploadImageToSupabase } from '../lib/supabase-storage';
 
 export default function BranchSelection() {
   const { brandId } = useParams<{ brandId: string }>();
@@ -18,39 +20,57 @@ export default function BranchSelection() {
   const [newBranchName, setNewBranchName] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleCreateBranch = async () => {
     if (!newBranchName || !brandId) return;
+    setIsUploading(true);
     try {
+      let finalImageUrl = imageUrl;
+      if (selectedFile) {
+        finalImageUrl = await uploadImageToSupabase(selectedFile, 'branches');
+      }
       await createBranch({ 
         name: newBranchName, 
-        imageUrl, 
+        imageUrl: finalImageUrl, 
         brandId: Number(brandId) 
       });
       setNewBranchName('');
       setImageUrl('');
+      setSelectedFile(null);
       setIsDialogOpen(false);
       toast.success('สร้างสาขาสำเร็จ');
-    } catch (error) {
-      toast.error('สร้างสาขาไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.message || 'สร้างสาขาไม่สำเร็จ');
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleUpdateBranch = async () => {
     if (!editingBranch || !newBranchName) return;
+    setIsUploading(true);
     try {
+      let finalImageUrl = imageUrl;
+      if (selectedFile) {
+        finalImageUrl = await uploadImageToSupabase(selectedFile, 'branches');
+      }
       await updateBranch({
         id: editingBranch.id,
         name: newBranchName,
-        imageUrl,
+        imageUrl: finalImageUrl,
       });
       setEditingBranch(null);
       setNewBranchName('');
       setImageUrl('');
+      setSelectedFile(null);
       setIsDialogOpen(false);
       toast.success('อัปเดตสาขาสำเร็จ');
-    } catch (error) {
-      toast.error('อัปเดตสาขาไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.message || 'อัปเดตสาขาไม่สำเร็จ');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -110,18 +130,27 @@ export default function BranchSelection() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="image">URL รูปภาพ (ไม่บังคับ)</Label>
-                  <Input 
-                    id="image" 
+                  <ImageUpload 
                     value={imageUrl} 
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://example.com/branch.png"
+                    onChange={(url) => setImageUrl(url)}
+                    onFileSelect={(file) => setSelectedFile(file)}
+                    label="รูปภาพสาขา (ไม่บังคับ)"
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={editingBranch ? handleUpdateBranch : handleCreateBranch}>
-                  {editingBranch ? 'บันทึกการแก้ไข' : 'สร้างสาขา'}
+                <Button 
+                  onClick={editingBranch ? handleUpdateBranch : handleCreateBranch}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      กำลังบันทึก...
+                    </>
+                  ) : (
+                    editingBranch ? 'บันทึกการแก้ไข' : 'สร้างสาขา'
+                  )}
                 </Button>
               </DialogFooter>
             </DialogContent>

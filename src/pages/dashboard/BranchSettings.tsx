@@ -4,16 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Loader2, QrCode, Save, Upload } from 'lucide-react';
+import { Loader2, QrCode, Save } from 'lucide-react';
 import { useBranch } from '../../hooks/useBranches';
 import api from '../../lib/api';
 import { toast } from 'sonner';
+import { ImageUpload } from '../../components/ImageUpload';
+import { uploadImageToSupabase } from '../../lib/supabase-storage';
 
 export default function BranchSettings() {
   const { branchId } = useParams<{ branchId: string }>();
   const { branch, isLoading, updateBranch } = useBranch(Number(branchId));
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (branch) {
@@ -24,12 +27,20 @@ export default function BranchSettings() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      let finalQrCodeUrl = qrCodeUrl;
+      
+      if (selectedFile) {
+        finalQrCodeUrl = await uploadImageToSupabase(selectedFile, 'qrcodes');
+      }
+
       await updateBranch({
-        qrCodeUrl: qrCodeUrl
+        qrCodeUrl: finalQrCodeUrl
       });
+      setQrCodeUrl(finalQrCodeUrl);
+      setSelectedFile(null);
       toast.success('บันทึกการตั้งค่าสำเร็จ');
-    } catch (error) {
-      toast.error('ไม่สามารถบันทึกข้อมูลได้');
+    } catch (error: any) {
+      toast.error(error.message || 'ไม่สามารถบันทึกข้อมูลได้');
     } finally {
       setIsSaving(false);
     }
@@ -62,32 +73,14 @@ export default function BranchSettings() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="qrCodeUrl">URL รูปภาพ QR Code</Label>
-            <div className="flex gap-4">
-              <Input 
-                id="qrCodeUrl" 
-                value={qrCodeUrl} 
-                onChange={(e) => setQrCodeUrl(e.target.value)}
-                placeholder="https://example.com/your-qrcode.png"
-                className="flex-1"
-              />
-            </div>
-            <p className="text-xs text-slate-400 italic">
-              * แนะนำให้ใช้ URL ของรูปภาพ QR Code จากพร้อมเพย์หรือช่องทางอื่นๆ
-            </p>
+            <ImageUpload 
+              value={qrCodeUrl} 
+              onChange={(url) => setQrCodeUrl(url)}
+              onFileSelect={(file) => setSelectedFile(file)}
+              label="รูปภาพ QR Code พร้อมเพย์"
+              description="อัปโหลดรูปภาพ QR Code สำหรับรับชำระเงิน"
+            />
           </div>
-
-          {qrCodeUrl && (
-            <div className="p-4 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 inline-block">
-              <img 
-                src={qrCodeUrl} 
-                alt="QR Code Preview" 
-                className="w-48 h-48 object-contain"
-                referrerPolicy="no-referrer"
-                onError={() => toast.error('ไม่สามารถโหลดรูปภาพ QR Code ได้ กรุณาตรวจสอบ URL')}
-              />
-            </div>
-          )}
 
           <div className="pt-4 flex justify-end">
             <Button onClick={handleSave} disabled={isSaving} className="gap-2 px-8">
