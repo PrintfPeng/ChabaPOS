@@ -7,6 +7,10 @@ import { Loader2, ShoppingCart, Plus, Minus, X, ChevronLeft, Search, UtensilsCro
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { toast } from 'sonner';
+import { ScrollArea } from '../../components/ui/scroll-area';
+import { Badge } from '../../components/ui/badge';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../../components/ui/sheet';
+import { cn } from '../../lib/utils';
 
 interface MenuItem {
   id: number;
@@ -178,50 +182,57 @@ export default function StaffOrdering() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] gap-6">
+    <div className="flex flex-col lg:flex-row h-full gap-6 overflow-hidden">
       {/* Left: Menu Selection */}
-      <div className="flex-1 flex flex-col gap-6 overflow-hidden">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ChevronLeft className="w-6 h-6" />
+      <div className="flex-1 flex flex-col gap-4 sm:gap-6 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0">
+              <ChevronLeft className="w-5 h-5 sm:w-6 h-6" />
             </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">สั่งอาหาร: {tableName}</h1>
-              <p className="text-slate-500 text-sm">{branchName}</p>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">โต๊ะ: {tableName}</h1>
+              <p className="text-slate-500 text-[10px] sm:text-xs uppercase tracking-widest font-bold">{branchName}</p>
             </div>
           </div>
-          <div className="relative w-64">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input 
               placeholder="ค้นหาเมนู..." 
-              className="pl-10"
+              className="pl-10 h-10 sm:h-11 rounded-xl border-slate-200"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-2 space-y-8">
+        <div className="flex-1 overflow-y-auto pr-1 space-y-8 no-scrollbar md:custom-scrollbar">
           {Array.isArray(filteredCategories) && filteredCategories.map(category => (
             <div key={category.id} className="space-y-4">
-              <h2 className="text-lg font-bold text-slate-800 border-l-4 border-primary pl-3">
+              <h2 className="text-base sm:text-lg font-black text-slate-800 border-l-4 border-primary pl-3 tracking-tight italic">
                 {category.name}
               </h2>
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {Array.isArray(category.items) && category.items.map(item => (
                   <Card 
                     key={item.id} 
-                    className="overflow-hidden cursor-pointer hover:border-primary transition-colors group" 
+                    className="overflow-hidden cursor-pointer hover:border-primary transition-all group border-slate-100 shadow-sm active:scale-95" 
                     onClick={() => handleSelectItem(item)}
                   >
                     <CardContent className="p-0">
                       {item.imageUrl && (
-                        <img src={item.imageUrl} alt={item.name} className="w-full h-32 object-cover" referrerPolicy="no-referrer" />
+                        <div className="h-24 sm:h-32 overflow-hidden">
+                          <img 
+                            src={item.imageUrl} 
+                            alt={item.name} 
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                            referrerPolicy="no-referrer" 
+                          />
+                        </div>
                       )}
                       <div className="p-3">
-                        <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors">{item.name}</h3>
-                        <p className="text-primary font-bold">฿{item.price.toLocaleString()}</p>
+                        <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors text-sm sm:text-base line-clamp-1">{item.name}</h3>
+                        <p className="text-primary font-black text-sm mt-1">฿{item.price.toLocaleString()}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -230,64 +241,50 @@ export default function StaffOrdering() {
             </div>
           ))}
         </div>
+
+        {/* Mobile Cart Trigger */}
+        <div className="lg:hidden fixed bottom-6 left-4 right-4 z-40">
+          <Sheet>
+            <SheetTrigger render={
+              <Button className="w-full h-14 rounded-2xl shadow-2xl flex justify-between items-center px-6 btn-primary" />
+            }>
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg relative">
+                  <ShoppingCart className="w-5 h-5" />
+                  {cart.length > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-white text-primary text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-primary">
+                      {cart.reduce((s, i) => s + i.quantity, 0)}
+                    </span>
+                  )}
+                </div>
+                <span className="font-bold">สรุปรายการ ({cart.length})</span>
+              </div>
+              <span className="font-bold text-lg">฿{totalAmount.toLocaleString()}</span>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="h-[80vh] rounded-t-[32px] p-0 overflow-hidden border-none shadow-2xl">
+              <CartSummaryContent 
+                cart={cart} 
+                updateCartQuantity={updateCartQuantity} 
+                removeFromCart={removeFromCart} 
+                totalAmount={totalAmount} 
+                handleSubmitOrder={handleSubmitOrder} 
+                isSubmitting={isSubmitting} 
+              />
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
 
-      {/* Right: Cart Summary */}
-      <div className="w-96 bg-white rounded-2xl border border-slate-200 flex flex-col shadow-sm overflow-hidden">
-        <div className="p-6 border-b bg-slate-50">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5" />
-            สรุปออเดอร์
-          </h2>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {Array.isArray(cart) && cart.map(item => (
-            <div key={item.cartItemId} className="flex gap-4 border-b pb-4 last:border-0">
-              <div className="flex-1 space-y-1">
-                <h4 className="font-bold text-slate-900">{item.name}</h4>
-                {Array.isArray(item.options) && item.options.length > 0 && (
-                  <p className="text-xs text-slate-500">
-                    {item.options.map((o: any) => o.name).join(', ')}
-                  </p>
-                )}
-                <p className="font-bold text-primary">฿{((item.price + item.options.reduce((s: number, o: any) => s + o.price, 0)) * item.quantity).toLocaleString()}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => updateCartQuantity(item.cartItemId, -1)}>
-                  <Minus className="w-3 h-3" />
-                </Button>
-                <span className="font-bold w-4 text-center">{item.quantity}</span>
-                <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => updateCartQuantity(item.cartItemId, 1)}>
-                  <Plus className="w-3 h-3" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removeFromCart(item.cartItemId)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-          {(!Array.isArray(cart) || cart.length === 0) && (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2">
-              <UtensilsCrossed className="w-12 h-12 opacity-20" />
-              <p>ยังไม่มีรายการอาหาร</p>
-            </div>
-          )}
-        </div>
-
-        <div className="p-6 bg-slate-50 border-t space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-slate-600 font-medium">ราคารวมทั้งสิ้น</span>
-            <span className="text-2xl font-bold text-slate-900">฿{totalAmount.toLocaleString()}</span>
-          </div>
-          <Button 
-            className="w-full h-14 rounded-xl text-lg font-bold shadow-lg shadow-primary/20" 
-            disabled={isSubmitting || cart.length === 0} 
-            onClick={handleSubmitOrder}
-          >
-            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'ยืนยันออเดอร์'}
-          </Button>
-        </div>
+      {/* Right: Cart Summary (Desktop Only) */}
+      <div className="hidden lg:flex w-[380px] bg-white rounded-[32px] border border-slate-100 flex-col shadow-xl shadow-slate-200/50 overflow-hidden">
+        <CartSummaryContent 
+          cart={cart} 
+          updateCartQuantity={updateCartQuantity} 
+          removeFromCart={removeFromCart} 
+          totalAmount={totalAmount} 
+          handleSubmitOrder={handleSubmitOrder} 
+          isSubmitting={isSubmitting} 
+        />
       </div>
 
       {/* Item Selection Dialog */}
@@ -366,5 +363,84 @@ export default function StaffOrdering() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function CartSummaryContent({ cart, updateCartQuantity, removeFromCart, totalAmount, handleSubmitOrder, isSubmitting }: any) {
+  return (
+    <>
+      <div className="p-6 border-b flex justify-between items-center bg-white sticky top-0 z-10 shrink-0 capitalize">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <ShoppingCart className="w-5 h-5 text-primary" />
+          สรุปออเดอร์
+        </h2>
+        {cart.length > 0 && <Badge variant="secondary" className="rounded-full font-black px-3">{cart.reduce((s: any, i: any) => s + i.quantity, 0)}</Badge>}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30">
+        {Array.isArray(cart) && cart.map((item: any) => (
+          <div key={item.cartItemId} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-3">
+            <div className="flex justify-between items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-slate-900 truncate text-sm sm:text-base">{item.name}</h4>
+                {Array.isArray(item.options) && item.options.length > 0 && (
+                  <p className="text-[10px] sm:text-xs text-slate-400 leading-tight">
+                    {item.options.map((o: any) => o.name).join(', ')}
+                  </p>
+                )}
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-red-500 shrink-0" onClick={() => removeFromCart(item.cartItemId)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="flex justify-between items-center pt-2">
+              <p className="font-black text-primary tabular-nums">฿{((item.price + item.options.reduce((s: number, o: any) => s + o.price, 0)) * item.quantity).toLocaleString()}</p>
+              <div className="flex items-center gap-3 bg-slate-100/50 p-1 rounded-full border border-slate-100">
+                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full" onClick={() => updateCartQuantity(item.cartItemId, -1)}>
+                  <Minus className="w-3 h-3" />
+                </Button>
+                <span className="font-black text-xs sm:text-sm w-4 text-center">{item.quantity}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full" onClick={() => updateCartQuantity(item.cartItemId, 1)}>
+                  <Plus className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {(!Array.isArray(cart) || cart.length === 0) && (
+          <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4 py-20 animate-in fade-in zoom-in duration-300">
+            <div className="p-6 bg-slate-100 rounded-[32px]">
+              <UtensilsCrossed className="w-12 h-12 opacity-20" />
+            </div>
+            <p className="font-bold text-slate-400 italic">ยังไม่มีรายการอาหาร</p>
+          </div>
+        )}
+      </div>
+
+      <div className="p-6 bg-white border-t border-slate-100 space-y-4 shadow-[0_-15px_30px_rgba(0,0,0,0.02)] shrink-0">
+        <div className="flex justify-between items-center px-2">
+          <span className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">ราคารวมทั้งสิ้น</span>
+          <span className="text-3xl font-black text-slate-900 tracking-tighter italic">฿{totalAmount.toLocaleString()}</span>
+        </div>
+        <Button 
+          className="w-full h-14 sm:h-16 rounded-[20px] text-lg font-black shadow-2xl shadow-primary/20 flex items-center justify-center gap-3" 
+          disabled={isSubmitting || cart.length === 0} 
+          onClick={handleSubmitOrder}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span>กำลังบักทึก...</span>
+            </>
+          ) : (
+            <>
+              <span>ยืนยันออเดอร์</span>
+              <ChevronLeft className="w-5 h-5 rotate-180" />
+            </>
+          )}
+        </Button>
+      </div>
+    </>
   );
 }

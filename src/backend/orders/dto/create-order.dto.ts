@@ -36,4 +36,10 @@ export class CreateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
   items: OrderItemDto[];
+
+  @IsOptional()
+  isPrepaid?: boolean;
+
+  @IsOptional()
+  paymentType?: 'CASH' | 'TRANSFER';
 }

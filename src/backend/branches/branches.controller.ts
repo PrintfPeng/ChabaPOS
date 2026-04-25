@@ -34,4 +34,10 @@ export class BranchesController {
   getMenu(@Param('id', ParseIntPipe) id: number) {
     return this.branchesService.getMenu(id);
   }
+
+  @Public()
+  @Get(':id/tables')
+  getTables(@Param('id', ParseIntPipe) id: number) {
+    return this.branchesService.getTables(id);
+  }
 }

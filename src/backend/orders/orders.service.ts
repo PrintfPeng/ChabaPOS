@@ -82,6 +82,8 @@ export class OrdersService {
       data: {
         orderNumber,
         totalAmount,
+        status: dto.isPrepaid ? 'PAID' : 'PENDING',
+        paymentType: dto.isPrepaid ? dto.paymentType : null,
         branchId: dto.branchId,
         tableId: dto.tableId === 0 ? null : dto.tableId,
         source: dto.source || 'CUSTOMER',
@@ -99,7 +101,15 @@ export class OrdersService {
     });
 
     // 5. Update Table Status if tableId is present and not 0
-    if (dto.tableId && dto.tableId !== 0) {
+    // If it's prepaid, we don't necessarily want to mark the table as OCCUPIED because the transaction is already closed.
+    // However, if they selected a table, someone is sitting there. 
+    // But standard "PAID" logic in this app clears the table status.
+    // Let's stick to the user request: "ชำระเงินสำเร็จ -> ส่งออเดอร์เข้าครัว และ บันทึกสถานะบิลเป็น ชำระเงินแล้ว (Paid) ทันที"
+    // In completePayment, table is set back to AVAILABLE.
+    // So for prepaid, we probably shouldn't even set it to OCCUPIED if it's a one-off transaction,
+    // OR we set it to OCCUPIED if they are staying. 
+    // But if we want it to be "Paid", usually it means the table is free to be cleared or was never really "occupied" in the sense of an open bill.
+    if (dto.tableId && dto.tableId !== 0 && !dto.isPrepaid) {
       await this.prisma.table.update({
         where: { id: dto.tableId },
         data: { status: 'OCCUPIED' },

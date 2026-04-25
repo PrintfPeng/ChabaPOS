@@ -98,4 +98,12 @@ export class BranchesService {
       },
     });
   }
+
+  async getTables(id: number) {
+    return this.prisma.table.findMany({
+      where: { zone: { branchId: id } },
+      include: { zone: true },
+      orderBy: { name: 'asc' },
+    });
+  }
 }

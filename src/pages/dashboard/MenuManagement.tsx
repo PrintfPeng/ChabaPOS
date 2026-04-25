@@ -22,6 +22,7 @@ export default function MenuManagement() {
   const { categories, menuItems, isLoading, createCategory, updateCategory, deleteCategory, createMenuItem, updateMenuItem, deleteMenuItem } = useMenus(bid);
   const { kitchens } = useKitchens(bid);
   const { groups: optionGroups } = useOptions(bid);
+  const [activeTab, setActiveTab] = useState<string>('');
   
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newItem, setNewItem] = useState<{
@@ -40,6 +41,13 @@ export default function MenuManagement() {
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Initialize active tab when categories are loaded
+  React.useEffect(() => {
+    if (Array.isArray(categories) && categories.length > 0 && !activeTab) {
+      setActiveTab(categories[0].id.toString());
+    }
+  }, [categories, activeTab]);
 
   const handleCreateCategory = async () => {
     if (!bid || !newCategoryName) return;
@@ -306,23 +314,25 @@ export default function MenuManagement() {
         </div>
       </div>
 
-      <Tabs defaultValue={Array.isArray(categories) && categories[0] ? categories[0].id.toString() : ""} className="w-full">
-        <TabsList className="mb-8 flex-wrap h-auto p-1 bg-slate-100">
-          {Array.isArray(categories) && categories.map(cat => (
-            <div key={cat.id} className="flex items-center">
-              <TabsTrigger value={cat.id.toString()} className="px-6 py-2">
-                {cat.name}
-              </TabsTrigger>
-              <Button variant="ghost" size="icon" className="h-8 w-8 ml-1" onClick={() => openEditCategory(cat)}>
-                <Edit2 className="w-3 h-3" />
-              </Button>
-            </div>
-          ))}
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="mb-8 flex-nowrap sm:flex-wrap h-auto p-1 bg-slate-100 min-w-max sm:min-w-0">
+            {Array.isArray(categories) && categories.map(cat => (
+              <div key={cat.id} className="flex items-center shrink-0">
+                <TabsTrigger value={cat.id.toString()} className="px-6 py-2 whitespace-nowrap">
+                  {cat.name}
+                </TabsTrigger>
+                <Button variant="ghost" size="icon" className="h-8 w-8 ml-1" onClick={() => openEditCategory(cat)}>
+                  <Edit2 className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+          </TabsList>
+        </div>
 
         {Array.isArray(categories) && categories.map(cat => (
           <TabsContent key={cat.id} value={cat.id.toString()}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {Array.isArray(menuItems) && menuItems.filter(item => item.categoryId === cat.id).map(item => (
                 <Card key={item.id} className="overflow-hidden">
                   <div className="h-32 bg-slate-100 flex items-center justify-center text-slate-400">

@@ -78,7 +78,6 @@ export default function BranchSettings() {
               onChange={(url) => setQrCodeUrl(url)}
               onFileSelect={(file) => setSelectedFile(file)}
               label="รูปภาพ QR Code พร้อมเพย์"
-              description="อัปโหลดรูปภาพ QR Code สำหรับรับชำระเงิน"
             />
           </div>
 

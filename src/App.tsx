@@ -8,6 +8,7 @@ import BrandSelection from './pages/BrandSelection';
 import BranchSelection from './pages/BranchSelection';
 import Dashboard from './pages/Dashboard';
 import CustomerOrder from './pages/CustomerOrder';
+import PrepaidOrder from './pages/PrepaidOrder';
 import OrderSuccess from './pages/OrderSuccess';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -24,6 +25,7 @@ export default function App() {
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/order/:branchId/:tableId" element={<CustomerOrder />} />
+            <Route path="/prepaid/:branchId" element={<PrepaidOrder />} />
             <Route path="/order-success" element={<OrderSuccess />} />
             <Route 
               path="/brands" 

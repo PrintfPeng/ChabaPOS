@@ -221,28 +221,28 @@ export default function CustomerOrder() {
               <div className="h-px flex-1 bg-slate-200" />
             </div>
             
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {Array.isArray(category.items) && category.items.map(item => (
                 <Card 
                   key={item.id} 
                   className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer group" 
                   onClick={() => handleSelectItem(item)}
                 >
-                  <CardContent className="p-0 flex h-32">
-                    <div className="p-4 flex-1 flex flex-col justify-between">
+                  <CardContent className="p-0 flex h-28 sm:h-32">
+                    <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
                       <div>
-                        <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors line-clamp-1">{item.name}</h3>
-                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">คัดสรรวัตถุดิบคุณภาพดี ปรุงสดใหม่ทุกจาน</p>
+                        <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors line-clamp-1 text-sm sm:text-base">{item.name}</h3>
+                        <p className="text-[10px] sm:text-xs text-slate-400 mt-1 line-clamp-2">อร่อย สดใหม่ ทันใจ</p>
                       </div>
                       <div className="flex justify-between items-end">
-                        <p className="text-lg font-black text-primary">฿{item.price.toLocaleString()}</p>
-                        <div className="bg-primary/10 p-2 rounded-xl group-hover:bg-primary group-hover:text-white transition-all">
-                          <Plus className="w-5 h-5" />
+                        <p className="text-base sm:text-lg font-black text-primary">฿{item.price.toLocaleString()}</p>
+                        <div className="bg-primary/10 p-1.5 sm:p-2 rounded-xl group-hover:bg-primary group-hover:text-white transition-all text-primary">
+                          <Plus className="w-4 h-4 sm:w-5 h-5" />
                         </div>
                       </div>
                     </div>
                     {item.imageUrl && (
-                      <div className="w-32 h-full relative overflow-hidden">
+                      <div className="w-28 sm:w-32 h-full relative overflow-hidden shrink-0">
                         <img 
                           src={item.imageUrl} 
                           alt={item.name} 

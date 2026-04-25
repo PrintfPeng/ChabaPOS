@@ -91,26 +91,27 @@ export default function BranchSelection() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/brands')}>
-              <ChevronLeft className="w-6 h-6" />
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/brands')} className="shrink-0">
+              <ChevronLeft className="w-5 h-5 sm:w-6 h-6" />
             </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">สาขา</h1>
-              <p className="text-slate-500">เลือกสาขาเพื่อเปิดแดชบอร์ด POS</p>
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 truncate">สาขา</h1>
+              <p className="text-slate-500 text-sm">เลือกสาขาเพื่อเปิด POS</p>
             </div>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) {
-              setEditingBranch(null);
-              setNewBranchName('');
-              setImageUrl('');
-            }
-          }}>
+          <div className="w-full sm:w-auto">
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
+                setEditingBranch(null);
+                setNewBranchName('');
+                setImageUrl('');
+              }
+            }}>
             <DialogTrigger render={<Button />}>
               <Plus className="w-4 h-4 mr-2" />
               เพิ่มสาขาใหม่
@@ -156,8 +157,9 @@ export default function BranchSelection() {
             </DialogContent>
           </Dialog>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {Array.isArray(branches) && branches.map((branch) => (
             <Card 
               key={branch.id} 

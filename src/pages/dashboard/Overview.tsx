@@ -1,11 +1,12 @@
 import React from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useBranch } from '../../hooks/useBranches';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Utensils, Menu, Settings, LayoutGrid, Loader2 } from 'lucide-react';
 
 export default function Overview() {
   const { branchId } = useParams<{ branchId: string }>();
+  const navigate = useNavigate();
   const { branch, isLoading } = useBranch(Number(branchId));
 
   if (isLoading) {
@@ -73,13 +74,19 @@ export default function Overview() {
             <CardTitle>ทางลัด</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
-            <button className="p-4 text-left border rounded-xl hover:bg-slate-50 transition-colors group">
-              <p className="font-medium text-slate-900 group-hover:text-primary">เพิ่มรายการเมนู</p>
+            <button 
+              onClick={() => navigate('menu')}
+              className="p-4 text-left border rounded-xl hover:bg-slate-50 transition-colors group"
+            >
+              <p className="font-medium text-slate-900 group-hover:text-primary">จัดการเมนู</p>
               <p className="text-xs text-slate-500">ขยายรายการอาหารของคุณ</p>
             </button>
-            <button className="p-4 text-left border rounded-xl hover:bg-slate-50 transition-colors group">
+            <button 
+              onClick={() => navigate('tables')}
+              className="p-4 text-left border rounded-xl hover:bg-slate-50 transition-colors group"
+            >
               <p className="font-medium text-slate-900 group-hover:text-primary">จัดการโต๊ะ</p>
-              <p className="text-xs text-slate-500">อัปเดตสถานะโต๊ะ</p>
+              <p className="text-xs text-slate-500">อัปเดตสถานะโต๊ะที่นั่ง</p>
             </button>
           </CardContent>
         </Card>
