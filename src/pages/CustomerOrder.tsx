@@ -228,28 +228,28 @@ export default function CustomerOrder() {
                   className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer group" 
                   onClick={() => handleSelectItem(item)}
                 >
-                  <CardContent className="p-0 flex h-28 sm:h-32">
-                    <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
-                      <div>
+                  <CardContent className="p-0 flex h-28 sm:h-32 min-w-0 overflow-hidden">
+                    <div className="p-3 sm:p-4 flex-1 min-w-0 flex flex-col justify-between overflow-hidden">
+                      <div className="min-w-0">
                         <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors line-clamp-1 text-sm sm:text-base">{item.name}</h3>
                         <p className="text-[10px] sm:text-xs text-slate-400 mt-1 line-clamp-2">อร่อย สดใหม่ ทันใจ</p>
                       </div>
-                      <div className="flex justify-between items-end">
-                        <p className="text-base sm:text-lg font-black text-primary">฿{item.price.toLocaleString()}</p>
-                        <div className="bg-primary/10 p-1.5 sm:p-2 rounded-xl group-hover:bg-primary group-hover:text-white transition-all text-primary">
+                      <div className="flex justify-between items-end mt-2">
+                        <p className="text-base sm:text-lg font-black text-primary shrink-0">฿{item.price.toLocaleString()}</p>
+                        <div className="bg-primary/10 p-1.5 sm:p-2 rounded-xl group-hover:bg-primary group-hover:text-white transition-all text-primary shrink-0">
                           <Plus className="w-4 h-4 sm:w-5 h-5" />
                         </div>
                       </div>
                     </div>
                     {item.imageUrl && (
-                      <div className="w-28 sm:w-32 h-full relative overflow-hidden shrink-0">
+                      <div className="w-28 sm:w-32 h-full relative overflow-hidden shrink-0 aspect-square">
                         <img 
                           src={item.imageUrl} 
                           alt={item.name} 
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
                           referrerPolicy="no-referrer" 
                         />
-                        <div className="absolute inset-0 bg-gradient-to-l from-black/20 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent" />
                       </div>
                     )}
                   </CardContent>
@@ -281,12 +281,19 @@ export default function CustomerOrder() {
       {/* Item Selection Dialog */}
       <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>
         <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden rounded-t-3xl sm:rounded-3xl">
-          {selectedItem && (
-            <>
-              {selectedItem.imageUrl && (
-                <img src={selectedItem.imageUrl} alt={selectedItem.name} className="w-full h-48 object-cover" referrerPolicy="no-referrer" />
-              )}
-              <div className="p-6 space-y-6">
+            {selectedItem && (
+              <>
+                {selectedItem.imageUrl && (
+                  <div className="relative w-full aspect-video sm:aspect-[21/9] overflow-hidden shrink-0">
+                    <img 
+                      src={selectedItem.imageUrl} 
+                      alt={selectedItem.name} 
+                      className="absolute inset-0 w-full h-full object-cover" 
+                      referrerPolicy="no-referrer" 
+                    />
+                  </div>
+                )}
+                <div className="p-6 space-y-6">
                 <DialogHeader>
                   <DialogTitle className="text-2xl">{selectedItem.name}</DialogTitle>
                   <p className="text-lg font-bold text-primary">฿{selectedItem.price.toLocaleString()}</p>

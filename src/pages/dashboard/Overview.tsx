@@ -73,7 +73,14 @@ export default function Overview() {
           <CardHeader>
             <CardTitle>ทางลัด</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button 
+              onClick={() => navigate('counter-service')}
+              className="p-4 text-left border-2 border-primary/20 bg-primary/5 rounded-2xl hover:bg-primary/10 transition-all group lg:col-span-2"
+            >
+              <p className="font-black text-primary text-lg">Counter Service (POS)</p>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-tighter">Order & Pay Now Terminal</p>
+            </button>
             <button 
               onClick={() => navigate('menu')}
               className="p-4 text-left border rounded-xl hover:bg-slate-50 transition-colors group"

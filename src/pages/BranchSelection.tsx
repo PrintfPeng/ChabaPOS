@@ -167,9 +167,14 @@ export default function BranchSelection() {
               onClick={() => navigate(`/brands/${brandId}/branches/${branch.id}`)}
             >
               <CardHeader className="flex flex-row items-center gap-4">
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary overflow-hidden">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary overflow-hidden relative shrink-0">
                   {branch.imageUrl ? (
-                    <img src={branch.imageUrl} alt={branch.name} className="w-full h-full object-cover" />
+                    <img 
+                      src={branch.imageUrl} 
+                      alt={branch.name} 
+                      className="absolute inset-0 w-full h-full object-cover" 
+                      referrerPolicy="no-referrer"
+                    />
                   ) : (
                     <MapPin className="w-6 h-6" />
                   )}

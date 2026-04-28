@@ -120,11 +120,23 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
+  html, body {
+    @apply overflow-x-hidden max-w-full m-0 p-0;
+    width: 100%;
+    min-height: 100vh;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: none;
+  }
   body {
     @apply bg-background text-foreground;
-    }
+  }
   html {
     @apply font-sans;
-    }
+  }
+  #root {
+    @apply overflow-x-hidden max-w-full min-h-screen flex flex-col relative;
+    width: 100%;
+  }
 }

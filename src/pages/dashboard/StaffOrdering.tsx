@@ -219,20 +219,24 @@ export default function StaffOrdering() {
                     className="overflow-hidden cursor-pointer hover:border-primary transition-all group border-slate-100 shadow-sm active:scale-95" 
                     onClick={() => handleSelectItem(item)}
                   >
-                    <CardContent className="p-0">
-                      {item.imageUrl && (
-                        <div className="h-24 sm:h-32 overflow-hidden">
+                    <CardContent className="p-0 flex flex-col h-full overflow-hidden">
+                      {item.imageUrl ? (
+                        <div className="relative aspect-[4/3] w-full overflow-hidden shrink-0">
                           <img 
                             src={item.imageUrl} 
                             alt={item.name} 
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
                             referrerPolicy="no-referrer" 
                           />
                         </div>
+                      ) : (
+                        <div className="aspect-[4/3] w-full bg-slate-50 flex items-center justify-center shrink-0">
+                          <UtensilsCrossed className="w-8 h-8 text-slate-200" />
+                        </div>
                       )}
-                      <div className="p-3">
-                        <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors text-sm sm:text-base line-clamp-1">{item.name}</h3>
-                        <p className="text-primary font-black text-sm mt-1">฿{item.price.toLocaleString()}</p>
+                      <div className="p-2 sm:p-3 flex-1 flex flex-col justify-center">
+                        <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors text-xs sm:text-sm line-clamp-2 leading-tight">{item.name}</h3>
+                        <p className="text-primary font-black text-xs sm:text-sm mt-1">฿{item.price.toLocaleString()}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -276,7 +280,7 @@ export default function StaffOrdering() {
       </div>
 
       {/* Right: Cart Summary (Desktop Only) */}
-      <div className="hidden lg:flex w-[380px] bg-white rounded-[32px] border border-slate-100 flex-col shadow-xl shadow-slate-200/50 overflow-hidden">
+      <div className="hidden lg:flex w-[320px] xl:w-[380px] bg-white rounded-[32px] border border-slate-100 flex-col shadow-xl shadow-slate-200/50 overflow-hidden shrink-0">
         <CartSummaryContent 
           cart={cart} 
           updateCartQuantity={updateCartQuantity} 

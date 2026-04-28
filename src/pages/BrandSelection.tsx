@@ -160,9 +160,14 @@ export default function BrandSelection() {
               onClick={() => navigate(`/brands/${brand.id}/branches`)}
             >
               <CardHeader className="flex flex-row items-center gap-4">
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary overflow-hidden">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary overflow-hidden relative shrink-0">
                   {brand.imageUrl ? (
-                    <img src={brand.imageUrl} alt={brand.name} className="w-full h-full object-cover" />
+                    <img 
+                      src={brand.imageUrl} 
+                      alt={brand.name} 
+                      className="absolute inset-0 w-full h-full object-cover" 
+                      referrerPolicy="no-referrer"
+                    />
                   ) : (
                     <Store className="w-6 h-6" />
                   )}
