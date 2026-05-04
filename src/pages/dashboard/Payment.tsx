@@ -168,7 +168,7 @@ export default function Payment() {
                <div className="p-4 sm:p-5 bg-white border-b shrink-0 flex items-center justify-between">
                   <div className="flex items-center gap-2 sm:gap-3">
                     <div className="p-1.5 sm:p-2 bg-primary/10 rounded-xl">
-                        <Receipt className="w-4 h-4 sm:w-5 h-5 text-primary" />
+                        <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                     </div>
                     <h3 className="text-base sm:text-lg font-black">โต๊ะ {selectedBill.table?.name}</h3>
                   </div>
@@ -227,7 +227,7 @@ export default function Payment() {
                           )}
                         >
                           <div className={cn("p-2 sm:p-3 rounded-lg sm:rounded-xl", paymentMode === 'CASH' ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
-                            <Banknote className="w-5 h-5 sm:w-6 h-6" />
+                            <Banknote className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
                           <span className="font-black text-xs sm:text-sm">เงินสด</span>
                         </button>
@@ -241,7 +241,7 @@ export default function Payment() {
                           )}
                         >
                           <div className={cn("p-2 sm:p-3 rounded-lg sm:rounded-xl", paymentMode === 'TRANSFER' ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
-                            <QrCode className="w-5 h-5 sm:w-6 h-6" />
+                            <QrCode className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
                           <span className="font-black text-xs sm:text-sm">เงินโอน / สแกน</span>
                         </button>
@@ -302,7 +302,7 @@ export default function Payment() {
                                   className="h-10 sm:h-12 rounded-lg sm:rounded-xl bg-red-50 text-red-500 hover:bg-red-100 active:scale-90"
                                   onClick={deleteLastDigit}
                                 >
-                                  <Delete className="w-4 h-4 sm:w-5 h-5" />
+                                  <Delete className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </Button>
                              </div>
                            </div>
@@ -332,7 +332,7 @@ export default function Payment() {
                      {!paymentMode && (
                         <div className="py-12 sm:py-16 flex flex-col items-center justify-center space-y-3 sm:space-y-4 bg-slate-50 rounded-2xl sm:rounded-3xl border border-slate-100">
                            <div className="p-4 sm:p-6 bg-white rounded-2xl shadow-sm">
-                             <CreditCard className="w-10 h-10 sm:w-12 h-12 text-slate-100" />
+                             <CreditCard className="w-10 h-10 sm:w-12 sm:h-12 text-slate-100" />
                            </div>
                            <p className="font-black text-slate-400 italic text-xs sm:text-sm">กรุณาเลือกวิธีการชำระเงิน</p>
                         </div>
@@ -347,7 +347,7 @@ export default function Payment() {
                     disabled={isProcessing || !paymentMode || (paymentMode === 'CASH' && (!receivedAmount || parseFloat(receivedAmount) < selectedBill.totalAmount))}
                     onClick={handlePayment}
                   >
-                    {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 h-5 animate-spin" /> : <ChevronRight className="w-4 h-4 sm:w-5 h-5" />}
+                    {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />}
                     <span>ยืนยันชำระเงิน</span>
                   </Button>
                </div>
