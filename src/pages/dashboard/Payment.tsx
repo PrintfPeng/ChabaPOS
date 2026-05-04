@@ -162,7 +162,7 @@ export default function Payment() {
       <AnimatePresence>
       {selectedBill && (
         <Dialog open={!!selectedBill} onOpenChange={() => setSelectedBill(null)}>
-          <DialogContent className="w-[95vw] max-w-5xl h-[90vh] sm:h-[80vh] max-h-[850px] p-0 gap-0 border-none overflow-hidden rounded-[24px] sm:rounded-[40px] shadow-2xl flex flex-col sm:flex-row bg-white">
+          <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl h-[90vh] sm:h-[80vh] max-h-[850px] p-0 gap-0 border-none overflow-hidden rounded-[24px] sm:rounded-[40px] shadow-2xl flex flex-col sm:flex-row bg-white">
             {/* Left Column: Bill Summary */}
             <div className="w-full sm:w-[300px] lg:w-[350px] shrink-0 h-[30%] sm:h-full flex flex-col bg-slate-50 border-r border-slate-100 overflow-hidden">
                <div className="p-4 sm:p-5 bg-white border-b shrink-0 flex items-center justify-between">
@@ -330,11 +330,17 @@ export default function Payment() {
                      )}
 
                      {!paymentMode && (
-                        <div className="py-12 sm:py-16 flex flex-col items-center justify-center space-y-3 sm:space-y-4 bg-slate-50 rounded-2xl sm:rounded-3xl border border-slate-100">
-                           <div className="p-4 sm:p-6 bg-white rounded-2xl shadow-sm">
-                             <CreditCard className="w-10 h-10 sm:w-12 sm:h-12 text-slate-100" />
+                        <div className="flex-1 min-h-[250px] sm:min-h-[350px] flex flex-col items-center justify-center space-y-4 sm:space-y-6 bg-slate-50/50 rounded-2xl sm:rounded-3xl border-2 border-dashed border-slate-200">
+                           <div className="relative group">
+                             <div className="absolute inset-0 bg-primary/5 rounded-full blur-2xl animate-pulse"></div>
+                             <div className="relative p-6 sm:p-8 bg-white rounded-[2rem] shadow-sm border border-slate-100 text-slate-200 transition-transform group-hover:scale-105">
+                               <CreditCard className="w-12 h-12 sm:w-16 sm:h-16" />
+                             </div>
                            </div>
-                           <p className="font-black text-slate-400 italic text-xs sm:text-sm">กรุณาเลือกวิธีการชำระเงิน</p>
+                           <div className="text-center space-y-1 sm:space-y-2">
+                             <p className="font-black text-slate-400 text-sm sm:text-base">ยังไม่ได้เลือกวิธีชำระเงิน</p>
+                             <p className="font-medium text-slate-300 text-xs sm:text-sm">กรุณาคลิกเลือก "เงินสด" หรือ "เงินโอน" ด้านบน</p>
+                           </div>
                         </div>
                      )}
                   </div>

@@ -38,14 +38,14 @@ export default function Dashboard() {
   const navItems = [
     { name: 'ภาพรวม', path: '', icon: LayoutDashboard },
     { name: 'เคาน์เตอร์ (จ่ายทันที)', path: 'counter-service', icon: QrCode },
+    { name: 'โต๊ะ', path: 'tables', icon: TableIcon },
     { name: 'หน้าจอครัว', path: 'kitchen-display', icon: ChefHat },
     { name: 'การชำระเงิน', path: 'payment', icon: Banknote },
-    { name: 'ออเดอร์จากพนักงาน', path: 'staff-order', icon: UtensilsCrossed, hidden: true },
     { name: 'จัดการครัว', path: 'kitchens', icon: UtensilsCrossed },
     { name: 'เมนู', path: 'menu', icon: MenuIcon },
     { name: 'ตัวเลือกเสริม', path: 'options', icon: Settings2 },
-    { name: 'โต๊ะ', path: 'tables', icon: TableIcon },
     { name: 'ตั้งค่าสาขา', path: 'settings', icon: Settings },
+    { name: 'ออเดอร์จากพนักงาน', path: 'staff-order', icon: UtensilsCrossed, hidden: true },
   ];
 
   const handleLogout = () => {

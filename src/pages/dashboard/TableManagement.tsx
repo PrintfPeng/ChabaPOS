@@ -28,7 +28,6 @@ export default function TableManagement() {
   const [isZoneDialogOpen, setIsZoneDialogOpen] = useState(false);
   const [isTableDialogOpen, setIsTableDialogOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
-  const [isQrDialogOpen, setIsQrDialogOpen] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [selectedTableForQr, setSelectedTableForQr] = useState<any>(null);
 
@@ -140,13 +139,21 @@ export default function TableManagement() {
     }
   };
 
-  const handleShowQRCode = async (table: any) => {
+  const handlePrintQRCode = async (e: React.MouseEvent, table: any) => {
+    e.stopPropagation();
+    const toastId = toast.loading('กำลังเตรียมพิมพ์ QR Code...');
     try {
       const url = await getQRCode(table.id);
       setQrCodeUrl(url);
       setSelectedTableForQr(table);
-      setIsQrDialogOpen(true);
+      
+      // Delay briefly to allow React to render the PrintableQRCode in the hidden div
+      setTimeout(() => {
+        toast.dismiss(toastId);
+        window.print();
+      }, 300);
     } catch (error) {
+      toast.dismiss(toastId);
       toast.error('ไม่สามารถสร้าง QR Code ได้');
     }
   };
@@ -253,48 +260,54 @@ export default function TableManagement() {
                 </Button>
               </div>
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
               {Array.isArray(zone.tables) && zone.tables.map(table => (
                 <Card 
                   key={table.id} 
-                  className="cursor-pointer transition-all hover:scale-105 bg-white group relative"
+                  className="cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:border-primary/50 bg-white group relative overflow-hidden flex flex-col h-full border-2 border-slate-100"
+                  onClick={() => navigate(`/brands/${brandId}/branches/${branchId}/order/${table.id}`)}
                 >
-                  <CardContent className="p-6 text-center">
-                    <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center mb-2 bg-slate-100 text-slate-600">
-                      <LayoutGrid className="w-6 h-6" />
-                    </div>
-                    <p className="font-bold text-slate-900">{table.name}</p>
-                    
-                    <div className="mt-4 flex flex-col gap-2">
-                      <Button 
-                        className="w-full gap-2" 
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/brands/${brandId}/branches/${branchId}/order/${table.id}`);
-                        }}
-                      >
-                        <Utensils className="w-4 h-4" />
-                        สั่งอาหาร
-                      </Button>
-                      <div className="flex justify-center gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleShowQRCode(table); }}>
-                          <QrCode className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); openEditTable(table); }}>
-                          <Edit2 className="w-4 h-4 text-slate-400" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleDeleteTable(table.id); }}>
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
+                  <CardContent className="p-0 flex flex-col h-full">
+                    <div className="p-6 text-center flex-1 flex flex-col items-center justify-center">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full flex items-center justify-center mb-3 sm:mb-4 bg-slate-50 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        <Utensils className="w-6 h-6 sm:w-8 sm:h-8" />
                       </div>
+                      <h3 className="font-black text-lg sm:text-xl text-slate-900 group-hover:text-primary transition-colors">{table.name}</h3>
+                      <p className="text-[10px] sm:text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider group-hover:text-primary/70">กดเพื่อสั่งอาหาร</p>
+                    </div>
+                    
+                    <div className="flex border-t border-slate-100 bg-slate-50 mt-auto">
+                       <button 
+                         className="flex-1 flex flex-col items-center justify-center py-2 sm:py-3 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                         onClick={(e) => { e.stopPropagation(); openEditTable(table); }}
+                       >
+                         <Edit2 className="w-4 h-4 mb-1" />
+                         <span className="text-[9px] sm:text-[10px] font-bold">แก้ไข</span>
+                       </button>
+                       <div className="w-[1px] bg-slate-200"></div>
+                       <button 
+                         className="flex-1 flex flex-col items-center justify-center py-2 sm:py-3 text-primary/70 hover:bg-primary/10 hover:text-primary transition-colors"
+                         onClick={(e) => handlePrintQRCode(e, table)}
+                       >
+                         <Printer className="w-4 h-4 mb-1" />
+                         <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">พิมพ์ QR</span>
+                       </button>
+                       <div className="w-[1px] bg-slate-200"></div>
+                       <button 
+                         className="flex-1 flex flex-col items-center justify-center py-2 sm:py-3 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                         onClick={(e) => { e.stopPropagation(); handleDeleteTable(table.id); }}
+                       >
+                         <Trash2 className="w-4 h-4 mb-1" />
+                         <span className="text-[9px] sm:text-[10px] font-bold">ลบ</span>
+                       </button>
                     </div>
                   </CardContent>
                 </Card>
               ))}
               {(!Array.isArray(zone.tables) || zone.tables.length === 0) && (
-                <div className="col-span-full py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  <p className="text-sm text-slate-400">ยังไม่มีโต๊ะในโซนนี้</p>
+                <div className="col-span-full py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                  <LayoutGrid className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-300 mb-3" />
+                  <p className="text-sm sm:text-base font-bold text-slate-500">ยังไม่มีโต๊ะในโซนนี้</p>
                 </div>
               )}
             </div>
@@ -309,47 +322,16 @@ export default function TableManagement() {
         )}
       </div>
 
-      <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>QR Code สำหรับสั่งอาหาร</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col items-center justify-center py-8">
-            {qrCodeUrl && (
-              <>
-                <div className="bg-white p-4 rounded-xl shadow-inner mb-4">
-                  <img src={qrCodeUrl} alt="QR Code" className="w-64 h-64" />
-                </div>
-                <p className="text-slate-500 text-sm mb-6">สแกนเพื่อสั่งอาหารจากโต๊ะ {selectedTableForQr?.name}</p>
-                
-                <div className="grid grid-cols-2 gap-4 w-full">
-                  <Button variant="outline" onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = qrCodeUrl;
-                    link.download = `qrcode-${selectedTableForQr?.name}.png`;
-                    link.click();
-                  }}>
-                    ดาวน์โหลด
-                  </Button>
-                  <Button className="gap-2" onClick={() => window.print()}>
-                    <Printer className="w-4 h-4" />
-                    พิมพ์ใบสั่งอาหาร
-                  </Button>
-                </div>
-
-                {/* Hidden printable area */}
-                <div className="hidden">
-                  <PrintableQRCode 
-                    qrCodeUrl={qrCodeUrl} 
-                    tableName={selectedTableForQr?.name || ''} 
-                    branchName={branchName} 
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Hidden printable area always present, just waits for data */}
+      {qrCodeUrl && selectedTableForQr && (
+        <div className="hidden">
+          <PrintableQRCode 
+            qrCodeUrl={qrCodeUrl} 
+            tableName={selectedTableForQr.name} 
+            branchName={branchName} 
+          />
+        </div>
+      )}
     </div>
   );
 }
