@@ -4,9 +4,12 @@ import api from '../lib/api';
 import { useCart } from '../contexts/CartContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
-import { Loader2, ShoppingCart, Plus, Minus, ChevronRight, X } from 'lucide-react';
+import { Loader2, ShoppingCart, Plus, Minus, ChevronRight, X, UtensilsCrossed } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
+import { ScrollArea } from '../components/ui/scroll-area';
+import { cn } from '../lib/utils';
+import { Badge } from '../components/ui/badge';
 
 interface MenuItem {
   id: number;
@@ -246,7 +249,7 @@ export default function CustomerOrder() {
                         <img 
                           src={item.imageUrl} 
                           alt={item.name} 
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                          className="absolute inset-0 w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" 
                           referrerPolicy="no-referrer" 
                         />
                         <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent" />
@@ -280,84 +283,109 @@ export default function CustomerOrder() {
 
       {/* Item Selection Dialog */}
       <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>
-        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden rounded-t-3xl sm:rounded-3xl">
-            {selectedItem && (
-              <>
-                {selectedItem.imageUrl && (
-                  <div className="relative w-full aspect-video sm:aspect-[21/9] overflow-hidden shrink-0">
+        <DialogContent className="w-[95vw] sm:max-w-[480px] p-0 overflow-hidden rounded-[24px] sm:rounded-3xl border-none max-h-[90vh] flex flex-col">
+          {selectedItem && (
+            <>
+              <div className="relative h-32 sm:h-44 overflow-hidden shrink-0">
+                 {selectedItem.imageUrl ? (
                     <img 
                       src={selectedItem.imageUrl} 
                       alt={selectedItem.name} 
-                      className="absolute inset-0 w-full h-full object-cover" 
+                      className="absolute inset-0 w-full h-full object-contain" 
                       referrerPolicy="no-referrer" 
                     />
-                  </div>
-                )}
-                <div className="p-6 space-y-6">
-                <DialogHeader>
-                  <DialogTitle className="text-2xl">{selectedItem.name}</DialogTitle>
-                  <p className="text-lg font-bold text-primary">฿{selectedItem.price.toLocaleString()}</p>
-                </DialogHeader>
-
-                {Array.isArray(selectedItem.optionGroups) && selectedItem.optionGroups.map(group => (
-                  <div key={group.id} className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-bold text-slate-900">{group.name}</h4>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 uppercase tracking-wider">
-                        {group.isMultiple ? 'เลือกได้หลายอย่าง' : 'เลือกได้ 1 อย่าง'}
-                      </span>
+                 ) : (
+                    <div className="absolute inset-0 w-full h-full bg-slate-100 flex items-center justify-center">
+                       <UtensilsCrossed className="w-12 h-12 text-slate-300" />
                     </div>
-                    <div className="space-y-2">
-                      {Array.isArray(group.options) && group.options.map(option => {
-                        const isSelected = Array.isArray(selectedOptions) && selectedOptions.find(o => o.id === option.id);
-                        return (
-                          <div 
-                            key={option.id} 
-                            className={`flex justify-between items-center p-3 rounded-xl border-2 transition-all cursor-pointer ${
-                              isSelected 
-                              ? 'border-primary bg-primary/5' 
-                              : 'border-slate-100 hover:border-slate-200'
-                            }`}
-                            onClick={() => toggleOption(group, option)}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                isSelected ? 'border-primary bg-primary' : 'border-slate-300'
-                              } ${!group.isMultiple ? 'rounded-full' : 'rounded-md'}`}>
-                                {isSelected && (
-                                  <div className={group.isMultiple ? "w-2.5 h-2.5 bg-white rounded-[2px]" : "w-2 h-2 bg-white rounded-full"} />
-                                )}
-                              </div>
-                              <span className="font-medium">{option.name}</span>
-                            </div>
-                            <span className="text-sm text-slate-500">
-                              {option.price > 0 ? `+฿${option.price}` : 'ฟรี'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <span className="font-bold">จำนวน</span>
-                  <div className="flex items-center gap-4">
-                    <Button variant="outline" size="icon" className="rounded-full" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
-                      <Minus className="w-4 h-4" />
-                    </Button>
-                    <span className="font-bold text-xl">{quantity}</span>
-                    <Button variant="outline" size="icon" className="rounded-full" onClick={() => setQuantity(q => q + 1)}>
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <DialogFooter className="pt-4">
-                  <Button className="w-full h-12 text-lg font-bold rounded-xl" onClick={handleAddToCart}>
-                    เพิ่มลงตะกร้า - ฿{((selectedItem.price + selectedOptions.reduce((s, o) => s + o.price, 0)) * quantity).toLocaleString()}
+                 )}
+                 <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute top-2 right-2 rounded-full bg-white/80 backdrop-blur-sm hover:bg-white z-20 h-8 w-8" 
+                    onClick={() => setSelectedItem(null)}
+                  >
+                    <X className="w-4 h-4" />
                   </Button>
-                </DialogFooter>
+              </div>
+              
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <ScrollArea className="flex-1 px-1">
+                  <div className="p-4 sm:p-6 space-y-5">
+                    <DialogHeader className="space-y-1">
+                      <div className="flex justify-between items-start gap-4">
+                        <DialogTitle className="text-xl sm:text-2xl font-black leading-tight">{selectedItem.name}</DialogTitle>
+                        <span className="text-lg sm:text-xl font-black text-primary italic shrink-0">฿{selectedItem.price.toLocaleString()}</span>
+                      </div>
+                    </DialogHeader>
+
+                    {Array.isArray(selectedItem.optionGroups) && selectedItem.optionGroups.length > 0 && (
+                      <div className="space-y-5">
+                        {selectedItem.optionGroups.map(group => (
+                          <div key={group.id} className="space-y-2.5">
+                            <div className="flex justify-between items-center px-1">
+                              <h4 className="font-black text-slate-400 text-[10px] uppercase tracking-widest leading-none">{group.name}</h4>
+                              <div className="bg-slate-100 text-[9px] font-black tracking-tighter text-slate-400 px-1.5 py-0.5 rounded uppercase">
+                                {group.isMultiple ? 'หลายรายการ' : 'เลือก 1 รายการ'}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2">
+                              {Array.isArray(group.options) && group.options.map(option => {
+                                const isSelected = selectedOptions.find(o => o.id === option.id);
+                                return (
+                                  <div 
+                                    key={option.id} 
+                                    className={cn(
+                                      "flex justify-between items-center p-3 rounded-xl border-2 transition-all cursor-pointer active:scale-[0.98]",
+                                      isSelected 
+                                      ? 'border-primary bg-primary/5 text-primary' 
+                                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                                    )}
+                                    onClick={() => toggleOption(group, option)}
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={cn(
+                                        "w-4 h-4 border flex items-center justify-center transition-all shrink-0",
+                                        isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300',
+                                        !group.isMultiple ? 'rounded-full' : 'rounded-[4px]'
+                                      )}>
+                                        {isSelected && <div className={cn("bg-white", group.isMultiple ? "w-2 h-2 rounded-[1px]" : "w-1.5 h-1.5 rounded-full")} />}
+                                      </div>
+                                      <span className="font-bold text-sm truncate">{option.name}</span>
+                                    </div>
+                                    <span className="text-xs font-black text-slate-400 shrink-0 ml-1">
+                                      {option.price > 0 ? `+฿${option.price}` : 'ฟรี'}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+
+                <div className="p-4 sm:p-6 bg-white border-t border-slate-100 space-y-4 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-slate-900 text-sm italic">QUANTITY</span>
+                    <div className="flex items-center gap-4 bg-slate-50 p-1 rounded-full border border-slate-100">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-white shadow-sm hover:text-primary" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+                        <Minus className="w-3.5 h-3.5" />
+                      </Button>
+                      <span className="font-black text-lg w-6 text-center tabular-nums">{quantity}</span>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-white shadow-sm hover:text-primary" onClick={() => setQuantity(q => q + 1)}>
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Button className="w-full h-14 sm:h-16 text-lg font-black rounded-2xl shadow-xl shadow-primary/20 transition-all hover:scale-[1.01] active:scale-95 flex justify-between px-6" onClick={handleAddToCart}>
+                    <span>เพิ่มลงตะกร้า</span>
+                    <span className="bg-white/20 px-3 py-1 rounded-lg text-sm">฿{((selectedItem.price + selectedOptions.reduce((s, o) => s + o.price, 0)) * quantity).toLocaleString()}</span>
+                  </Button>
+                </div>
               </div>
             </>
           )}

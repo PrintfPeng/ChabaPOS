@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -15,7 +15,8 @@ import {
   QrCode, 
   Calculator,
   CheckCircle2,
-  Trash2
+  Trash2,
+  ChevronRight
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -67,7 +68,8 @@ interface Table {
 }
 
 export default function CounterService() {
-  const { branchId } = useParams<{ branchId: string }>();
+  const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
+  const navigate = useNavigate();
   
   const [categories, setCategories] = useState<Category[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -223,6 +225,11 @@ export default function CounterService() {
       setIsPaymentDialogOpen(false);
       setSelectedTableId(null);
       setReceivedAmount('');
+
+      // Redirect to main branch dashboard after success
+      setTimeout(() => {
+        navigate(`/brands/${brandId}/branches/${branchId}`);
+      }, 1500);
     } catch (error) {
       toast.error('ทำรายการไม่สำเร็จ กรุณาลองใหม่');
     } finally {
@@ -296,7 +303,7 @@ export default function CounterService() {
                       <img 
                         src={item.imageUrl} 
                         alt={item.name} 
-                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                        className="absolute inset-0 w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" 
                         referrerPolicy="no-referrer" 
                       />
                     ) : (
@@ -367,209 +374,228 @@ export default function CounterService() {
 
       {/* Item Selection Dialog */}
       <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>
-        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-3xl border-none">
+        <DialogContent className="w-[95vw] sm:max-w-[480px] p-0 overflow-hidden rounded-[24px] sm:rounded-3xl border-none max-h-[90vh] flex flex-col">
           {selectedItem && (
-            <div className="flex flex-col">
-              <div className="relative h-48 sm:h-56 overflow-hidden shrink-0">
+            <>
+              <div className="relative h-32 sm:h-44 overflow-hidden shrink-0">
                  {selectedItem.imageUrl ? (
                     <img 
                       src={selectedItem.imageUrl} 
                       alt={selectedItem.name} 
-                      className="absolute inset-0 w-full h-full object-cover" 
+                      className="absolute inset-0 w-full h-full object-contain" 
                       referrerPolicy="no-referrer" 
                     />
                  ) : (
                     <div className="absolute inset-0 w-full h-full bg-slate-100 flex items-center justify-center">
-                       <UtensilsCrossed className="w-16 h-16 text-slate-300" />
+                       <UtensilsCrossed className="w-12 h-12 text-slate-300" />
                     </div>
                  )}
+                 <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute top-2 right-2 rounded-full bg-white/80 backdrop-blur-sm hover:bg-white z-20 h-8 w-8" 
+                    onClick={() => setSelectedItem(null)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
               </div>
-              <div className="p-6 space-y-6">
-                <DialogHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <DialogTitle className="text-2xl font-black">{selectedItem.name}</DialogTitle>
-                      <DialogDescription className="text-primary font-black text-xl mt-1 italic">฿{selectedItem.price.toLocaleString()}</DialogDescription>
-                    </div>
-                    <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setSelectedItem(null)}>
-                      <X className="w-5 h-5" />
-                    </Button>
-                  </div>
-                </DialogHeader>
-
-                <ScrollArea className="max-h-[35vh]">
-                  <div className="space-y-6 pr-4">
-                    {Array.isArray(selectedItem.optionGroups) && selectedItem.optionGroups.map(group => (
-                      <div key={group.id} className="space-y-3">
-                        <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
-                          <h4 className="font-black text-slate-700 text-sm">{group.name}</h4>
-                          <Badge variant="outline" className="text-[10px] font-black tracking-widest uppercase bg-white">
-                            {group.isMultiple ? 'หลายรายการ' : 'เลือก 1 รายการ'}
-                          </Badge>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {Array.isArray(group.options) && group.options.map(option => {
-                            const isSelected = selectedOptions.find(o => o.id === option.id);
-                            return (
-                              <div 
-                                key={option.id} 
-                                className={cn(
-                                  "flex justify-between items-center p-3 rounded-xl border-2 transition-all cursor-pointer",
-                                  isSelected 
-                                  ? 'border-primary bg-primary/5 text-primary' 
-                                  : 'border-slate-100 hover:border-slate-200'
-                                )}
-                                onClick={() => toggleOption(group, option)}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className={cn(
-                                    "w-4 h-4 border-2 flex items-center justify-center transition-all",
-                                    isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300',
-                                    !group.isMultiple ? 'rounded-full' : 'rounded-sm'
-                                  )}>
-                                    {isSelected && <div className={cn("bg-white", group.isMultiple ? "w-1.5 h-1.5 rounded-[1px]" : "w-1 h-1 rounded-full")} />}
-                                  </div>
-                                  <span className="font-bold text-xs">{option.name}</span>
-                                </div>
-                                <span className="text-[10px] font-black text-slate-400">
-                                  {option.price > 0 ? `+${option.price}` : 'ฟรี'}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
+              
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <ScrollArea className="flex-1">
+                  <div className="p-4 sm:p-6 space-y-5">
+                    <DialogHeader className="space-y-1">
+                      <div className="flex justify-between items-start gap-4">
+                        <DialogTitle className="text-xl sm:text-2xl font-black leading-tight">{selectedItem.name}</DialogTitle>
+                        <span className="text-lg sm:text-xl font-black text-primary italic shrink-0">฿{selectedItem.price.toLocaleString()}</span>
                       </div>
-                    ))}
+                    </DialogHeader>
+
+                    {Array.isArray(selectedItem.optionGroups) && selectedItem.optionGroups.length > 0 && (
+                      <div className="space-y-5">
+                        {selectedItem.optionGroups.map(group => (
+                          <div key={group.id} className="space-y-2.5">
+                            <div className="flex justify-between items-center px-1">
+                              <h4 className="font-black text-slate-400 text-[10px] uppercase tracking-widest leading-none">{group.name}</h4>
+                              <Badge variant="outline" className="text-[9px] font-black tracking-tighter bg-slate-50 border-slate-100 text-slate-400 px-1.5 py-0 h-4">
+                                {group.isMultiple ? 'เลือกได้หลายอย่าง' : 'เลือกได้ 1 อย่าง'}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {Array.isArray(group.options) && group.options.map(option => {
+                                const isSelected = selectedOptions.find(o => o.id === option.id);
+                                return (
+                                  <div 
+                                    key={option.id} 
+                                    className={cn(
+                                      "flex justify-between items-center p-2.5 rounded-xl border-2 transition-all cursor-pointer active:scale-[0.98]",
+                                      isSelected 
+                                      ? 'border-primary bg-primary/5 text-primary' 
+                                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                                    )}
+                                    onClick={() => toggleOption(group, option)}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className={cn(
+                                        "w-3.5 h-3.5 border flex items-center justify-center transition-all shrink-0",
+                                        isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300',
+                                        !group.isMultiple ? 'rounded-full' : 'rounded-[3px]'
+                                      )}>
+                                        {isSelected && <div className={cn("bg-white", group.isMultiple ? "w-1.5 h-1.5 rounded-[1px]" : "w-1 h-1 rounded-full")} />}
+                                      </div>
+                                      <span className="font-bold text-xs truncate">{option.name}</span>
+                                    </div>
+                                    <span className="text-[10px] font-black text-slate-400 shrink-0 ml-1">
+                                      {option.price > 0 ? `+฿${option.price}` : 'ฟรี'}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </ScrollArea>
 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <span className="font-black text-slate-900">จำนวน</span>
-                  <div className="flex items-center gap-4 bg-slate-50 p-1 rounded-full border">
-                    <Button variant="ghost" size="icon" className="rounded-full h-10 w-10" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
-                      <Minus className="w-4 h-4" />
-                    </Button>
-                    <span className="font-black text-xl w-8 text-center">{quantity}</span>
-                    <Button variant="ghost" size="icon" className="rounded-full h-10 w-10" onClick={() => setQuantity(q => q + 1)}>
-                      <Plus className="w-4 h-4" />
-                    </Button>
+                <div className="p-4 sm:p-6 bg-white border-t border-slate-100 space-y-4 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-slate-900 text-sm">จำนวนที่ต้องการ</span>
+                    <div className="flex items-center gap-4 bg-slate-50 p-1 rounded-full border border-slate-100">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-white shadow-sm hover:text-primary" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+                        <Minus className="w-3.5 h-3.5" />
+                      </Button>
+                      <span className="font-black text-lg w-6 text-center tabular-nums">{quantity}</span>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-white shadow-sm hover:text-primary" onClick={() => setQuantity(q => q + 1)}>
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                <DialogFooter>
-                  <Button className="w-full h-14 text-lg font-black rounded-2xl shadow-xl shadow-primary/20" onClick={handleAddToCart}>
-                    เพิ่มลงตะกร้า • ฿{((selectedItem.price + selectedOptions.reduce((s, o) => s + o.price, 0)) * quantity).toLocaleString()}
+                  <Button className="w-full h-14 sm:h-16 text-lg font-black rounded-2xl shadow-xl shadow-primary/20 transition-all hover:scale-[1.01] active:scale-95 flex justify-between px-6" onClick={handleAddToCart}>
+                    <span>เพิ่มลงตะกร้า</span>
+                    <span className="bg-white/20 px-3 py-1 rounded-lg text-sm">฿{((selectedItem.price + selectedOptions.reduce((s, o) => s + o.price, 0)) * quantity).toLocaleString()}</span>
                   </Button>
-                </DialogFooter>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
 
       {/* Payment Confirmation Dialog */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-[32px] border-none">
-          <div className="p-8 space-y-8">
-            <DialogHeader>
-              <DialogTitle className="text-3xl font-black text-center">ยืนยันการชำระเงิน</DialogTitle>
-              <p className="text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Checkout & Payment</p>
-            </DialogHeader>
+        <DialogContent className="w-[95vw] sm:max-w-[480px] p-0 overflow-hidden rounded-[24px] sm:rounded-3xl border-none max-h-[95vh] flex flex-col">
+          <div className="flex-1 overflow-hidden flex flex-col relative">
+            <ScrollArea className="flex-1">
+              <div className="p-5 sm:p-7 space-y-6">
+                <DialogHeader>
+                  <DialogTitle className="text-xl sm:text-2xl font-black text-center">ยืนยันการชำระเงิน</DialogTitle>
+                </DialogHeader>
 
-            <div className="grid grid-cols-2 gap-4">
-              <button 
-                onClick={() => setPaymentMode('CASH')}
-                className={cn(
-                  "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all gap-3 group",
-                  paymentMode === 'CASH' 
-                    ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5" 
-                    : "border-slate-100 hover:border-slate-200"
-                )}
-              >
-                <div className={cn("p-3 rounded-full", paymentMode === 'CASH' ? "bg-primary text-white" : "bg-slate-100 text-slate-400")}>
-                  <Banknote className="w-8 h-8" />
-                </div>
-                <span className="font-black">เงินสด (Cash)</span>
-              </button>
-              <button 
-                onClick={() => setPaymentMode('TRANSFER')}
-                className={cn(
-                  "flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all gap-3 group",
-                  paymentMode === 'TRANSFER' 
-                    ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5" 
-                    : "border-slate-100 hover:border-slate-200"
-                )}
-              >
-                <div className={cn("p-3 rounded-full", paymentMode === 'TRANSFER' ? "bg-primary text-white" : "bg-slate-100 text-slate-400")}>
-                  <QrCode className="w-8 h-8" />
-                </div>
-                <span className="font-black">PromptPay / โอนเงิน</span>
-              </button>
-            </div>
-
-            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-6">
-               <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-bold">ยอดเงินที่ต้องชำระ</span>
-                  <span className="text-3xl font-black text-slate-900 italic">฿{totalAmount.toLocaleString()}</span>
-               </div>
-
-               {paymentMode === 'CASH' && (
-                 <div className="space-y-4 pt-4 border-t border-slate-200">
-                    <div className="space-y-2">
-                       <label className="text-xs font-black text-slate-500 uppercase tracking-widest">รับมา (Received)</label>
-                       <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400 text-xl">฿</span>
-                          <Input 
-                            type="number" 
-                            autoFocus
-                            placeholder="0.00" 
-                            className="h-16 pl-10 text-2xl font-black rounded-2xl bg-white border-2 border-slate-200 focus:border-primary transition-all"
-                            value={receivedAmount}
-                            onChange={(e) => setReceivedAmount(e.target.value)}
-                          />
-                       </div>
-                    </div>
-                    {receivedAmount && parseFloat(receivedAmount) > 0 && (
-                      <div className="flex justify-between items-center p-4 bg-green-50 rounded-2xl animate-in fade-in slide-in-from-top-2">
-                        <span className="text-green-600 font-bold">เงินทอน (Change)</span>
-                        <span className="text-2xl font-black text-green-700">฿{changeAmount.toLocaleString()}</span>
-                      </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => setPaymentMode('CASH')}
+                    className={cn(
+                      "flex flex-row items-center justify-center p-2.5 rounded-xl border-2 transition-all gap-2 group active:scale-95",
+                      paymentMode === 'CASH' 
+                        ? "border-primary bg-primary/5 text-primary shadow-md shadow-primary/5" 
+                        : "border-slate-100 hover:border-slate-200 bg-slate-50/50"
                     )}
-                 </div>
-               )}
-
-               {paymentMode === 'TRANSFER' && (
-                 <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl border-2 border-dashed border-slate-200 animate-in zoom-in-95">
-                    <div className="p-4 bg-slate-50 rounded-2xl mb-4">
-                      <QrCode className="w-12 h-12 text-primary opacity-50" />
+                  >
+                    <div className={cn("p-1.5 rounded-lg", paymentMode === 'CASH' ? "bg-primary text-white" : "bg-white text-slate-400")}>
+                      <Banknote className="w-4 h-4" />
                     </div>
-                    <p className="text-sm font-bold text-slate-500 text-center">สแกน QR บนใบแจ้งหนี้<br/>หรือแสดง QR สาขาให้ลูกค้า</p>
-                 </div>
-               )}
-            </div>
+                    <span className="font-black text-[11px] sm:text-xs whitespace-nowrap">เงินสด (Cash)</span>
+                  </button>
+                  <button 
+                    onClick={() => setPaymentMode('TRANSFER')}
+                    className={cn(
+                      "flex flex-row items-center justify-center p-2.5 rounded-xl border-2 transition-all gap-2 group active:scale-95",
+                      paymentMode === 'TRANSFER' 
+                        ? "border-primary bg-primary/5 text-primary shadow-md shadow-primary/5" 
+                        : "border-slate-100 hover:border-slate-200 bg-slate-50/50"
+                    )}
+                  >
+                    <div className={cn("p-1.5 rounded-lg", paymentMode === 'TRANSFER' ? "bg-primary text-white" : "bg-white text-slate-400")}>
+                      <QrCode className="w-4 h-4" />
+                    </div>
+                    <span className="font-black text-[11px] sm:text-xs whitespace-nowrap">PromptPay</span>
+                  </button>
+                </div>
 
-            <div className="space-y-2">
-               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">ระบุโต๊ะ (ไม่บังคับ)</label>
-               <select 
-                 className="w-full h-12 bg-slate-50 rounded-xl border-none font-bold px-4 appearance-none"
-                 value={selectedTableId || ''}
-                 onChange={(e) => setSelectedTableId(e.target.value ? Number(e.target.value) : null)}
-               >
-                 <option value="">-- ไม่ระบุโต๊ะ --</option>
-                 {tables.map(t => (
-                   <option key={t.id} value={t.id}>{t.name} ({t.zone.name})</option>
-                 ))}
-               </select>
-            </div>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                   <div className="flex justify-between items-center">
+                      <span className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">ยอดชำระจริง</span>
+                      <span className="text-xl sm:text-2xl font-black text-slate-900 italic tabular-nums">฿{totalAmount.toLocaleString()}</span>
+                   </div>
 
-            <Button 
-              className="w-full h-16 rounded-[24px] text-xl font-black shadow-2xl shadow-primary/20 flex items-center justify-center gap-3" 
-              disabled={isSubmitting || (paymentMode === 'CASH' && (!receivedAmount || parseFloat(receivedAmount) < totalAmount))}
-              onClick={handleSubmitOrder}
-            >
-              {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 className="w-6 h-6" />}
-              <span>ยืนยันการชำระเงิน</span>
-            </Button>
+                   {paymentMode === 'CASH' && (
+                     <div className="space-y-3 pt-3 border-t border-slate-200 animate-in slide-in-from-top-2">
+                        <div className="space-y-1.5">
+                           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">รับเงินสดมา</label>
+                           <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-slate-300 text-base">฿</span>
+                              <Input 
+                                type="number" 
+                                autoFocus
+                                placeholder="0.00" 
+                                className="h-10 sm:h-12 pl-8 text-lg sm:text-xl font-black rounded-xl bg-white border-none focus:ring-1 focus:ring-primary transition-all text-right tabular-nums shadow-sm"
+                                value={receivedAmount}
+                                onChange={(e) => setReceivedAmount(e.target.value)}
+                              />
+                           </div>
+                        </div>
+                        {receivedAmount && parseFloat(receivedAmount) > 0 && (
+                          <div className="flex justify-between items-center p-2.5 bg-green-50 rounded-xl border border-green-100">
+                            <span className="text-green-600 font-bold text-[10px]">เงินทอน</span>
+                            <span className="text-lg sm:text-xl font-black text-green-700 italic">฿{changeAmount.toLocaleString()}</span>
+                          </div>
+                        )}
+                     </div>
+                   )}
+
+                   {paymentMode === 'TRANSFER' && (
+                     <div className="flex flex-row items-center justify-center gap-3 p-3 bg-white rounded-xl border border-dashed border-slate-200 animate-in zoom-in-95">
+                        <div className="p-2 bg-slate-50 rounded-lg">
+                          <QrCode className="w-6 h-6 text-primary opacity-50" />
+                        </div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">สแกน QR บนใบแจ้งหนี้<br/>หรือแสดง QR ประจำสาขา</p>
+                     </div>
+                   )}
+                </div>
+
+                <div className="space-y-1.5">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">ระบุโต๊ะ (Optional)</label>
+                   <div className="relative group">
+                     <select 
+                       className="w-full h-11 sm:h-12 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-100 font-bold px-4 appearance-none transition-colors cursor-pointer text-sm"
+                       value={selectedTableId || ''}
+                       onChange={(e) => setSelectedTableId(e.target.value ? Number(e.target.value) : null)}
+                     >
+                       <option value="">-- ไม่ระบุเลชโต๊ะ / Take Away --</option>
+                       {tables.map(t => (
+                         <option key={t.id} value={t.id}>{t.name} ({t.zone.name})</option>
+                       ))}
+                     </select>
+                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300 group-hover:text-primary transition-colors">
+                        <ChevronRight className="w-4 h-4 rotate-90" />
+                     </div>
+                   </div>
+                </div>
+              </div>
+            </ScrollArea>
+
+            <div className="p-4 sm:p-6 bg-white border-t border-slate-100 shrink-0">
+              <Button 
+                className="w-full h-12 sm:h-14 rounded-[16px] sm:rounded-[20px] text-base sm:text-lg font-black shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all" 
+                disabled={isSubmitting || (paymentMode === 'CASH' && (!receivedAmount || parseFloat(receivedAmount) < totalAmount))}
+                onClick={handleSubmitOrder}
+              >
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                <span>ยืนยันการชำระเงิน</span>
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

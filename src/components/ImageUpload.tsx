@@ -56,7 +56,7 @@ export function ImageUpload({ value, onChange, onFileSelect, label = 'รูป�
             <img 
               src={previewUrl} 
               alt="Preview" 
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
             />
             <button
               onClick={handleRemove}

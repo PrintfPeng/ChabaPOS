@@ -367,7 +367,12 @@ export default function MenuManagement() {
                     <Card key={item.id} className="overflow-hidden border-none shadow-sm group hover:shadow-xl transition-all rounded-[24px] sm:rounded-[32px] flex flex-col bg-white">
                         <div className="aspect-[4/3] bg-slate-50 relative overflow-hidden shrink-0">
                             {item.imageUrl ? (
-                                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
+                                <img 
+                                  src={item.imageUrl} 
+                                  alt={item.name} 
+                                  className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" 
+                                  referrerPolicy="no-referrer" 
+                                />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-slate-200">
                                     <LayoutGrid className="w-10 h-10" />
