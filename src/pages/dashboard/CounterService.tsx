@@ -196,6 +196,11 @@ export default function CounterService() {
     setIsPaymentDialogOpen(true);
   };
 
+  const handleQuickCash = (amount: number) => {
+    const current = parseFloat(receivedAmount || '0');
+    setReceivedAmount((current + amount).toString());
+  };
+
   const handleSubmitOrder = async () => {
     if (paymentMode === 'CASH' && (!receivedAmount || parseFloat(receivedAmount) < totalAmount)) {
       toast.error('จำนวนเงินรับมาไม่เพียงพอ');
@@ -540,10 +545,48 @@ export default function CounterService() {
                                 type="number" 
                                 autoFocus
                                 placeholder="0.00" 
-                                className="h-10 sm:h-12 pl-8 text-lg sm:text-xl font-black rounded-xl bg-white border-none focus:ring-1 focus:ring-primary transition-all text-right tabular-nums shadow-sm"
+                                className="h-10 sm:h-12 pl-8 pr-10 text-lg sm:text-xl font-black rounded-xl bg-white border-none focus:ring-1 focus:ring-primary transition-all text-right tabular-nums shadow-sm"
                                 value={receivedAmount}
                                 onChange={(e) => setReceivedAmount(e.target.value)}
                               />
+                              {receivedAmount && (
+                                 <button 
+                                   onClick={() => setReceivedAmount('')}
+                                   className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+                                 >
+                                   <X className="w-3 h-3" />
+                                 </button>
+                               )}
+                           </div>
+                           
+                           <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 sm:gap-2 mt-2">
+                              {['1000', '500', '100', '50', '20'].map(val => (
+                                 <button 
+                                  key={`note-${val}`} 
+                                  type="button"
+                                  onClick={() => handleQuickCash(Number(val))}
+                                  className="h-8 sm:h-10 rounded-lg bg-white border border-slate-100 shadow-sm text-[10px] sm:text-xs font-black text-slate-600 hover:border-primary hover:text-primary active:scale-95 transition-all flex items-center justify-center"
+                                 >
+                                   +{val}
+                                 </button>
+                              ))}
+                              {['10', '5', '2', '1'].map(val => (
+                                 <button 
+                                  key={`coin-${val}`} 
+                                  type="button"
+                                  onClick={() => handleQuickCash(Number(val))}
+                                  className="h-8 sm:h-10 rounded-full bg-slate-50 border border-slate-100 shadow-sm text-[10px] sm:text-xs font-black text-slate-500 hover:bg-slate-100 active:scale-95 transition-all flex items-center justify-center"
+                                 >
+                                   +{val}
+                                 </button>
+                              ))}
+                              <button 
+                                type="button"
+                                onClick={() => setReceivedAmount(totalAmount.toString())}
+                                className="h-8 sm:h-10 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[10px] sm:text-xs font-black hover:bg-primary/20 active:scale-95 transition-all flex items-center justify-center col-span-2 sm:col-span-1"
+                              >
+                                จ่ายพอดี
+                              </button>
                            </div>
                         </div>
                         {receivedAmount && parseFloat(receivedAmount) > 0 && (

@@ -37,8 +37,8 @@ export default function Dashboard() {
 
   const navItems = [
     { name: 'ภาพรวม', path: '', icon: LayoutDashboard },
-    { name: 'เคาน์เตอร์ (จ่ายทันที)', path: 'counter-service', icon: QrCode },
-    { name: 'โต๊ะ', path: 'tables', icon: TableIcon },
+    { name: 'สั่งอาหารแบบชำระทันที', path: 'counter-service', icon: QrCode },
+    { name: 'เปิดโต๊ะสั่งอาหาร', path: 'tables', icon: TableIcon },
     { name: 'หน้าจอครัว', path: 'kitchen-display', icon: ChefHat },
     { name: 'การชำระเงิน', path: 'payment', icon: Banknote },
     { name: 'จัดการครัว', path: 'kitchens', icon: UtensilsCrossed },

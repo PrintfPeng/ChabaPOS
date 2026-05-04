@@ -18,19 +18,34 @@ export class OrdersService {
 
     // 2. Generate Order Number (e.g., 1-20240418-001)
     const today = new Date();
-    const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
     today.setHours(0, 0, 0, 0);
     
-    const count = await this.prisma.order.count({
+    const year = today.getFullYear();
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    const day = today.getDate().toString().padStart(2, '0');
+    const dateStr = `${year}${month}${day}`;
+    
+    const lastOrder = await this.prisma.order.findFirst({
       where: {
-        createdAt: {
-          gte: today,
+        orderNumber: {
+          startsWith: `${dto.branchId}-${dateStr}-`,
         },
-        branchId: dto.branchId,
+      },
+      orderBy: {
+        orderNumber: 'desc',
       },
     });
+
+    let sequence = 1;
+    if (lastOrder) {
+      const parts = lastOrder.orderNumber.split('-');
+      const lastSeq = parseInt(parts[2], 10);
+      if (!isNaN(lastSeq)) {
+        sequence = lastSeq + 1;
+      }
+    }
     
-    const orderNumber = `${dto.branchId}-${dateStr}-${(count + 1).toString().padStart(3, '0')}`;
+    const orderNumber = `${dto.branchId}-${dateStr}-${sequence.toString().padStart(3, '0')}`;
 
     // 3. Process Items and Calculate Total
     let totalAmount = 0;

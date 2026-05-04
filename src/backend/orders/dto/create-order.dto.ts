@@ -1,4 +1,4 @@
-import { IsNumber, IsString, IsArray, ValidateNested, IsOptional } from 'class-validator';
+import { IsNumber, IsString, IsArray, ValidateNested, IsOptional, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class OrderOptionDto {
@@ -37,9 +37,11 @@ export class CreateOrderDto {
   @Type(() => OrderItemDto)
   items: OrderItemDto[];
 
+  @IsBoolean()
   @IsOptional()
   isPrepaid?: boolean;
 
+  @IsString()
   @IsOptional()
   paymentType?: 'CASH' | 'TRANSFER';
 }

@@ -273,17 +273,34 @@ export default function Payment() {
                                 />
                              </div>
 
-                             <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-                                {['1000', '500', '100'].map(val => (
+                             <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 sm:gap-2">
+                                {['1000', '500', '100', '50', '20'].map(val => (
                                    <Button 
-                                    key={val} 
+                                    key={`note-${val}`} 
                                     variant="outline" 
-                                    className="h-10 sm:h-11 rounded-lg sm:rounded-xl font-black text-xs sm:text-sm border-slate-100 hover:bg-slate-50 active:scale-95"
+                                    className="h-9 sm:h-10 rounded-lg font-black text-[10px] sm:text-xs border-slate-100 hover:bg-slate-50 hover:text-primary hover:border-primary active:scale-95 transition-all"
                                     onClick={() => handleQuickCash(Number(val))}
                                    >
                                       +{val}
                                    </Button>
                                 ))}
+                                {['10', '5', '2', '1'].map(val => (
+                                   <Button 
+                                    key={`coin-${val}`} 
+                                    variant="outline" 
+                                    className="h-9 sm:h-10 rounded-full font-black text-[10px] sm:text-xs bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100 hover:text-primary active:scale-95 transition-all"
+                                    onClick={() => handleQuickCash(Number(val))}
+                                   >
+                                      +{val}
+                                   </Button>
+                                ))}
+                                <Button 
+                                  variant="outline" 
+                                  className="h-9 sm:h-10 rounded-lg font-black text-[10px] sm:text-xs bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 active:scale-95 transition-all col-span-2 sm:col-span-1"
+                                  onClick={() => setReceivedAmount(selectedBill.totalAmount.toString())}
+                                >
+                                  จ่ายพอดี
+                                </Button>
                              </div>
 
                              <div className="grid grid-cols-3 gap-1 sm:gap-1.5">
