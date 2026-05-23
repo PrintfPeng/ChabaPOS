@@ -12,6 +12,10 @@ import { ZonesModule } from './zones/zones.module';
 import { TablesModule } from './tables/tables.module';
 import { OrdersModule } from './orders/orders.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
+import { MaterialCategoriesModule } from './material-categories/material-categories.module';
+import { RawMaterialsModule } from './raw-materials/raw-materials.module';
+import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 
 @Module({
   imports: [
@@ -25,7 +29,11 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ZonesModule,
     TablesModule,
     OrdersModule,
-    DashboardModule
+    DashboardModule,
+    SuppliersModule,
+    MaterialCategoriesModule,
+    RawMaterialsModule,
+    PurchaseOrdersModule
   ],
   providers: [
     {

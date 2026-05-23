@@ -51,6 +51,10 @@ model Branch {
   pin          String?
   createdAt    DateTime      @default(now())
   updatedAt  DateTime   @updatedAt
+  suppliers    Supplier[]
+  materialCategories MaterialCategory[]
+  rawMaterials RawMaterial[]
+  purchaseOrders PurchaseOrder[]
 
   @@index([brandId])
 }
@@ -249,5 +253,88 @@ model ActivityLog {
 
   @@index([userId])
   @@index([branchId])
+}
+
+// ============================================
+// INVENTORY MANAGEMENT SYSTEM
+// ============================================
+
+model Supplier {
+  id        Int      @id @default(autoincrement())
+  name      String
+  contact   String?
+  branchId  Int
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  orders    PurchaseOrder[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+}
+
+model MaterialCategory {
+  id        Int      @id @default(autoincrement())
+  name      String
+  branchId  Int
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  materials RawMaterial[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+}
+
+model RawMaterial {
+  id          Int      @id @default(autoincrement())
+  name        String
+  unit        String   // e.g. กิโลกรัม, ขวด, ลัง
+  categoryId  Int
+  category    MaterialCategory @relation(fields: [categoryId], references: [id])
+  branchId    Int
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  orderItems  PurchaseOrderItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([branchId])
+}
+
+enum PurchaseOrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id          Int                 @id @default(autoincrement())
+  supplierId  Int
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  branchId    Int
+  branch      Branch              @relation(fields: [branchId], references: [id])
+  status      PurchaseOrderStatus @default(PENDING)
+  totalAmount Float               @default(0)
+  orderDate   DateTime            @default(now())
+  items       PurchaseOrderItem[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([supplierId])
+  @@index([branchId])
+}
+
+model PurchaseOrderItem {
+  id              Int           @id @default(autoincrement())
+  purchaseOrderId Int
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  rawMaterialId   Int
+  rawMaterial     RawMaterial   @relation(fields: [rawMaterialId], references: [id])
+  quantity        Float
+  price           Float         @default(0) // Price per unit
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([purchaseOrderId])
+  @@index([rawMaterialId])
 }
 

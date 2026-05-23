@@ -12,7 +12,8 @@ import {
   Banknote,
   Settings,
   Menu,
-  QrCode
+  QrCode,
+  Package
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from '../components/ui/button';
@@ -26,6 +27,7 @@ import CounterService from './dashboard/CounterService';
 import Overview from './dashboard/Overview';
 import Payment from './dashboard/Payment';
 import BranchSettings from './dashboard/BranchSettings';
+import InventoryLayout from './dashboard/inventory/InventoryLayout';
 import { auth } from '../lib/firebase';
 
 export default function Dashboard() {
@@ -42,6 +44,7 @@ export default function Dashboard() {
     { name: 'จัดการครัว', path: 'kitchens', icon: UtensilsCrossed },
     { name: 'เมนู', path: 'menu', icon: MenuIcon },
     { name: 'ตัวเลือกเสริม', path: 'options', icon: Settings2 },
+    { name: 'จัดการคลังสินค้า', path: 'inventory', icon: Package },
     { name: 'ตั้งค่าสาขา', path: 'settings', icon: Settings },
     { name: 'ออเดอร์จากพนักงาน', path: 'staff-order', icon: UtensilsCrossed, hidden: true },
   ];
@@ -105,6 +108,7 @@ export default function Dashboard() {
             <Route path="tables" element={<TableManagement />} />
             <Route path="payment" element={<Payment />} />
             <Route path="settings" element={<BranchSettings />} />
+            <Route path="inventory/*" element={<InventoryLayout />} />
             <Route path="order/:tableId" element={<StaffOrdering />} />
           </Routes>
         </div>
