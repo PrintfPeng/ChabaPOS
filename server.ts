@@ -7,7 +7,6 @@ import path from "path";
 import express from "express";
 import helmet from "helmet";
 import { Reflector } from "@nestjs/core";
-import { JwtAuthGuard } from "./src/backend/auth/jwt-auth.guard";
 import { PrismaClientExceptionFilter } from "./src/backend/prisma/prisma-exception.filter";
 
 async function startServer() {
@@ -37,8 +36,6 @@ async function startServer() {
     transform: true,
   }));
 
-  const reflector = app.get(Reflector);
-  app.useGlobalGuards(new JwtAuthGuard(reflector));
 
   const PORT = 3000;
 

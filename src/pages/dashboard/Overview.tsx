@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useBranch } from '../../hooks/useBranches';
+import api from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Badge } from '../../components/ui/badge';
@@ -14,43 +15,78 @@ import {
   User, 
   Clock 
 } from 'lucide-react';
+import { toast } from 'sonner';
 
-const MOCK_SALES_SUMMARY = {
-  todaySales: 24500,
-  orderCount: 142,
-  topMenu: 'กะเพราหมูกรอบไข่ดาว',
-  salesIncrease: '+12.5%',
-  orderIncrease: '+5.2%'
-};
+export interface SummaryData {
+  todaySales: number;
+  orderCount: number;
+  topMenu: string;
+  salesIncrease: string;
+  orderIncrease: string;
+  topMenus: { name: string; quantity: number }[];
+}
 
-const MOCK_ACTIVITIES = [
-  { id: 1, action: 'เพิ่มรายการเมนูใหม่: "ยำวุ้นเส้นหมูสับ"', user: 'แอดมิน สมชาย', time: '10 นาทีที่แล้ว', role: 'Admin' },
-  { id: 2, action: 'ยกเลิกบิล #INV-2023001', user: 'แคชเชียร์ สมหญิง', time: '1 ชั่วโมงที่แล้ว', role: 'Cashier' },
-  { id: 3, action: 'อัปเดตราคา "ข้าวผัดปู"', user: 'แอดมิน สมชาย', time: '2 ชั่วโมงที่แล้ว', role: 'Admin' },
-  { id: 4, action: 'เปิดกะ (Shift Start)', user: 'แคชเชียร์ สมหญิง', time: '08:00 น.', role: 'Cashier' },
-];
+export interface RevenueData {
+  label: string;
+  value: number;
+}
 
-const MOCK_REVENUE_CHART_DATA = [
-  { label: '08:00', value: 1200 },
-  { label: '10:00', value: 2500 },
-  { label: '12:00', value: 8900 },
-  { label: '14:00', value: 4200 },
-  { label: '16:00', value: 3100 },
-  { label: '18:00', value: 11500 },
-  { label: '20:00', value: 9800 },
-];
+export interface ActivityLogData {
+  id: number;
+  action: string;
+  user: string;
+  time: string;
+  role: string;
+  details?: string;
+}
 
 export default function Overview() {
   const { branchId } = useParams<{ branchId: string }>();
-  const { branch, isLoading } = useBranch(Number(branchId));
+  const { branch, isLoading: isBranchLoading } = useBranch(Number(branchId));
 
-  if (isLoading) {
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
+  useEffect(() => {
+    if (!branchId) return;
+
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        const [summaryRes, revenueRes, logsRes] = await Promise.all([
+          api.get(`/dashboard/summary?branchId=${branchId}`),
+          api.get(`/dashboard/revenue?branchId=${branchId}&period=${period}`),
+          api.get(`/dashboard/logs?branchId=${branchId}`)
+        ]);
+
+        setSummary(summaryRes.data);
+        setRevenueData(revenueRes.data);
+        setActivityLogs(logsRes.data);
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+        toast.error('ไม่สามารถโหลดข้อมูล Dashboard ได้');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [branchId, period]);
+
+  if (isBranchLoading || isLoading || !summary) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center py-40 space-y-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="text-slate-500">กำลังโหลดข้อมูล Dashboard...</p>
       </div>
     );
   }
+
+  // Get max value for chart scaling
+  const maxRevenue = Math.max(...revenueData.map(d => d.value), 100);
 
   return (
     <div className="space-y-6 max-w-7xl pb-10">
@@ -67,7 +103,7 @@ export default function Overview() {
             <div className="flex justify-between items-start">
               <div className="space-y-2">
                 <p className="text-sm font-medium text-slate-600">ยอดขายรวมวันนี้</p>
-                <h3 className="text-3xl font-bold text-primary">฿{MOCK_SALES_SUMMARY.todaySales.toLocaleString()}</h3>
+                <h3 className="text-3xl font-bold text-primary">฿{summary.todaySales.toLocaleString()}</h3>
               </div>
               <div className="p-3 bg-white rounded-xl shadow-sm">
                 <TrendingUp className="w-5 h-5 text-primary" />
@@ -75,7 +111,7 @@ export default function Overview() {
             </div>
             <div className="mt-4 flex items-center gap-2 text-sm">
               <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 border-none">
-                {MOCK_SALES_SUMMARY.salesIncrease}
+                {summary.salesIncrease}
               </Badge>
               <span className="text-slate-500">เทียบกับเมื่อวาน</span>
             </div>
@@ -87,7 +123,7 @@ export default function Overview() {
             <div className="flex justify-between items-start">
               <div className="space-y-2">
                 <p className="text-sm font-medium text-slate-600">จำนวนออเดอร์</p>
-                <h3 className="text-3xl font-bold text-slate-900">{MOCK_SALES_SUMMARY.orderCount}</h3>
+                <h3 className="text-3xl font-bold text-slate-900">{summary.orderCount}</h3>
               </div>
               <div className="p-3 bg-blue-50 rounded-xl">
                 <Receipt className="w-5 h-5 text-blue-600" />
@@ -95,7 +131,7 @@ export default function Overview() {
             </div>
             <div className="mt-4 flex items-center gap-2 text-sm">
               <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none">
-                {MOCK_SALES_SUMMARY.orderIncrease}
+                {summary.orderIncrease}
               </Badge>
               <span className="text-slate-500">เทียบกับเมื่อวาน</span>
             </div>
@@ -107,8 +143,8 @@ export default function Overview() {
             <div className="flex justify-between items-start">
               <div className="space-y-2 w-full">
                 <p className="text-sm font-medium text-slate-600">เมนูยอดฮิตวันนี้</p>
-                <h3 className="text-xl font-bold text-slate-900 mt-2 truncate w-[90%]" title={MOCK_SALES_SUMMARY.topMenu}>
-                  {MOCK_SALES_SUMMARY.topMenu}
+                <h3 className="text-xl font-bold text-slate-900 mt-2 truncate w-[90%]" title={summary.topMenu}>
+                  {summary.topMenu}
                 </h3>
               </div>
               <div className="p-3 bg-orange-50 rounded-xl shrink-0">
@@ -116,7 +152,11 @@ export default function Overview() {
               </div>
             </div>
             <div className="mt-4 flex items-center gap-2 text-sm">
-               <span className="text-slate-500">ถูกสั่งไปแล้ว <strong className="text-slate-900">38</strong> จาน</span>
+               {summary.topMenus.length > 0 ? (
+                 <span className="text-slate-500">ถูกสั่งไปแล้ว <strong className="text-slate-900">{summary.topMenus[0].quantity}</strong> จาน</span>
+               ) : (
+                 <span className="text-slate-500">ยังไม่มีข้อมูลการสั่งซื้อ</span>
+               )}
             </div>
           </CardContent>
         </Card>
@@ -134,15 +174,14 @@ export default function Overview() {
               <CardDescription>สรุปยอดขายแยกตามช่วงเวลาแบบกราฟ</CardDescription>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="daily" className="w-full">
+              <Tabs value={period} onValueChange={(v) => setPeriod(v as any)} className="w-full">
                 <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100/80">
                   <TabsTrigger value="daily">รายวัน</TabsTrigger>
                   <TabsTrigger value="weekly">รายสัปดาห์</TabsTrigger>
                   <TabsTrigger value="monthly">รายเดือน</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="daily" className="space-y-4 animate-in fade-in-50 duration-500">
-                  {/* Mock Chart UI */}
+                <TabsContent value={period} className="space-y-4 animate-in fade-in-50 duration-500">
                   <div className="h-[300px] w-full bg-slate-50/50 border border-slate-100 rounded-xl flex items-end justify-between p-4 px-2 sm:px-6 gap-1 sm:gap-2 relative">
                     {/* Y-Axis Guide lines */}
                     <div className="absolute inset-0 flex flex-col justify-between py-8 px-4 pointer-events-none">
@@ -151,12 +190,12 @@ export default function Overview() {
                       ))}
                     </div>
 
-                    {MOCK_REVENUE_CHART_DATA.map((data, i) => (
+                    {revenueData.length > 0 ? revenueData.map((data, i) => (
                       <div key={i} className="flex flex-col items-center gap-2 w-full group z-10">
                         <div className="relative w-full flex justify-center h-[240px] items-end">
                           <div 
                             className="w-full max-w-[40px] bg-primary/20 group-hover:bg-primary transition-all duration-300 rounded-t-md relative" 
-                            style={{ height: `${Math.max(5, (data.value / 12000) * 100)}%` }}
+                            style={{ height: `${Math.max(5, (data.value / maxRevenue) * 100)}%` }}
                           >
                             <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs py-1.5 px-2.5 rounded shadow-lg whitespace-nowrap z-20">
                               ฿{data.value.toLocaleString()}
@@ -167,16 +206,12 @@ export default function Overview() {
                         </div>
                         <span className="text-[10px] sm:text-xs text-slate-500 font-medium">{data.label}</span>
                       </div>
-                    ))}
+                    )) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <p className="text-slate-400">ไม่พบข้อมูลรายรับในช่วงเวลานี้</p>
+                      </div>
+                    )}
                   </div>
-                </TabsContent>
-
-                <TabsContent value="weekly" className="h-[300px] flex items-center justify-center border border-slate-100 rounded-xl bg-slate-50/50 animate-in fade-in-50 duration-500">
-                  <p className="text-slate-400">Mock Data สำหรับรายงานรายสัปดาห์</p>
-                </TabsContent>
-
-                <TabsContent value="monthly" className="h-[300px] flex items-center justify-center border border-slate-100 rounded-xl bg-slate-50/50 animate-in fade-in-50 duration-500">
-                  <p className="text-slate-400">Mock Data สำหรับรายงานรายเดือน</p>
                 </TabsContent>
               </Tabs>
             </CardContent>
@@ -195,10 +230,10 @@ export default function Overview() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6 pt-2">
-                {MOCK_ACTIVITIES.map((activity, index) => (
+                {activityLogs.length > 0 ? activityLogs.map((activity, index) => (
                   <div key={activity.id} className="relative flex gap-4">
                     {/* Connecting line */}
-                    {index !== MOCK_ACTIVITIES.length - 1 && (
+                    {index !== activityLogs.length - 1 && (
                       <div className="absolute left-[19px] top-10 bottom-[-24px] w-[2px] bg-slate-100" />
                     )}
                     
@@ -221,7 +256,12 @@ export default function Overview() {
                       </div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-10 text-slate-500">
+                    <Activity className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                    <p>ยังไม่มีบันทึกการทำงาน</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

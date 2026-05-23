@@ -15,7 +15,8 @@ model User {
   firstName String
   lastName  String
   phone     String?
-  brands    Brand[]
+  brands       Brand[]
+  activityLogs ActivityLog[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -45,6 +46,7 @@ model Branch {
   zones        Zone[]
   optionGroups OptionGroup[]
   orders       Order[]
+  activityLogs ActivityLog[]
   qrCodeUrl    String?
   createdAt    DateTime      @default(now())
   updatedAt  DateTime   @updatedAt
@@ -231,3 +233,18 @@ model OrderItemOption {
 
   @@index([orderItemId])
 }
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  details   String?
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  branchId  Int
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([branchId])
+}
+
