@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsOptional, IsNumber, IsUrl } from 'class-validator';
+import { IsString, IsInt, IsOptional, IsNumber, IsUrl, IsNotEmpty } from 'class-validator';
 
 export class CreateCategoryDto {
   @IsString()
@@ -23,15 +23,16 @@ export class CreateMenuItemDto {
   @IsUrl()
   imageUrl?: string;
 
+  @IsNotEmpty({ message: 'กรุณาระบุหมวดหมู่' })
   @IsInt()
   categoryId: number;
 
   @IsInt()
   branchId: number;
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'กรุณาระบุห้องครัว' })
   @IsInt()
-  kitchenId?: number;
+  kitchenId: number;
 
   @IsOptional()
   @IsInt({ each: true })

@@ -94,9 +94,14 @@ export default function MenuManagement() {
   };
 
   const handleCreateItem = async () => {
-    if (!bid || !newItem.name || !newItem.price || !newItem.categoryId) return;
-
-    // Frontend Duplicate Validation
+    if (!newItem.name || !newItem.price) return;
+    if (!newItem.categoryId || newItem.categoryId === "") {
+      return toast.error("กรุณาเลือกหมวดหมู่สินค้า");
+    }
+    if (!newItem.kitchenId || newItem.kitchenId === "") {
+      return toast.error("กรุณาเลือกห้องครัวสำหรับส่งออเดอร์");
+    }
+    
     if (Array.isArray(menuItems) && menuItems.some(item => item.name.toLowerCase() === newItem.name.toLowerCase())) {
       return toast.error('ชื่อเมนูนี้มีอยู่ในระบบแล้ว');
     }
@@ -115,7 +120,7 @@ export default function MenuManagement() {
         name: newItem.name,
         price: parseFloat(newItem.price),
         categoryId: Number(newItem.categoryId),
-        kitchenId: (newItem.kitchenId && newItem.kitchenId !== 'none') ? Number(newItem.kitchenId) : null,
+        kitchenId: Number(newItem.kitchenId),
         imageUrl: finalImageUrl,
         optionGroupIds: newItem.optionGroupIds,
       });
@@ -131,7 +136,13 @@ export default function MenuManagement() {
   };
 
   const handleUpdateItem = async () => {
-    if (!editingItem || !newItem.name || !newItem.price || !newItem.categoryId) return;
+    if (!editingItem || !newItem.name || !newItem.price) return;
+    if (!newItem.categoryId || newItem.categoryId === "") {
+      return toast.error("กรุณาเลือกหมวดหมู่สินค้า");
+    }
+    if (!newItem.kitchenId || newItem.kitchenId === "") {
+      return toast.error("กรุณาเลือกห้องครัวสำหรับส่งออเดอร์");
+    }
     setIsUploading(true);
     try {
       let finalImageUrl = newItem.imageUrl;
@@ -146,7 +157,7 @@ export default function MenuManagement() {
         name: newItem.name,
         price: parseFloat(newItem.price),
         categoryId: Number(newItem.categoryId),
-        kitchenId: (newItem.kitchenId && newItem.kitchenId !== 'none') ? Number(newItem.kitchenId) : null,
+        kitchenId: Number(newItem.kitchenId),
         imageUrl: finalImageUrl,
         optionGroupIds: newItem.optionGroupIds,
       });
@@ -298,9 +309,13 @@ export default function MenuManagement() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">หมวดหมู่</Label>
-                        <Select value={newItem.categoryId} onValueChange={(val) => setNewItem({...newItem, categoryId: val})}>
+                        <Select 
+                          value={newItem.categoryId ? String(newItem.categoryId) : undefined} 
+                          onValueChange={(val) => setNewItem({...newItem, categoryId: val})}
+                          items={Array.isArray(categories) ? categories.map(cat => ({ value: String(cat.id), label: cat.name })) : []}
+                        >
                           <SelectTrigger className="h-11 rounded-xl">
-                            <SelectValue placeholder="เลือกหมวดหมู่" />
+                            <SelectValue placeholder="เลือกหมวดหมู่ (จำเป็น)" />
                           </SelectTrigger>
                           <SelectContent>
                             {Array.isArray(categories) && categories.map(cat => (
@@ -315,17 +330,15 @@ export default function MenuManagement() {
                           value={newItem.kitchenId ? String(newItem.kitchenId) : undefined} 
                           onValueChange={(val) => setNewItem({...newItem, kitchenId: val})}
                           items={[
-                            { value: 'none', label: 'ไม่ระบุ' },
                             ...(Array.isArray(kitchens) ? kitchens.map(k => ({ value: String(k.id), label: k.name })) : [])
                           ]}
                         >
                           <SelectTrigger className="h-11 rounded-xl">
-                            <SelectValue placeholder="เลือกห้องครัว" />
+                            <SelectValue placeholder="เลือกห้องครัว (จำเป็น)" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none">ไม่ระบุ</SelectItem>
                             {Array.isArray(kitchens) && kitchens.map(k => (
-                              <SelectItem key={k.id} value={String(k.id)}>{k.name}</SelectItem>
+                              <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

@@ -11,6 +11,7 @@ export interface CartItem {
     name: string;
     price: number;
   }[];
+  notes?: string;
 }
 
 interface CartContextType {
@@ -28,7 +29,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const addToCart = (item: Omit<CartItem, 'id'>) => {
-    const id = `${item.menuItemId}-${item.options.map(o => o.optionId).sort().join(',')}`;
+    const id = `${item.menuItemId}-${item.options.map(o => o.optionId).sort().join(',')}-${item.notes || ''}`;
     setCart(prev => {
       const existing = prev.find(i => i.id === id);
       if (existing) {

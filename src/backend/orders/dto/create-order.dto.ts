@@ -18,6 +18,10 @@ class OrderItemDto {
   @Type(() => OrderOptionDto)
   @IsOptional()
   options?: OrderOptionDto[];
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }
 
 export class CreateOrderDto {
@@ -44,4 +48,8 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   paymentType?: 'CASH' | 'TRANSFER';
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }

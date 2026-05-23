@@ -50,6 +50,7 @@ export default function CustomerOrder() {
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itemNotes, setItemNotes] = useState('');
 
   const categoryRefs = React.useRef<{ [key: number]: HTMLDivElement | null }>({});
 
@@ -98,6 +99,7 @@ export default function CustomerOrder() {
     setSelectedItem(item);
     setSelectedOptions([]);
     setQuantity(1);
+    setItemNotes('');
   };
 
   const toggleOption = (group: any, option: any) => {
@@ -130,6 +132,7 @@ export default function CustomerOrder() {
       name: selectedItem.name,
       price: selectedItem.price,
       quantity,
+      notes: itemNotes || undefined,
       options: selectedOptions.map(o => ({
         optionId: o.id,
         name: o.name,
@@ -154,6 +157,7 @@ export default function CustomerOrder() {
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
           quantity: item.quantity,
+          notes: item.notes,
           options: item.options.map(o => ({ optionId: o.optionId }))
         }))
       });
@@ -364,6 +368,18 @@ export default function CustomerOrder() {
                         ))}
                       </div>
                     )}
+                    
+                    <div className="space-y-2.5 pt-2">
+                       <div className="flex justify-between items-center px-1">
+                          <h4 className="font-black text-slate-400 text-[10px] uppercase tracking-widest leading-none">หมายเหตุเพิ่มเติม</h4>
+                       </div>
+                       <Input 
+                         placeholder="เช่น ไม่ใส่ผัก, เผ็ดน้อย" 
+                         className="h-11 rounded-xl text-sm border-slate-200 focus:border-primary shadow-sm"
+                         value={itemNotes}
+                         onChange={(e) => setItemNotes(e.target.value)}
+                       />
+                    </div>
                   </div>
                 </ScrollArea>
 
@@ -410,6 +426,11 @@ export default function CustomerOrder() {
                   {Array.isArray(item.options) && item.options.length > 0 && (
                     <p className="text-xs text-slate-500">
                       {item.options.map(o => o.name).join(', ')}
+                    </p>
+                  )}
+                  {item.notes && (
+                    <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight mt-0.5 italic">
+                      * {item.notes}
                     </p>
                   )}
                   <p className="font-bold text-primary">฿{((item.price + item.options.reduce((s, o) => s + o.price, 0)) * item.quantity).toLocaleString()}</p>

@@ -50,6 +50,7 @@ export default function StaffOrdering() {
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<any[]>([]);
   const [quantity, setQuantity] = useState(1);
+  const [itemNotes, setItemNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -75,6 +76,7 @@ export default function StaffOrdering() {
     setSelectedItem(item);
     setSelectedOptions([]);
     setQuantity(1);
+    setItemNotes('');
   };
 
   const toggleOption = (group: any, option: any) => {
@@ -111,6 +113,7 @@ export default function StaffOrdering() {
         name: selectedItem.name,
         price: selectedItem.price,
         quantity,
+        notes: itemNotes || undefined,
         options: selectedOptions.map(o => ({
           optionId: o.id,
           name: o.name,
@@ -153,6 +156,7 @@ export default function StaffOrdering() {
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
           quantity: item.quantity,
+          notes: item.notes,
           options: item.options.map((o: any) => ({ optionId: o.optionId }))
         }))
       });
@@ -374,6 +378,18 @@ export default function StaffOrdering() {
                         ))}
                       </div>
                     )}
+                    
+                    <div className="space-y-2.5 pt-2">
+                       <div className="flex justify-between items-center px-1">
+                          <h4 className="font-black text-slate-400 text-[10px] uppercase tracking-widest leading-none">หมายเหตุเพิ่มเติม</h4>
+                       </div>
+                       <Input 
+                         placeholder="เช่น ไม่ใส่ผัก, เผ็ดน้อย" 
+                         className="h-11 rounded-xl text-sm border-slate-200 focus:border-primary shadow-sm"
+                         value={itemNotes}
+                         onChange={(e) => setItemNotes(e.target.value)}
+                       />
+                    </div>
                   </div>
                 </div>
 
@@ -423,8 +439,13 @@ function CartSummaryContent({ cart, updateCartQuantity, removeFromCart, totalAmo
               <div className="flex-1 min-w-0">
                 <h4 className="font-bold text-slate-900 truncate text-sm sm:text-base">{item.name}</h4>
                 {Array.isArray(item.options) && item.options.length > 0 && (
-                  <p className="text-[10px] sm:text-xs text-slate-400 leading-tight">
+                  <p className="text-[10px] sm:text-xs text-slate-400 leading-tight mt-0.5">
                     {item.options.map((o: any) => o.name).join(', ')}
+                  </p>
+                )}
+                {item.notes && (
+                  <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight mt-0.5 italic">
+                    * {item.notes}
                   </p>
                 )}
               </div>

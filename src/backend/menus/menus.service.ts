@@ -61,6 +61,9 @@ export class MenusService {
 
   // Menu Items
   async createMenuItem(userId: number, dto: CreateMenuItemDto) {
+    if (!dto.categoryId || !dto.kitchenId) {
+      throw new BadRequestException('กรุณาระบุหมวดหมู่และห้องครัวให้ครบถ้วน');
+    }
     const { optionGroupIds, ...data } = dto;
     const branch = await this.prisma.branch.findUnique({
       where: { id: dto.branchId },

@@ -85,6 +85,7 @@ export class OrdersService {
         name: menuItem.name,
         price: menuItem.price,
         quantity: itemDto.quantity,
+        notes: itemDto.notes || null,
         kitchenId: menuItem.kitchenId,
         options: {
           create: optionsData,
@@ -102,6 +103,7 @@ export class OrdersService {
         branchId: dto.branchId,
         tableId: dto.tableId === 0 ? null : dto.tableId,
         source: dto.source || 'CUSTOMER',
+        notes: dto.notes || null,
         items: {
           create: orderItemsData,
         },

@@ -197,6 +197,11 @@ export default function Payment() {
                                               {item.options.map((o:any)=>o.name).join(', ')}
                                             </p>
                                           )}
+                                          {item.notes && (
+                                            <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight truncate italic">
+                                              * {item.notes}
+                                            </p>
+                                          )}
                                       </div>
                                    </div>
                                    <span className="font-bold text-[11px] sm:text-sm shrink-0">฿{((item.price + (Array.isArray(item.options) ? item.options.reduce((s:any,o:any)=>s+o.price,0) : 0))*item.quantity).toLocaleString()}</span>
