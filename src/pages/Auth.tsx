@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import api from '../lib/api';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -103,7 +104,28 @@ export default function Auth() {
         toast.success('ลงทะเบียนสำเร็จ');
       }
       console.log(`[Auth] ${isLogin ? 'Login' : 'Registration'} successful`);
-      navigate('/brands');
+      
+      try {
+        const brandsRes = await api.get('/brands');
+        const brands = brandsRes.data;
+
+        if (Array.isArray(brands) && brands.length === 1) {
+          const brandId = brands[0].id;
+          const branchesRes = await api.get(`/brands/${brandId}/branches`);
+          const branches = branchesRes.data;
+
+          if (Array.isArray(branches) && branches.length === 1) {
+            navigate(`/brands/${brandId}/branches/${branches[0].id}`);
+          } else {
+            navigate(`/brands/${brandId}/branches`);
+          }
+        } else {
+          navigate('/brands');
+        }
+      } catch (err) {
+        console.error('[Auth] Failed to fetch brands/branches info:', err);
+        navigate('/brands');
+      }
     } catch (error: any) {
       console.error(`[Auth] ${isLogin ? 'Login' : 'Registration'} failed:`, error);
       const message = error.response?.data?.message;

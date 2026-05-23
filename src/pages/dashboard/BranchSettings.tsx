@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Loader2, QrCode, Save } from 'lucide-react';
+import { Loader2, QrCode, Save, Plus } from 'lucide-react';
 import { useBranch } from '../../hooks/useBranches';
 import api from '../../lib/api';
 import { toast } from 'sonner';
@@ -12,7 +12,8 @@ import { ImageUpload } from '../../components/ImageUpload';
 import { uploadImageToSupabase } from '../../lib/supabase-storage';
 
 export default function BranchSettings() {
-  const { branchId } = useParams<{ branchId: string }>();
+  const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
+  const navigate = useNavigate();
   const { branch, isLoading, updateBranch } = useBranch(Number(branchId));
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -56,9 +57,21 @@ export default function BranchSettings() {
 
   return (
     <div className="max-w-4xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">ตั้งค่าสาขา</h1>
-        <p className="text-slate-500">จัดการข้อมูลและค่ากำหนดต่างๆ ของสาขา {branch?.name}</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">ตั้งค่าสาขา</h1>
+          <p className="text-slate-500">จัดการข้อมูลและค่ากำหนดต่างๆ ของสาขา {branch?.name}</p>
+        </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={() => navigate('/brands')} className="flex-1 sm:flex-none">
+            <Plus className="w-4 h-4 mr-2" />
+            สร้างแบรนด์
+          </Button>
+          <Button variant="outline" onClick={() => navigate(`/brands/${brandId}/branches`)} className="flex-1 sm:flex-none">
+            <Plus className="w-4 h-4 mr-2" />
+            สร้างสาขาเพิ่ม
+          </Button>
+        </div>
       </div>
 
       <Card>

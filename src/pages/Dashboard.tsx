@@ -18,7 +18,6 @@ import { cn } from '../lib/utils';
 import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import KitchenManagement from './dashboard/KitchenManagement';
-import KitchenDisplay from './dashboard/KitchenDisplay';
 import MenuManagement from './dashboard/MenuManagement';
 import OptionManagement from './dashboard/OptionManagement';
 import TableManagement from './dashboard/TableManagement';
@@ -39,7 +38,6 @@ export default function Dashboard() {
     { name: 'ภาพรวม', path: '', icon: LayoutDashboard },
     { name: 'สั่งอาหารแบบชำระทันที', path: 'counter-service', icon: QrCode },
     { name: 'เปิดโต๊ะสั่งอาหาร', path: 'tables', icon: TableIcon },
-    { name: 'หน้าจอครัว', path: 'kitchen-display', icon: ChefHat },
     { name: 'การชำระเงิน', path: 'payment', icon: Banknote },
     { name: 'จัดการครัว', path: 'kitchens', icon: UtensilsCrossed },
     { name: 'เมนู', path: 'menu', icon: MenuIcon },
@@ -101,7 +99,6 @@ export default function Dashboard() {
           <Routes>
             <Route index element={<Overview />} />
             <Route path="counter-service" element={<CounterService />} />
-            <Route path="kitchen-display" element={<KitchenDisplay />} />
             <Route path="kitchens" element={<KitchenManagement />} />
             <Route path="menu" element={<MenuManagement />} />
             <Route path="options" element={<OptionManagement />} />
