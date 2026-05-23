@@ -10,4 +10,8 @@ export class CreateBranchDto {
 
   @IsInt()
   brandId: number;
+
+  @IsOptional()
+  @IsString()
+  pin?: string;
 }

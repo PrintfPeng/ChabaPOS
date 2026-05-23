@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import api from '../../lib/api';
 import PrintableQRCode from '../../components/PrintableQRCode';
+import { PinVerificationDialog } from '../../components/PinVerificationDialog';
 import { useNavigate } from 'react-router-dom';
 
 export default function TableManagement() {
@@ -31,6 +32,9 @@ export default function TableManagement() {
   const [branchName, setBranchName] = useState('');
   const [selectedTableForQr, setSelectedTableForQr] = useState<any>(null);
   const [printAllData, setPrintAllData] = useState<{table: any, qrCodeUrl: string}[] | null>(null);
+
+  const [isPinDialogOpen, setIsPinDialogOpen] = useState(false);
+  const [pendingDeleteAction, setPendingDeleteAction] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     const fetchBranch = async () => {
@@ -133,22 +137,31 @@ export default function TableManagement() {
     setIsTableDialogOpen(true);
   };
 
+  const confirmDelete = (action: () => void) => {
+    setPendingDeleteAction(() => action);
+    setIsPinDialogOpen(true);
+  };
+
   const handleDeleteTable = async (id: number) => {
-    try {
-      await deleteTable(id);
-      toast.success('ลบโต๊ะแล้ว');
-    } catch (error) {
-      toast.error('ลบโต๊ะไม่สำเร็จ');
-    }
+    confirmDelete(async () => {
+      try {
+        await deleteTable(id);
+        toast.success('ลบโต๊ะแล้ว');
+      } catch (error) {
+        toast.error('ลบโต๊ะไม่สำเร็จ');
+      }
+    });
   };
 
   const handleDeleteZone = async (id: number) => {
-    try {
-      await deleteZone(id);
-      toast.success('ลบโซนแล้ว');
-    } catch (error) {
-      toast.error('ลบโซนไม่สำเร็จ');
-    }
+    confirmDelete(async () => {
+      try {
+        await deleteZone(id);
+        toast.success('ลบโซนแล้ว');
+      } catch (error) {
+        toast.error('ลบโซนไม่สำเร็จ');
+      }
+    });
   };
 
   const handlePrintQRCode = async (e: React.MouseEvent, table: any) => {
@@ -262,13 +275,19 @@ export default function TableManagement() {
                 </div>
                 <div>
                   <Label>โซน</Label>
-                  <Select value={newTable.zoneId} onValueChange={(val) => setNewTable({...newTable, zoneId: val})}>
+                  <Select 
+                    value={newTable.zoneId ? String(newTable.zoneId) : undefined} 
+                    onValueChange={(val) => setNewTable({...newTable, zoneId: String(val)})}
+                    items={Array.isArray(zones) ? zones.map(z => ({ value: String(z.id), label: z.name })) : []}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="เลือกโซน" />
                     </SelectTrigger>
                     <SelectContent>
                       {Array.isArray(zones) && zones.map(zone => (
-                        <SelectItem key={zone.id} value={zone.id.toString()}>{zone.name}</SelectItem>
+                        <SelectItem key={zone.id} value={String(zone.id)}>
+                          {zone.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -304,45 +323,45 @@ export default function TableManagement() {
                 </Button>
               </div>
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 sm:gap-4">
               {Array.isArray(zone.tables) && zone.tables.map(table => (
                 <Card 
                   key={table.id} 
-                  className="cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:border-primary/50 bg-white group relative overflow-hidden flex flex-col h-full border-2 border-slate-100"
+                  className="cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:border-primary/50 bg-white group relative overflow-hidden flex flex-col h-full border-2 border-slate-100 rounded-[20px] sm:rounded-[24px]"
                   onClick={() => navigate(`/brands/${brandId}/branches/${branchId}/order/${table.id}`)}
                 >
                   <CardContent className="p-0 flex flex-col h-full">
-                    <div className="p-6 text-center flex-1 flex flex-col items-center justify-center">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full flex items-center justify-center mb-3 sm:mb-4 bg-slate-50 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                        <Utensils className="w-6 h-6 sm:w-8 sm:h-8" />
+                    <div className="p-4 text-center flex-1 flex flex-col items-center justify-center">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto rounded-full flex items-center justify-center mb-2 bg-slate-50 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />
                       </div>
-                      <h3 className="font-black text-lg sm:text-xl text-slate-900 group-hover:text-primary transition-colors">{table.name}</h3>
-                      <p className="text-[10px] sm:text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider group-hover:text-primary/70">กดเพื่อสั่งอาหาร</p>
+                      <h3 className="font-black text-base sm:text-lg text-slate-900 group-hover:text-primary transition-colors leading-tight">{table.name}</h3>
+                      <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider group-hover:text-primary/70">กดเพื่อสั่งอาหาร</p>
                     </div>
                     
                     <div className="flex border-t border-slate-100 bg-slate-50 mt-auto">
                        <button 
-                         className="flex-1 flex flex-col items-center justify-center py-2 sm:py-3 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                         className="flex-1 flex flex-col items-center justify-center py-1.5 sm:py-2 text-slate-400 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                          onClick={(e) => { e.stopPropagation(); openEditTable(table); }}
                        >
-                         <Edit2 className="w-4 h-4 mb-1" />
-                         <span className="text-[9px] sm:text-[10px] font-bold">แก้ไข</span>
+                         <Edit2 className="w-3.5 h-3.5 mb-0.5" />
+                         <span className="text-[8px] sm:text-[9px] font-bold">แก้ไข</span>
                        </button>
                        <div className="w-[1px] bg-slate-200"></div>
                        <button 
-                         className="flex-1 flex flex-col items-center justify-center py-2 sm:py-3 text-primary/70 hover:bg-primary/10 hover:text-primary transition-colors"
+                         className="flex-1 flex flex-col items-center justify-center py-1.5 sm:py-2 text-primary/70 hover:bg-primary/10 hover:text-primary transition-colors"
                          onClick={(e) => handlePrintQRCode(e, table)}
                        >
-                         <Printer className="w-4 h-4 mb-1" />
-                         <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">พิมพ์ QR</span>
+                         <Printer className="w-3.5 h-3.5 mb-0.5" />
+                         <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">พิมพ์ QR</span>
                        </button>
                        <div className="w-[1px] bg-slate-200"></div>
                        <button 
-                         className="flex-1 flex flex-col items-center justify-center py-2 sm:py-3 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                         className="flex-1 flex flex-col items-center justify-center py-1.5 sm:py-2 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                          onClick={(e) => { e.stopPropagation(); handleDeleteTable(table.id); }}
                        >
-                         <Trash2 className="w-4 h-4 mb-1" />
-                         <span className="text-[9px] sm:text-[10px] font-bold">ลบ</span>
+                         <Trash2 className="w-3.5 h-3.5 mb-0.5" />
+                         <span className="text-[8px] sm:text-[9px] font-bold">ลบ</span>
                        </button>
                     </div>
                   </CardContent>
@@ -390,6 +409,21 @@ export default function TableManagement() {
           ))}
         </div>
       )}
+
+      <PinVerificationDialog
+        isOpen={isPinDialogOpen}
+        onClose={() => {
+          setIsPinDialogOpen(false);
+          setPendingDeleteAction(null);
+        }}
+        onSuccess={() => {
+          setIsPinDialogOpen(false);
+          if (pendingDeleteAction) pendingDeleteAction();
+          setPendingDeleteAction(null);
+        }}
+        title="ยืนยันการลบข้อมูล"
+        description="กรุณากรอกรหัส PIN 6 หลักของสาขานี้ เพื่อยืนยันการลบข้อมูล"
+      />
     </div>
   );
 }

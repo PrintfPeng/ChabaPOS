@@ -17,6 +17,7 @@ import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import { ImageUpload } from '../../components/ImageUpload';
 import { uploadImageToSupabase } from '../../lib/supabase-storage';
+import { PinVerificationDialog } from '../../components/PinVerificationDialog';
 
 export default function MenuManagement() {
   const { branchId } = useParams<{ branchId: string }>();
@@ -44,6 +45,9 @@ export default function MenuManagement() {
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  const [isPinDialogOpen, setIsPinDialogOpen] = useState(false);
+  const [pendingDeleteAction, setPendingDeleteAction] = useState<(() => void) | null>(null);
 
   // Initialize active tab when categories are loaded
   React.useEffect(() => {
@@ -111,7 +115,7 @@ export default function MenuManagement() {
         name: newItem.name,
         price: parseFloat(newItem.price),
         categoryId: Number(newItem.categoryId),
-        kitchenId: newItem.kitchenId ? Number(newItem.kitchenId) : undefined,
+        kitchenId: (newItem.kitchenId && newItem.kitchenId !== 'none') ? Number(newItem.kitchenId) : null,
         imageUrl: finalImageUrl,
         optionGroupIds: newItem.optionGroupIds,
       });
@@ -142,7 +146,7 @@ export default function MenuManagement() {
         name: newItem.name,
         price: parseFloat(newItem.price),
         categoryId: Number(newItem.categoryId),
-        kitchenId: newItem.kitchenId ? Number(newItem.kitchenId) : undefined,
+        kitchenId: (newItem.kitchenId && newItem.kitchenId !== 'none') ? Number(newItem.kitchenId) : null,
         imageUrl: finalImageUrl,
         optionGroupIds: newItem.optionGroupIds,
       });
@@ -177,13 +181,31 @@ export default function MenuManagement() {
     setIsItemDialogOpen(true);
   };
 
+  const confirmDelete = (action: () => void) => {
+    setPendingDeleteAction(() => action);
+    setIsPinDialogOpen(true);
+  };
+
   const handleDeleteItem = async (id: number) => {
-    try {
-      await deleteMenuItem(id);
-      toast.success('ลบรายการแล้ว');
-    } catch (error) {
-      toast.error('ลบรายการไม่สำเร็จ');
-    }
+    confirmDelete(async () => {
+      try {
+        await deleteMenuItem(id);
+        toast.success('ลบรายการแล้ว');
+      } catch (error) {
+        toast.error('ลบรายการไม่สำเร็จ');
+      }
+    });
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    confirmDelete(async () => {
+      try {
+        await deleteCategory(id);
+        toast.success('ลบหมวดหมู่แล้ว');
+      } catch (error) {
+        toast.error('ลบหมวดหมู่ไม่สำเร็จ');
+      }
+    });
   };
 
   if (isLoading) {
@@ -289,14 +311,21 @@ export default function MenuManagement() {
                       </div>
                       <div className="space-y-2">
                         <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">ส่งไปที่ครัว</Label>
-                        <Select value={newItem.kitchenId} onValueChange={(val) => setNewItem({...newItem, kitchenId: val})}>
+                        <Select 
+                          value={newItem.kitchenId ? String(newItem.kitchenId) : undefined} 
+                          onValueChange={(val) => setNewItem({...newItem, kitchenId: val})}
+                          items={[
+                            { value: 'none', label: 'ไม่ระบุ' },
+                            ...(Array.isArray(kitchens) ? kitchens.map(k => ({ value: String(k.id), label: k.name })) : [])
+                          ]}
+                        >
                           <SelectTrigger className="h-11 rounded-xl">
                             <SelectValue placeholder="เลือกห้องครัว" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">ไม่ระบุ</SelectItem>
                             {Array.isArray(kitchens) && kitchens.map(k => (
-                              <SelectItem key={k.id} value={k.id.toString()}>{k.name}</SelectItem>
+                              <SelectItem key={k.id} value={String(k.id)}>{k.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -365,6 +394,14 @@ export default function MenuManagement() {
                     onClick={() => openEditCategory(cat)}
                 >
                   <Edit2 className="w-3 h-3" />
+                </Button>
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-red-50 hover:text-red-500" 
+                    onClick={() => handleDeleteCategory(cat.id)}
+                >
+                  <Trash2 className="w-3 h-3" />
                 </Button>
               </div>
             ))}
@@ -453,6 +490,21 @@ export default function MenuManagement() {
           </div>
         )}
       </Tabs>
+
+      <PinVerificationDialog
+        isOpen={isPinDialogOpen}
+        onClose={() => {
+          setIsPinDialogOpen(false);
+          setPendingDeleteAction(null);
+        }}
+        onSuccess={() => {
+          setIsPinDialogOpen(false);
+          if (pendingDeleteAction) pendingDeleteAction();
+          setPendingDeleteAction(null);
+        }}
+        title="ยืนยันการลบข้อมูล"
+        description="กรุณากรอกรหัส PIN 6 หลักของสาขานี้ เพื่อยืนยันการลบข้อมูล"
+      />
     </div>
   );
 }

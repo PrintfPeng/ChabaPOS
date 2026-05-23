@@ -48,6 +48,7 @@ model Branch {
   orders       Order[]
   activityLogs ActivityLog[]
   qrCodeUrl    String?
+  pin          String?
   createdAt    DateTime      @default(now())
   updatedAt  DateTime   @updatedAt
 

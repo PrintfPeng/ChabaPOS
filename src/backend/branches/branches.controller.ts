@@ -40,4 +40,9 @@ export class BranchesController {
   getTables(@Param('id', ParseIntPipe) id: number) {
     return this.branchesService.getTables(id);
   }
+
+  @Post(':id/verify-pin')
+  verifyPin(@Request() req, @Param('id', ParseIntPipe) id: number, @Body('pin') pin: string) {
+    return this.branchesService.verifyPin(req.user.userId, id, pin);
+  }
 }

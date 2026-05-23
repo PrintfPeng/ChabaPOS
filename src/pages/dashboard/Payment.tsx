@@ -192,10 +192,14 @@ export default function Payment() {
                                       <span className="font-black text-primary text-[10px] sm:text-xs shrink-0">{item.quantity}x</span>
                                       <div className="min-w-0">
                                          <p className="text-[11px] sm:text-sm font-bold text-slate-900 truncate leading-tight">{item.name}</p>
-                                         <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">{item.options.map((o:any)=>o.name).join(', ')}</p>
+                                         {Array.isArray(item.options) && item.options.length > 0 && (
+                                            <p className="text-xs text-muted-foreground leading-tight truncate">
+                                              {item.options.map((o:any)=>o.name).join(', ')}
+                                            </p>
+                                          )}
                                       </div>
                                    </div>
-                                   <span className="font-bold text-[11px] sm:text-sm shrink-0">฿{((item.price + item.options.reduce((s:any,o:any)=>s+o.price,0))*item.quantity).toLocaleString()}</span>
+                                   <span className="font-bold text-[11px] sm:text-sm shrink-0">฿{((item.price + (Array.isArray(item.options) ? item.options.reduce((s:any,o:any)=>s+o.price,0) : 0))*item.quantity).toLocaleString()}</span>
                                 </div>
                             ))}
                          </div>

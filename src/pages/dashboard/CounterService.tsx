@@ -405,8 +405,8 @@ export default function CounterService() {
                   </Button>
               </div>
               
-              <div className="flex-1 overflow-hidden flex flex-col">
-                <ScrollArea className="flex-1">
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 overflow-y-auto no-scrollbar pb-2">
                   <div className="p-4 sm:p-6 space-y-5">
                     <DialogHeader className="space-y-1">
                       <div className="flex justify-between items-start gap-4">
@@ -461,7 +461,7 @@ export default function CounterService() {
                       </div>
                     )}
                   </div>
-                </ScrollArea>
+                </div>
 
                 <div className="p-4 sm:p-6 bg-white border-t border-slate-100 space-y-4 shrink-0">
                   <div className="flex items-center justify-between">

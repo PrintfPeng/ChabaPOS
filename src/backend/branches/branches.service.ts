@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, Inject, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
@@ -105,5 +105,21 @@ export class BranchesService {
       include: { zone: true },
       orderBy: { name: 'asc' },
     });
+  }
+
+  async verifyPin(userId: number, id: number, pin: string) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id },
+      include: { brand: true },
+    });
+
+    if (!branch) throw new NotFoundException('Branch not found');
+    if (branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+    
+    if (!branch.pin || branch.pin !== pin) {
+      throw new UnauthorizedException('รหัส PIN ไม่ถูกต้อง');
+    }
+    
+    return { success: true };
   }
 }
