@@ -1,4 +1,4 @@
-import { Injectable, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
@@ -13,6 +13,11 @@ export class ZonesService {
       include: { brand: true },
     });
     if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+
+    const existingZone = await this.prisma.zone.findFirst({
+      where: { name: dto.name, branchId: dto.branchId },
+    });
+    if (existingZone) throw new BadRequestException('ชื่อโซนนี้มีอยู่ในระบบ');
 
     return this.prisma.zone.create({ data: dto });
   }

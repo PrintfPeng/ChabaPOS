@@ -1,4 +1,4 @@
-import { Injectable, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
@@ -14,6 +14,11 @@ export class TablesService {
       include: { branch: { include: { brand: true } } },
     });
     if (!zone || zone.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงโซนนี้');
+
+    const existingTable = await this.prisma.table.findFirst({
+      where: { name: dto.name, zone: { branchId: zone.branchId } },
+    });
+    if (existingTable) throw new BadRequestException('ชื่อโต๊ะนี้มีอยู่ในระบบ');
 
     return this.prisma.table.create({ data: dto });
   }

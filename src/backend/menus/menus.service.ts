@@ -1,4 +1,4 @@
-import { Injectable, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto, CreateMenuItemDto } from './dto/menu.dto';
 import { UpdateCategoryDto, UpdateMenuItemDto } from './dto/update-menu.dto';
@@ -14,6 +14,11 @@ export class MenusService {
       include: { brand: true },
     });
     if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+
+    const existingCategory = await this.prisma.category.findFirst({
+      where: { name: dto.name, branchId: dto.branchId },
+    });
+    if (existingCategory) throw new BadRequestException('ชื่อหมวดหมู่นี้มีอยู่ในระบบ');
 
     return this.prisma.category.create({ data: dto });
   }
@@ -62,6 +67,11 @@ export class MenusService {
       include: { brand: true },
     });
     if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+
+    const existingItem = await this.prisma.menuItem.findFirst({
+      where: { name: dto.name, branchId: dto.branchId },
+    });
+    if (existingItem) throw new BadRequestException('ชื่อเมนูนี้มีอยู่ในระบบ');
 
     return this.prisma.menuItem.create({
       data: {

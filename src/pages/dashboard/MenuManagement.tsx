@@ -54,6 +54,12 @@ export default function MenuManagement() {
 
   const handleCreateCategory = async () => {
     if (!bid || !newCategoryName) return;
+    
+    // Frontend Duplicate Validation
+    if (Array.isArray(categories) && categories.some(cat => cat.name.toLowerCase() === newCategoryName.toLowerCase())) {
+      return toast.error('ชื่อหมวดหมู่นี้มีอยู่ในระบบแล้ว');
+    }
+
     try {
       await createCategory({
         branchId: bid,
@@ -62,8 +68,8 @@ export default function MenuManagement() {
       setNewCategoryName('');
       setIsCatDialogOpen(false);
       toast.success('สร้างหมวดหมู่สำเร็จ');
-    } catch (error) {
-      toast.error('สร้างหมวดหมู่ไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || 'สร้างหมวดหมู่ไม่สำเร็จ');
     }
   };
 
@@ -78,13 +84,19 @@ export default function MenuManagement() {
       setNewCategoryName('');
       setIsCatDialogOpen(false);
       toast.success('อัปเดตหมวดหมู่สำเร็จ');
-    } catch (error) {
-      toast.error('อัปเดตหมวดหมู่ไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || 'อัปเดตหมวดหมู่ไม่สำเร็จ');
     }
   };
 
   const handleCreateItem = async () => {
     if (!bid || !newItem.name || !newItem.price || !newItem.categoryId) return;
+
+    // Frontend Duplicate Validation
+    if (Array.isArray(menuItems) && menuItems.some(item => item.name.toLowerCase() === newItem.name.toLowerCase())) {
+      return toast.error('ชื่อเมนูนี้มีอยู่ในระบบแล้ว');
+    }
+
     setIsUploading(true);
     try {
       let finalImageUrl = newItem.imageUrl;
@@ -108,7 +120,7 @@ export default function MenuManagement() {
       setIsItemDialogOpen(false);
       toast.success('สร้างรายการเมนูสำเร็จ');
     } catch (error: any) {
-      toast.error(error.message || 'สร้างรายการเมนูไม่สำเร็จ');
+      toast.error(error.response?.data?.message || error.message || 'สร้างรายการเมนูไม่สำเร็จ');
     } finally {
       setIsUploading(false);
     }
@@ -140,7 +152,7 @@ export default function MenuManagement() {
       setIsItemDialogOpen(false);
       toast.success('อัปเดตรายการเมนูสำเร็จ');
     } catch (error: any) {
-      toast.error(error.message || 'อัปเดตรายการเมนูไม่สำเร็จ');
+      toast.error(error.response?.data?.message || error.message || 'อัปเดตรายการเมนูไม่สำเร็จ');
     } finally {
       setIsUploading(false);
     }

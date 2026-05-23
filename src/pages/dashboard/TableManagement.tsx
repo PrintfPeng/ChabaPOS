@@ -30,6 +30,7 @@ export default function TableManagement() {
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [branchName, setBranchName] = useState('');
   const [selectedTableForQr, setSelectedTableForQr] = useState<any>(null);
+  const [printAllData, setPrintAllData] = useState<{table: any, qrCodeUrl: string}[] | null>(null);
 
   useEffect(() => {
     const fetchBranch = async () => {
@@ -45,6 +46,11 @@ export default function TableManagement() {
 
   const handleCreateZone = async () => {
     if (!bid || !newZoneName) return;
+
+    if (Array.isArray(zones) && zones.some(z => z.name.toLowerCase() === newZoneName.toLowerCase())) {
+      return toast.error('ชื่อโซนนี้มีอยู่ในระบบแล้ว');
+    }
+
     try {
       await createZone({
         branchId: bid,
@@ -53,8 +59,8 @@ export default function TableManagement() {
       setNewZoneName('');
       setIsZoneDialogOpen(false);
       toast.success('สร้างโซนสำเร็จ');
-    } catch (error) {
-      toast.error('สร้างโซนไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || 'สร้างโซนไม่สำเร็จ');
     }
   };
 
@@ -69,13 +75,19 @@ export default function TableManagement() {
       setNewZoneName('');
       setIsZoneDialogOpen(false);
       toast.success('อัปเดตโซนสำเร็จ');
-    } catch (error) {
-      toast.error('อัปเดตโซนไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || 'อัปเดตโซนไม่สำเร็จ');
     }
   };
 
   const handleCreateTable = async () => {
     if (!bid || !newTable.name || !newTable.zoneId) return;
+
+    const allTables = Array.isArray(zones) ? zones.flatMap(z => z.tables || []) : [];
+    if (allTables.some(t => t.name.toLowerCase() === newTable.name.toLowerCase())) {
+      return toast.error('ชื่อโต๊ะนี้มีอยู่ในระบบแล้ว');
+    }
+
     try {
       await createTable({
         zoneId: Number(newTable.zoneId),
@@ -84,8 +96,8 @@ export default function TableManagement() {
       setNewTable({ name: '', zoneId: '' });
       setIsTableDialogOpen(false);
       toast.success('สร้างโต๊ะสำเร็จ');
-    } catch (error) {
-      toast.error('สร้างโต๊ะไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || 'สร้างโต๊ะไม่สำเร็จ');
     }
   };
 
@@ -101,8 +113,8 @@ export default function TableManagement() {
       setNewTable({ name: '', zoneId: '' });
       setIsTableDialogOpen(false);
       toast.success('อัปเดตโต๊ะสำเร็จ');
-    } catch (error) {
-      toast.error('อัปเดตโต๊ะไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || 'อัปเดตโต๊ะไม่สำเร็จ');
     }
   };
 
@@ -155,6 +167,33 @@ export default function TableManagement() {
     } catch (error) {
       toast.dismiss(toastId);
       toast.error('ไม่สามารถสร้าง QR Code ได้');
+    }
+  };
+
+  const handlePrintAllQRCodes = async () => {
+    if (!Array.isArray(zones) || zones.length === 0) return toast.error('ไม่มีข้อมูลให้พิมพ์');
+    const allTables = zones.flatMap(z => z.tables || []);
+    if (allTables.length === 0) return toast.error('ไม่มีโต๊ะให้พิมพ์');
+
+    const toastId = toast.loading('กำลังเตรียมพิมพ์ QR Code ทั้งหมด...');
+    try {
+      // Set the first table for the single print component to be null so it doesn't print
+      setSelectedTableForQr(null);
+      
+      const qrData = await Promise.all(allTables.map(async (table) => {
+        const url = await getQRCode(table.id);
+        return { table, qrCodeUrl: url };
+      }));
+      setPrintAllData(qrData);
+      
+      // Delay to allow React to render the printable area
+      setTimeout(() => {
+        toast.dismiss(toastId);
+        window.print();
+      }, 500);
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error('ไม่สามารถเตรียมข้อมูลสำหรับพิมพ์ได้');
     }
   };
 
@@ -242,6 +281,11 @@ export default function TableManagement() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <Button variant="secondary" onClick={handlePrintAllQRCodes} className="hidden sm:flex border border-slate-200">
+            <Printer className="w-4 h-4 mr-2" />
+            พิมพ์ QR Code ทั้งหมด
+          </Button>
         </div>
       </div>
 
@@ -324,12 +368,26 @@ export default function TableManagement() {
 
       {/* Hidden printable area always present, just waits for data */}
       {qrCodeUrl && selectedTableForQr && (
-        <div className="hidden">
+        <div className="hidden print:block">
           <PrintableQRCode 
             qrCodeUrl={qrCodeUrl} 
             tableName={selectedTableForQr.name} 
             branchName={branchName} 
           />
+        </div>
+      )}
+
+      {printAllData && !selectedTableForQr && (
+        <div className="hidden print:block">
+          {printAllData.map((data, idx) => (
+            <div key={idx} className="break-after-page">
+              <PrintableQRCode 
+                qrCodeUrl={data.qrCodeUrl} 
+                tableName={data.table.name} 
+                branchName={branchName} 
+              />
+            </div>
+          ))}
         </div>
       )}
     </div>
