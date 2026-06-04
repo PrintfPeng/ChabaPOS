@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useBranch } from '../../hooks/useBranches';
 import api from '../../lib/api';
+import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Badge } from '../../components/ui/badge';
@@ -13,7 +14,8 @@ import {
   BarChart3, 
   Activity, 
   User, 
-  Clock 
+  Clock,
+  Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,8 +42,23 @@ export interface ActivityLogData {
   details?: string;
 }
 
+const getThaiDateString = () => {
+  const days = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
+  const months = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
+  const now = new Date();
+  const dayName = days[now.getDay()];
+  const date = now.getDate();
+  const monthName = months[now.getMonth()];
+  const year = now.getFullYear();
+  return `${dayName}ที่ ${date} ${monthName} ${year}`;
+};
+
 export default function Overview() {
-  const { branchId } = useParams<{ branchId: string }>();
+  const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
+  const navigate = useNavigate();
   const { branch, isLoading: isBranchLoading } = useBranch(Number(branchId));
 
   const [summary, setSummary] = useState<SummaryData | null>(null);
@@ -91,21 +108,39 @@ export default function Overview() {
   return (
     <div className="space-y-6 max-w-7xl pb-10">
       {/* Header section */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">ภาพรวมสาขา {branch?.name}</h1>
-        <p className="text-slate-500 mt-1">สรุปข้อมูลการดำเนินงาน ยอดขาย และความเคลื่อนไหวล่าสุด</p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 pb-5">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">ภาพรวมสาขา {branch?.name}</h1>
+          <p className="text-slate-500 text-sm mt-1">สรุปข้อมูลการดำเนินงาน ยอดขาย และความเคลื่อนไหวล่าสุด</p>
+        </div>
+        <div className="shrink-0">
+          <Button 
+            onClick={() => navigate(`/brands/${brandId}/branches/${branchId}/reports`)}
+            className="w-full sm:w-auto shadow-md shadow-red-500/10 bg-gradient-to-r from-primary to-red-500 text-white hover:opacity-90 transition-all duration-200 h-11 px-5 rounded-xl font-bold text-sm flex items-center justify-center gap-2"
+          >
+            <BarChart3 className="w-4 h-4" />
+            ดูรายงานฉบับเต็ม
+          </Button>
+        </div>
       </div>
 
       {/* 1. Sales Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="pt-6">
+        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 shadow-sm transition-all hover:shadow-md relative overflow-hidden">
+          {/* Watermark calendar icon */}
+          <div className="absolute right-[-15px] bottom-[-15px] text-primary/5 pointer-events-none">
+            <Calendar className="w-28 h-28" />
+          </div>
+          <CardContent className="pt-6 relative z-10">
             <div className="flex justify-between items-start">
               <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-600">ยอดขายรวมวันนี้</p>
-                <h3 className="text-3xl font-bold text-primary">฿{summary.todaySales.toLocaleString()}</h3>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">ยอดขายประจำวัน</p>
+                <div className="text-sm sm:text-lg font-black text-primary bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20 inline-block shadow-sm">
+                  {getThaiDateString()}
+                </div>
+                <h3 className="text-4xl sm:text-5xl lg:text-6xl font-black text-primary mt-3 tracking-tight">฿{summary.todaySales.toLocaleString()}</h3>
               </div>
-              <div className="p-3 bg-white rounded-xl shadow-sm">
+              <div className="p-2.5 bg-white rounded-xl shadow-sm border border-slate-100 shrink-0">
                 <TrendingUp className="w-5 h-5 text-primary" />
               </div>
             </div>
