@@ -55,6 +55,7 @@ model Branch {
   materialCategories MaterialCategory[]
   rawMaterials RawMaterial[]
   purchaseOrders PurchaseOrder[]
+  expenses     Expense[]
 
   @@index([brandId])
 }
@@ -260,14 +261,18 @@ model ActivityLog {
 // ============================================
 
 model Supplier {
-  id        Int      @id @default(autoincrement())
-  name      String
-  contact   String?
-  branchId  Int
-  branch    Branch   @relation(fields: [branchId], references: [id])
-  orders    PurchaseOrder[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  name        String
+  contact     String?  // legacy – kept for backward-compat
+  phone       String?
+  lineId      String?
+  bankAccount String?
+  bankName    String?
+  branchId    Int
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  orders      PurchaseOrder[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([branchId])
 }
@@ -288,6 +293,7 @@ model RawMaterial {
   id          Int      @id @default(autoincrement())
   name        String
   unit        String   // e.g. กิโลกรัม, ขวด, ลัง
+  stock       Float    @default(0)
   categoryId  Int
   category    MaterialCategory @relation(fields: [categoryId], references: [id])
   branchId    Int
@@ -316,10 +322,25 @@ model PurchaseOrder {
   totalAmount Float               @default(0)
   orderDate   DateTime            @default(now())
   items       PurchaseOrderItem[]
+  expense     Expense?
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
   @@index([supplierId])
+  @@index([branchId])
+}
+
+model Expense {
+  id              Int            @id @default(autoincrement())
+  amount          Float
+  description     String?
+  branchId        Int
+  branch          Branch         @relation(fields: [branchId], references: [id])
+  purchaseOrderId Int?           @unique
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
   @@index([branchId])
 }
 

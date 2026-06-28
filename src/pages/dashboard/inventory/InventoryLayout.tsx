@@ -6,6 +6,7 @@ import InventoryDashboard from './InventoryDashboard';
 import Suppliers from './Suppliers';
 import Categories from './Categories';
 import Materials from './Materials';
+import MaterialStock from './MaterialStock';
 import CreatePurchaseOrder from './CreatePurchaseOrder';
 import Expenses from './Expenses';
 
@@ -18,6 +19,7 @@ export default function InventoryLayout() {
     { name: 'ภาพรวม', path: '' },
     { name: 'สั่งซื้อวัตถุดิบ', path: '/purchase-orders/create' },
     { name: 'วัตถุดิบ', path: '/materials' },
+    { name: 'ยอดวัตถุดิบคงเหลือ', path: '/material-stock' },
     { name: 'หมวดหมู่', path: '/categories' },
     { name: 'ซัพพลายเออร์', path: '/suppliers' },
     { name: 'รายจ่าย', path: '/expenses' },
@@ -60,6 +62,7 @@ export default function InventoryLayout() {
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="categories" element={<Categories />} />
           <Route path="materials" element={<Materials />} />
+          <Route path="material-stock" element={<MaterialStock />} />
           <Route path="purchase-orders/create" element={<CreatePurchaseOrder />} />
           <Route path="expenses" element={<Expenses />} />
         </Routes>

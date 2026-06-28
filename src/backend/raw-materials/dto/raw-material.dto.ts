@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsOptional } from 'class-validator';
+import { IsString, IsInt, IsOptional, IsNumber, Min } from 'class-validator';
 
 export class CreateRawMaterialDto {
   @IsString()
@@ -12,6 +12,11 @@ export class CreateRawMaterialDto {
 
   @IsInt()
   branchId: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  stock?: number;
 }
 
 export class UpdateRawMaterialDto {
@@ -26,4 +31,15 @@ export class UpdateRawMaterialDto {
   @IsOptional()
   @IsInt()
   categoryId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  stock?: number;
+}
+
+export class UpdateStockDto {
+  @IsNumber()
+  @Min(0)
+  stock: number;
 }

@@ -1,6 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, UseGuards, Request, Query, Inject } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  ParseIntPipe,
+  UseGuards,
+  Request,
+  Query,
+  Inject,
+} from '@nestjs/common';
 import { RawMaterialsService } from './raw-materials.service';
-import { CreateRawMaterialDto, UpdateRawMaterialDto } from './dto/raw-material.dto';
+import { CreateRawMaterialDto, UpdateRawMaterialDto, UpdateStockDto } from './dto/raw-material.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
@@ -9,8 +22,8 @@ export class RawMaterialsController {
   constructor(@Inject(RawMaterialsService) private readonly rawMaterialsService: RawMaterialsService) {}
 
   @Post()
-  create(@Request() req, @Body() createRawMaterialDto: CreateRawMaterialDto) {
-    return this.rawMaterialsService.create(req.user.userId, createRawMaterialDto);
+  create(@Request() req, @Body() dto: CreateRawMaterialDto) {
+    return this.rawMaterialsService.create(req.user.userId, dto);
   }
 
   @Get()
@@ -18,9 +31,22 @@ export class RawMaterialsController {
     return this.rawMaterialsService.findAll(req.user.userId, branchId);
   }
 
+  @Patch(':id/stock')
+  updateStock(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateStockDto,
+  ) {
+    return this.rawMaterialsService.updateStock(req.user.userId, id, dto);
+  }
+
   @Patch(':id')
-  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() updateRawMaterialDto: UpdateRawMaterialDto) {
-    return this.rawMaterialsService.update(req.user.userId, id, updateRawMaterialDto);
+  update(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateRawMaterialDto,
+  ) {
+    return this.rawMaterialsService.update(req.user.userId, id, dto);
   }
 
   @Delete(':id')
