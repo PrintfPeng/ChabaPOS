@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Loader2, Receipt, CreditCard, Banknote, History, ChevronRight, QrCode, Delete, X } from 'lucide-react';
+import { Input } from '../../components/ui/input';
+import {
+  Loader2, Receipt, CreditCard, Banknote, History, ChevronRight, QrCode,
+  Delete, X, Phone, UserPlus, Star, Tag, ChevronDown, ChevronUp, CheckCircle2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
@@ -12,17 +16,315 @@ import { Badge } from '../../components/ui/badge';
 import { useBranch } from '../../hooks/useBranches';
 import { cn } from '../../lib/utils';
 
+/* ─── Types ─────────────────────────────────────────── */
+interface CustomerInfo {
+  id: number;
+  name: string;
+  phone: string;
+  points: number;
+}
+
+interface PromoInfo {
+  id: number;
+  name: string;
+  type: 'PERCENT' | 'FIXED' | 'POINTS_REDEMPTION';
+  value: number;
+  minSpend: number;
+  pointsNeeded: number;
+  memberOnly: boolean;
+}
+
+/* ─── CustomerPromoPanel ─────────────────────────────── */
+function CustomerPromoPanel({
+  branchId,
+  grossTotal,
+  onCustomerChange,
+  onDiscountChange,
+}: {
+  branchId: string;
+  grossTotal: number;
+  onCustomerChange: (c: CustomerInfo | null) => void;
+  onDiscountChange: (discount: number, promotionId: number | null) => void;
+}) {
+  const [expanded,        setExpanded]        = useState(false);
+  const [phone,           setPhone]           = useState('');
+  const [isSearching,     setIsSearching]     = useState(false);
+  const [customer,        setCustomer]        = useState<CustomerInfo | null>(null);
+  const [notFound,        setNotFound]        = useState(false);
+  const [promos,          setPromos]          = useState<PromoInfo[]>([]);
+  const [selectedPromo,   setSelectedPromo]   = useState<PromoInfo | null>(null);
+  const [discount,        setDiscount]        = useState(0);
+  const [isValidating,    setIsValidating]    = useState(false);
+  const [showQuickReg,    setShowQuickReg]    = useState(false);
+  const [quickName,       setQuickName]       = useState('');
+  const [isRegistering,   setIsRegistering]   = useState(false);
+  const phoneRef = useRef<HTMLInputElement>(null);
+
+  /* Reset when panel closes */
+  const reset = () => {
+    setPhone(''); setCustomer(null); setNotFound(false);
+    setSelectedPromo(null); setDiscount(0); setShowQuickReg(false); setQuickName('');
+    onCustomerChange(null); onDiscountChange(0, null);
+  };
+
+  const handleToggle = () => {
+    if (expanded) reset();
+    setExpanded((v) => !v);
+  };
+
+  /* Fetch active promos once */
+  useEffect(() => {
+    api.get(`/promotions?branchId=${branchId}&activeOnly=true`)
+      .then((r) => setPromos(r.data))
+      .catch(() => {});
+  }, [branchId]);
+
+  /* Customer lookup */
+  const searchCustomer = async () => {
+    if (phone.length < 9) return toast.error('กรอกเบอร์โทร 9-10 หลัก');
+    setIsSearching(true); setNotFound(false); setCustomer(null);
+    setSelectedPromo(null); setDiscount(0); onCustomerChange(null); onDiscountChange(0, null);
+    try {
+      const res = await api.get(`/customers/lookup?phone=${phone}&branchId=${branchId}`);
+      if (res.data) {
+        setCustomer(res.data);
+        onCustomerChange(res.data);
+        toast.success(`พบสมาชิก "${res.data.name}" — ${res.data.points} แต้ม`);
+      } else {
+        setNotFound(true);
+      }
+    } catch {
+      setNotFound(true);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  /* Quick register */
+  const handleQuickRegister = async () => {
+    if (!quickName.trim()) return toast.error('กรุณากรอกชื่อ');
+    setIsRegistering(true);
+    try {
+      const res = await api.post('/customers', { phone, name: quickName.trim(), branchId: Number(branchId) });
+      setCustomer(res.data); setNotFound(false); setShowQuickReg(false);
+      onCustomerChange(res.data);
+      toast.success(`สมัครสมาชิก "${res.data.name}" สำเร็จ`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'สมัครสมาชิกไม่สำเร็จ');
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  /* Apply promotion */
+  const applyPromo = async (promo: PromoInfo) => {
+    if (selectedPromo?.id === promo.id) {
+      setSelectedPromo(null); setDiscount(0); onDiscountChange(0, null); return;
+    }
+    setIsValidating(true);
+    try {
+      const res = await api.post('/promotions/validate', {
+        promotionId: promo.id,
+        branchId:    Number(branchId),
+        totalAmount: grossTotal,
+        customerId:  customer?.id,
+      });
+      setSelectedPromo(promo);
+      setDiscount(res.data.discountAmount);
+      onDiscountChange(res.data.discountAmount, promo.id);
+      toast.success(`ใช้ "${promo.name}" — ลด ฿${res.data.discountAmount.toLocaleString()}`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'ไม่สามารถใช้โปรโมชั่นนี้ได้');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  /* Filter promos: non-member promos are always visible; member-only requires customer */
+  const visiblePromos = promos.filter(
+    (p) => grossTotal >= p.minSpend && (!p.memberOnly || customer),
+  );
+
+  return (
+    <div className="border border-slate-100 rounded-2xl overflow-hidden">
+      {/* Toggle header */}
+      <button
+        onClick={handleToggle}
+        className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-primary/10 rounded-lg">
+            <Star className="w-4 h-4 text-primary" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-bold text-slate-800">สมาชิก & โปรโมชั่น</p>
+            {customer ? (
+              <p className="text-xs text-emerald-600 font-semibold">{customer.name} · {customer.points} แต้ม{discount > 0 ? ` · ลด ฿${discount.toLocaleString()}` : ''}</p>
+            ) : (
+              <p className="text-xs text-slate-400">ค้นหาสมาชิกหรือเลือกโปรโมชั่น</p>
+            )}
+          </div>
+        </div>
+        {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4 border-t border-slate-100">
+          {/* Phone search */}
+          <div className="flex gap-2 pt-3">
+            <div className="relative flex-1">
+              <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <Input
+                ref={phoneRef}
+                type="tel"
+                placeholder="เบอร์โทรสมาชิก"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                onKeyDown={(e) => e.key === 'Enter' && searchCustomer()}
+                className="pl-9 h-9 rounded-xl text-sm"
+                maxLength={10}
+              />
+            </div>
+            <Button
+              size="sm"
+              onClick={searchCustomer}
+              disabled={isSearching || phone.length < 9}
+              className="h-9 rounded-xl font-bold shrink-0"
+            >
+              {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'ค้นหา'}
+            </Button>
+          </div>
+
+          {/* Customer card */}
+          {customer && (
+            <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+              <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                {customer.name[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-emerald-800 text-sm truncate">{customer.name}</p>
+                <p className="text-xs text-emerald-600">{customer.phone}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-lg font-black text-amber-500">{customer.points}</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">แต้ม</p>
+              </div>
+              <button onClick={() => { setCustomer(null); onCustomerChange(null); setSelectedPromo(null); setDiscount(0); onDiscountChange(0, null); }} className="text-slate-300 hover:text-slate-500 ml-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Not found + quick register */}
+          {notFound && !customer && (
+            <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center">
+              <p className="text-sm text-slate-500 font-semibold">ไม่พบสมาชิกหมายเลข {phone}</p>
+              {!showQuickReg ? (
+                <button
+                  onClick={() => setShowQuickReg(true)}
+                  className="mt-2 text-xs text-primary font-bold flex items-center gap-1 mx-auto"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  + สมัครสมาชิกด่วน
+                </button>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <Input
+                    placeholder="ชื่อ-นามสกุลลูกค้า"
+                    value={quickName}
+                    onChange={(e) => setQuickName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleQuickRegister()}
+                    className="h-9 rounded-xl text-sm"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleQuickRegister}
+                    disabled={isRegistering}
+                    className="w-full h-9 rounded-xl font-bold text-sm"
+                  >
+                    {isRegistering ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <UserPlus className="w-3.5 h-3.5 mr-1" />}
+                    สมัครสมาชิกด่วน
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Promotions */}
+          {visiblePromos.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <Tag className="w-3 h-3" />
+                โปรโมชั่นที่ใช้ได้
+              </p>
+              <div className="space-y-1.5">
+                {visiblePromos.map((p) => {
+                  const isSelected = selectedPromo?.id === p.id;
+                  const needsPoints = p.type === 'POINTS_REDEMPTION';
+                  const hasEnough   = !needsPoints || (customer?.points ?? 0) >= p.pointsNeeded;
+                  return (
+                    <button
+                      key={p.id}
+                      disabled={isValidating || !hasEnough}
+                      onClick={() => applyPromo(p)}
+                      className={cn(
+                        'w-full flex items-center justify-between p-3 rounded-xl border-2 text-left transition-all',
+                        isSelected
+                          ? 'border-primary bg-primary/5'
+                          : hasEnough
+                          ? 'border-slate-100 hover:border-slate-200 bg-white'
+                          : 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed',
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <p className={cn('text-sm font-bold truncate', isSelected ? 'text-primary' : 'text-slate-800')}>
+                          {p.name}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {p.type === 'PERCENT' && `ลด ${p.value}%`}
+                          {p.type === 'FIXED' && `ลด ฿${p.value}`}
+                          {p.type === 'POINTS_REDEMPTION' && `ใช้ ${p.pointsNeeded} แต้ม → ลด ฿${p.value}${!hasEnough ? ' (แต้มไม่พอ)' : ''}`}
+                          {p.memberOnly && <span className="ml-1 text-primary/70">(สมาชิก)</span>}
+                        </p>
+                      </div>
+                      {isSelected && <CheckCircle2 className="w-5 h-5 text-primary shrink-0 ml-2" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Discount summary */}
+          {discount > 0 && (
+            <div className="flex items-center justify-between p-3 bg-primary/5 rounded-xl border border-primary/20">
+              <span className="text-sm font-bold text-primary">ส่วนลดที่ได้รับ</span>
+              <span className="text-lg font-black text-primary">- ฿{discount.toLocaleString()}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Payment() {
   const { branchId } = useParams<{ branchId: string }>();
   const { branch } = useBranch(Number(branchId));
-  const [unpaidBills, setUnpaidBills] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedBill, setSelectedBill] = useState<any>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  const [paymentMode, setPaymentMode] = useState<'CASH' | 'TRANSFER' | null>(null);
-  const [receivedAmount, setReceivedAmount] = useState('');
-  const [change, setChange] = useState(0);
+  const [unpaidBills,   setUnpaidBills]   = useState<any[]>([]);
+  const [isLoading,     setIsLoading]     = useState(true);
+  const [selectedBill,  setSelectedBill]  = useState<any>(null);
+  const [isProcessing,  setIsProcessing]  = useState(false);
+
+  const [paymentMode,     setPaymentMode]     = useState<'CASH' | 'TRANSFER' | null>(null);
+  const [receivedAmount,  setReceivedAmount]  = useState('');
+  const [change,          setChange]          = useState(0);
+
+  /* ── Member & Promo state ── */
+  const [memberInfo,      setMemberInfo]      = useState<CustomerInfo | null>(null);
+  const [discountAmount,  setDiscountAmount]  = useState(0);
+  const [activePromoId,   setActivePromoId]   = useState<number | null>(null);
 
   const fetchUnpaidBills = async () => {
     try {
@@ -41,21 +343,23 @@ export default function Payment() {
     return () => clearInterval(interval);
   }, [branchId]);
 
+  const finalTotal = selectedBill ? Math.max(0, selectedBill.totalAmount - discountAmount) : 0;
+
   useEffect(() => {
     if (selectedBill && receivedAmount) {
       const amount = parseFloat(receivedAmount) || 0;
-      setChange(Math.max(0, amount - selectedBill.totalAmount));
+      setChange(Math.max(0, amount - finalTotal));
     } else {
       setChange(0);
     }
-  }, [receivedAmount, selectedBill]);
+  }, [receivedAmount, selectedBill, finalTotal]);
 
   const handlePayment = async () => {
     if (!selectedBill || !paymentMode) return;
-    
+
     if (paymentMode === 'CASH') {
       const received = parseFloat(receivedAmount) || 0;
-      if (received < selectedBill.totalAmount) {
+      if (received < finalTotal) {
         toast.error('ยอดเงินที่รับมาไม่เพียงพอ');
         return;
       }
@@ -65,15 +369,27 @@ export default function Payment() {
     try {
       const tableId = selectedBill.tableId ?? selectedBill.table?.id;
       await api.post(`/orders/table/${tableId}/pay`, {
-        paymentType: paymentMode === 'CASH' ? 'CASH' : 'TRANSFER'
+        paymentType:    paymentMode === 'CASH' ? 'CASH' : 'TRANSFER',
+        ...(memberInfo     ? { customerId:     memberInfo.id } : {}),
+        ...(activePromoId  ? { promotionId:    activePromoId } : {}),
+        ...(discountAmount ? { discountAmount: discountAmount } : {}),
       });
-      toast.success('ชำระเงินเสร็จสิ้น');
+
+      const pointsEarned = Math.floor(finalTotal / 100);
+      toast.success(
+        memberInfo && pointsEarned > 0
+          ? `ชำระเงินเสร็จสิ้น — ${memberInfo.name} ได้รับ +${pointsEarned} แต้ม`
+          : 'ชำระเงินเสร็จสิ้น',
+      );
       setSelectedBill(null);
       setPaymentMode(null);
       setReceivedAmount('');
+      setMemberInfo(null);
+      setDiscountAmount(0);
+      setActivePromoId(null);
       fetchUnpaidBills();
-    } catch (error) {
-      toast.error('ชำระเงินไม่สำเร็จ');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'ชำระเงินไม่สำเร็จ');
     } finally {
       setIsProcessing(false);
     }
@@ -124,6 +440,9 @@ export default function Payment() {
                   setSelectedBill(bill);
                   setPaymentMode(null);
                   setReceivedAmount('');
+                  setMemberInfo(null);
+                  setDiscountAmount(0);
+                  setActivePromoId(null);
                 }}
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 p-5 pb-2">
@@ -213,10 +532,22 @@ export default function Payment() {
                   </div>
                </ScrollArea>
 
-               <div className="p-4 sm:p-6 bg-white border-t border-slate-100 shrink-0">
+               <div className="p-4 sm:p-6 bg-white border-t border-slate-100 shrink-0 space-y-2">
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm px-1">
+                      <span className="text-slate-400">ราคาปกติ</span>
+                      <span className="text-slate-400 line-through">฿{selectedBill.totalAmount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm px-1">
+                      <span className="text-primary font-bold">ส่วนลด</span>
+                      <span className="text-primary font-bold">- ฿{discountAmount.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="bg-slate-900 p-4 sm:p-5 rounded-2xl sm:rounded-[24px] text-white flex justify-between items-center shadow-lg">
-                    <span className="text-[9px] font-black text-slate-400 uppercase">ยอดรวม</span>
-                    <span className="text-2xl sm:text-3xl font-black italic">฿{selectedBill.totalAmount.toLocaleString()}</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase">ยอดชำระ</span>
+                    <span className="text-2xl sm:text-3xl font-black italic">฿{finalTotal.toLocaleString()}</span>
                   </div>
                </div>
             </div>
@@ -225,6 +556,13 @@ export default function Payment() {
             <div className="flex-1 flex flex-col h-full bg-white overflow-hidden relative">
                <ScrollArea className="flex-1">
                   <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+                     {/* Member & Promotion Panel */}
+                     <CustomerPromoPanel
+                       branchId={branchId!}
+                       grossTotal={selectedBill.totalAmount}
+                       onCustomerChange={setMemberInfo}
+                       onDiscountChange={(d, pid) => { setDiscountAmount(d); setActivePromoId(pid); }}
+                     />
                      <div className="grid grid-cols-2 gap-2 sm:gap-3">
                         <button 
                           onClick={() => setPaymentMode('CASH')}
@@ -261,7 +599,7 @@ export default function Payment() {
                            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100">
                               <div className="space-y-0">
                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">ยอดชำระ</label>
-                                 <p className="text-lg sm:text-xl font-black italic tabular-nums">฿{selectedBill.totalAmount.toLocaleString()}</p>
+                                 <p className="text-lg sm:text-xl font-black italic tabular-nums">฿{finalTotal.toLocaleString()}</p>
                               </div>
                               <div className="space-y-0 text-right">
                                  <label className="text-[9px] font-black text-green-500 uppercase tracking-widest leading-none">เงินทอน</label>
@@ -306,7 +644,7 @@ export default function Payment() {
                                 <Button 
                                   variant="outline" 
                                   className="h-9 sm:h-10 rounded-lg font-black text-[10px] sm:text-xs bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 active:scale-95 transition-all col-span-2 sm:col-span-1"
-                                  onClick={() => setReceivedAmount(selectedBill.totalAmount.toString())}
+                                  onClick={() => setReceivedAmount(finalTotal.toString())}
                                 >
                                   จ่ายพอดี
                                 </Button>
@@ -350,7 +688,7 @@ export default function Payment() {
                                 <QrCode className="w-10 h-10 text-slate-100" />
                               </div>
                            )}
-                           <p className="text-base sm:text-lg font-black text-slate-900 italic">฿{selectedBill.totalAmount.toLocaleString()}</p>
+                           <p className="text-base sm:text-lg font-black text-slate-900 italic">฿{finalTotal.toLocaleString()}</p>
                            <Badge variant="secondary" className="text-[8px] sm:text-[9px] text-slate-400 font-black uppercase tracking-widest mt-2 px-3 py-1 bg-white rounded-full border-none shadow-sm">PromptPay QR</Badge>
                         </div>
                      )}
@@ -376,7 +714,7 @@ export default function Payment() {
                   <Button variant="ghost" className="h-11 sm:h-13 rounded-xl sm:rounded-2xl font-bold text-slate-400 text-xs sm:text-sm" onClick={() => setSelectedBill(null)}>ยกเลิก</Button>
                   <Button 
                     className="h-11 sm:h-13 rounded-xl sm:rounded-2xl text-base sm:text-lg font-black shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                    disabled={isProcessing || !paymentMode || (paymentMode === 'CASH' && (!receivedAmount || parseFloat(receivedAmount) < selectedBill.totalAmount))}
+                    disabled={isProcessing || !paymentMode || (paymentMode === 'CASH' && (!receivedAmount || parseFloat(receivedAmount) < finalTotal))}
                     onClick={handlePayment}
                   >
                     {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />}

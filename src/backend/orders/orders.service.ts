@@ -270,28 +270,107 @@ export class OrdersService {
     return Object.values(grouped);
   }
 
-  async completePayment(tableId: number, paymentType: 'CASH' | 'TRANSFER') {
-    // 1. Update all unpaid orders to PAID
-    // If tableId is 0, we update orders where tableId is null
-    await this.prisma.order.updateMany({
-      where: {
-        tableId: tableId === 0 ? null : tableId,
-        status: { notIn: ['PAID', 'CANCELLED'] },
-      },
-      data: {
-        status: 'PAID',
-        paymentType,
-      },
+  /**
+   * ปิดบิลและชำระเงิน — รองรับสมาชิก, โปรโมชั่น, การหักแต้มและสะสมแต้ม
+   * ทุกอย่างอยู่ใน $transaction เดียวเพื่อความสม่ำเสมอของข้อมูล
+   */
+  async completePayment(
+    tableId: number,
+    paymentType: 'CASH' | 'TRANSFER',
+    opts?: {
+      customerId?:     number;
+      promotionId?:    number;
+      discountAmount?: number;
+    },
+  ) {
+    const POINTS_RATE = 100; // 1 แต้ม ต่อ 100 บาท
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. ดึง order ที่ยังไม่ได้ชำระทั้งหมด
+      const unpaid = await tx.order.findMany({
+        where: {
+          tableId: tableId === 0 ? null : tableId,
+          status: { notIn: ['PAID', 'CANCELLED'] },
+        },
+        select: { id: true, totalAmount: true },
+      });
+      if (!unpaid.length) return;
+
+      const grossTotal   = unpaid.reduce((s, o) => s + o.totalAmount, 0);
+      const discount     = opts?.discountAmount ?? 0;
+      const finalTotal   = Math.max(0, grossTotal - discount);
+      const orderIds     = unpaid.map((o) => o.id);
+      const firstOrderId = unpaid[0].id;
+
+      // 2. Mark all orders PAID
+      await tx.order.updateMany({
+        where: { id: { in: orderIds } },
+        data: {
+          status:      'PAID',
+          paymentType,
+          ...(opts?.customerId  ? { customerId:     opts.customerId  } : {}),
+          ...(opts?.promotionId ? { promotionId:    opts.promotionId } : {}),
+          ...(discount > 0      ? { discountAmount: discount         } : {}),
+        },
+      });
+
+      // 3. ถ้าเป็น POINTS_REDEMPTION → ตรวจแต้ม → หักแต้ม → บันทึกประวัติ
+      if (opts?.promotionId && opts?.customerId && discount > 0) {
+        const promotion = await tx.promotion.findUnique({
+          where: { id: opts.promotionId },
+        });
+
+        if (promotion?.type === 'POINTS_REDEMPTION' && promotion.pointsNeeded > 0) {
+          const customer = await tx.customer.findUnique({
+            where: { id: opts.customerId },
+          });
+
+          // Guard: ป้องกันแต้มติดลบ
+          if (!customer || customer.points < promotion.pointsNeeded) {
+            throw new Error(
+              `แต้มไม่พอ (มี ${customer?.points ?? 0} แต้ม ต้องการ ${promotion.pointsNeeded} แต้ม)`,
+            );
+          }
+
+          // หักแต้ม
+          await tx.customer.update({
+            where: { id: opts.customerId },
+            data: { points: { decrement: promotion.pointsNeeded } },
+          });
+
+          // บันทึก RedemptionHistory
+          await tx.redemptionHistory.create({
+            data: {
+              customerId:    opts.customerId,
+              promotionId:   opts.promotionId,
+              pointsSpent:   promotion.pointsNeeded,
+              discountAmount: discount,
+              orderId:        firstOrderId,
+            },
+          });
+        }
+      }
+
+      // 4. สะสมแต้มจากยอดชำระจริง (หลังหักส่วนลดแล้ว)
+      if (opts?.customerId && finalTotal > 0) {
+        const pointsToAward = Math.floor(finalTotal / POINTS_RATE);
+        if (pointsToAward > 0) {
+          await tx.customer.update({
+            where: { id: opts.customerId },
+            data: { points: { increment: pointsToAward } },
+          });
+        }
+      }
+
+      // 5. คืนสถานะโต๊ะ
+      if (tableId && tableId !== 0) {
+        await tx.table.update({
+          where: { id: tableId },
+          data: { status: 'AVAILABLE' },
+        });
+      }
     });
 
-    // 2. Clear table status to AVAILABLE only if it's a real table
-    if (tableId && tableId !== 0) {
-      return this.prisma.table.update({
-        where: { id: tableId },
-        data: { status: 'AVAILABLE' },
-      });
-    }
-    
     return { success: true };
   }
 }

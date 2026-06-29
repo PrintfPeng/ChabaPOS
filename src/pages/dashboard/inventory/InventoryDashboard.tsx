@@ -1,231 +1,1022 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { createRoot } from 'react-dom/client';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
-import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
+import api from '../../../lib/api';
+import { useBranch } from '../../../hooks/useBranches';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
+import { format, isSameDay, isSameWeek, isSameMonth, isSameYear } from 'date-fns';
+import { th } from 'date-fns/locale';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
-import { Loader2, Package, TrendingUp, Printer } from 'lucide-react';
+import {
+  Table, TableBody, TableCell, TableHead,
+  TableHeader, TableRow,
+} from '../../../components/ui/table';
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from '../../../components/ui/select';
+import {
+  Package, TrendingUp, Store, ClipboardList,
+  Loader2, Printer, Search, RefreshCw, Download,
+  CalendarDays, CalendarRange, CalendarClock, List,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleString('th-TH', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    day: '2-digit', 
-    month: 'short', 
-    year: 'numeric' 
-  }).replace(',', ' -');
+// ─── Types ────────────────────────────────────────────────────────────────────
+type ViewMode = 'daily' | 'weekly' | 'monthly' | 'all';
+
+interface POItem {
+  id: number;
+  quantity: number;
+  price: number;
+  rawMaterial?: { name: string; unit: string; category?: { name: string } };
+}
+
+interface PurchaseOrder {
+  id: number;
+  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+  totalAmount: number;
+  createdAt: string;
+  supplier?: {
+    id: number; name: string;
+    phone?: string; lineId?: string;
+    bankAccount?: string; bankName?: string;
+  };
+  items?: POItem[];
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleString('th-TH', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+
+const fmtDateShort = (d: string) =>
+  new Date(d).toLocaleDateString('th-TH', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+
+const STATUS_MAP: Record<string, { label: string; cls: string; pdfColor: string }> = {
+  COMPLETED: { label: 'เสร็จสิ้น',    cls: 'bg-emerald-100 text-emerald-700 border-emerald-200', pdfColor: '#065f46' },
+  CANCELLED: { label: 'ยกเลิก',        cls: 'bg-red-100 text-red-700 border-red-200',             pdfColor: '#991b1b' },
+  PENDING:   { label: 'รอดำเนินการ',   cls: 'bg-amber-100 text-amber-700 border-amber-200',       pdfColor: '#92400e' },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF Templates (inline-styles only — no CSS variables / oklch)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Single-order PDF template */
+function PdfSingleTemplate({
+  order, branchName,
+}: {
+  order: PurchaseOrder; branchName: string;
+}) {
+  const now      = new Date();
+  const dateStr  = now.toLocaleDateString('th-TH',  { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr  = now.toLocaleTimeString('th-TH',  { hour: '2-digit', minute: '2-digit' });
+  const sup      = order.supplier;
+  const items    = order.items ?? [];
+  const status   = STATUS_MAP[order.status] ?? STATUS_MAP.PENDING;
+
+  const s: Record<string, React.CSSProperties> = {
+    root:     { width: 794, backgroundColor: '#fff', padding: '32px 40px 28px', fontFamily: "'Segoe UI', Arial, sans-serif", color: '#1e293b', boxSizing: 'border-box' },
+    hdr:      { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 16, marginBottom: 20 },
+    brand:    { fontSize: 8,  fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 4 },
+    title:    { fontSize: 22, fontWeight: 900, color: '#0f172a', letterSpacing: -0.5 },
+    sub:      { fontSize: 11, color: '#64748b', marginTop: 4 },
+    metaWrap: { textAlign: 'right' as const },
+    metaLbl:  { fontSize: 8,  color: '#94a3b8', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' as const },
+    metaVal:  { fontSize: 12, fontWeight: 800, color: '#0f172a', marginTop: 2 },
+    metaSub:  { fontSize: 9,  color: '#94a3b8', marginTop: 2 },
+    supBox:   { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', marginBottom: 18 },
+    supLbl:   { fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase' as const, marginBottom: 8 },
+    grid2:    { display: 'grid', gridTemplateColumns: '110px 1fr', gap: '4px 8px', fontSize: 11 },
+    th:       { padding: '7px 10px', fontSize: 8, fontWeight: 700, color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase' as const, borderBottom: '2px solid #0f172a', background: '#f1f5f9' },
+    td:       { padding: '7px 10px', fontSize: 10, borderBottom: '1px solid #e2e8f0' },
+    sigWrap:  { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginTop: 40 },
+    sigLine:  { borderBottom: '1px dashed #0f172a', margin: '0 32px 8px', height: 32 },
+    footer:   { marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8' },
+  };
+
+  return (
+    <div style={s.root}>
+      {/* Header */}
+      <div style={s.hdr}>
+        <div>
+          <div style={s.brand}>CHABA POS SYSTEM</div>
+          <div style={s.title}>ใบสั่งซื้อวัตถุดิบ</div>
+          <div style={s.sub}>สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong></div>
+        </div>
+        <div style={s.metaWrap}>
+          <div style={s.metaLbl}>เลขที่เอกสาร</div>
+          <div style={{ ...s.metaVal, fontFamily: 'monospace' }}>PO-{String(order.id).padStart(5, '0')}</div>
+          <div style={s.metaSub}>{fmtDate(order.createdAt)}</div>
+          <div style={{ marginTop: 6, display: 'inline-block', fontSize: 9, fontWeight: 700, color: status.pdfColor, background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>
+            {status.label}
+          </div>
+        </div>
+      </div>
+
+      {/* Supplier */}
+      <div style={s.supBox}>
+        <div style={s.supLbl}>ข้อมูลคู่ค้า (Supplier)</div>
+        <div style={s.grid2}>
+          <span style={{ fontWeight: 700 }}>ชื่อร้านค้า:</span>
+          <span style={{ fontWeight: 700, fontSize: 13 }}>{sup?.name ?? '-'}</span>
+          {sup?.phone       && <><span style={{ fontWeight: 700 }}>โทรศัพท์:</span><span>{sup.phone}</span></>}
+          {sup?.lineId      && <><span style={{ fontWeight: 700 }}>Line ID:</span><span>{sup.lineId}</span></>}
+          {sup?.bankAccount && <><span style={{ fontWeight: 700 }}>บัญชีธนาคาร:</span><span>{sup.bankAccount}{sup.bankName ? ` (${sup.bankName})` : ''}</span></>}
+        </div>
+      </div>
+
+      {/* Items table */}
+      {(() => {
+        const isCompleted = order.status === 'COMPLETED';
+        const grandTotal  = items.reduce((s, i) => s + i.quantity * (i.price ?? 0), 0);
+        const headers = isCompleted
+          ? ['#', 'รายการวัตถุดิบ', 'หมวดหมู่', 'จำนวน', 'หน่วย', 'ราคา/หน่วย (฿)', 'ราคารวม (฿)']
+          : ['#', 'รายการวัตถุดิบ', 'หมวดหมู่', 'จำนวน', 'หน่วย'];
+        return (
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24 }}>
+            <thead>
+              <tr>
+                {headers.map((h, i) => (
+                  <th key={i} style={{ ...s.th, textAlign: i < 3 ? 'left' : 'right' as any }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, i) => {
+                const lineTotal = item.quantity * (item.price ?? 0);
+                return (
+                  <tr key={item.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
+                    <td style={{ ...s.td, color: '#94a3b8', width: 28, textAlign: 'center' }}>{i + 1}</td>
+                    <td style={{ ...s.td, fontWeight: 600 }}>{item.rawMaterial?.name}</td>
+                    <td style={{ ...s.td, color: '#64748b' }}>{item.rawMaterial?.category?.name ?? '-'}</td>
+                    <td style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>{item.quantity}</td>
+                    <td style={{ ...s.td, textAlign: 'right', color: '#64748b' }}>{item.rawMaterial?.unit}</td>
+                    {isCompleted && (
+                      <>
+                        <td style={{ ...s.td, textAlign: 'right' }}>
+                          ฿{(item.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: '#065f46' }}>
+                          ฿{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: '2px solid #0f172a', background: '#f8fafc' }}>
+                {isCompleted ? (
+                  <>
+                    <td colSpan={5} style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>ยอดรวมทั้งสิ้น</td>
+                    <td colSpan={2} style={{ ...s.td, textAlign: 'right', fontWeight: 900, fontSize: 15, color: '#065f46' }}>
+                      ฿{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td colSpan={3} style={{ ...s.td, textAlign: 'right', fontWeight: 700 }}>จำนวนรายการทั้งหมด</td>
+                    <td style={{ ...s.td, textAlign: 'right', fontWeight: 900, fontSize: 14 }}>{items.length}</td>
+                    <td style={{ ...s.td, color: '#64748b' }}>รายการ</td>
+                  </>
+                )}
+              </tr>
+            </tfoot>
+          </table>
+        );
+      })()}
+
+      {/* Signatures */}
+      <div style={s.sigWrap}>
+        {['ผู้จัดซื้อ', 'ผู้ตรวจสอบ / อนุมัติ'].map(r => (
+          <div key={r} style={{ textAlign: 'center' }}>
+            <div style={s.sigLine} />
+            <div style={{ fontWeight: 700, fontSize: 11 }}>{r}</div>
+            <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 4 }}>วันที่ _____/_____/_____</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={s.footer}>
+        <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>{dateStr} {timeStr}</span>
+      </div>
+    </div>
+  );
+}
+
+/** All-orders PDF template */
+function PdfAllTemplate({
+  orders, branchName, periodLabel, stats,
+}: {
+  orders: PurchaseOrder[];
+  branchName: string;
+  periodLabel: string;
+  stats: { count: number; totalAmount: number; uniqueSuppliers: number };
+}) {
+  const now     = new Date();
+  const dateStr = now.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+
+  const s: Record<string, React.CSSProperties> = {
+    root:   { width: 794, backgroundColor: '#fff', padding: '32px 40px 28px', fontFamily: "'Segoe UI', Arial, sans-serif", color: '#1e293b', boxSizing: 'border-box' },
+    hdr:    { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 16, marginBottom: 20 },
+    brand:  { fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 4 },
+    title:  { fontSize: 22, fontWeight: 900, color: '#0f172a', letterSpacing: -0.5 },
+    sub:    { fontSize: 11, color: '#64748b', marginTop: 4 },
+    kpiRow: { display: 'flex', gap: 12, marginBottom: 18 },
+    kpi:    { flex: 1, border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', textAlign: 'center' as const },
+    th:     { padding: '7px 10px', fontSize: 8, fontWeight: 700, color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase' as const, borderBottom: '2px solid #0f172a', background: '#f1f5f9' },
+    td:     { padding: '6px 10px', fontSize: 9, borderBottom: '1px solid #e2e8f0' },
+    footer: { marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8' },
+  };
+
+  return (
+    <div style={s.root}>
+      {/* Header */}
+      <div style={s.hdr}>
+        <div>
+          <div style={s.brand}>CHABA POS SYSTEM</div>
+          <div style={s.title}>รายงานการสั่งซื้อวัตถุดิบ</div>
+          <div style={s.sub}>
+            สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong>
+            &nbsp;·&nbsp;ช่วงเวลา: <strong style={{ color: '#dc2626' }}>{periodLabel}</strong>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 8, color: '#94a3b8', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>วันที่ออกรายงาน</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{dateStr}</div>
+          <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>{timeStr}</div>
+        </div>
+      </div>
+
+      {/* KPI summary */}
+      <div style={s.kpiRow}>
+        {[
+          { label: 'จำนวนบิลทั้งหมด', value: `${stats.count} บิล` },
+          { label: 'ยอดรวมทั้งหมด',   value: stats.totalAmount > 0 ? `฿${stats.totalAmount.toLocaleString()}` : 'ไม่ระบุ' },
+          { label: 'จำนวนร้านค้า',     value: `${stats.uniqueSuppliers} แห่ง` },
+        ].map(k => (
+          <div key={k.label} style={s.kpi}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.8 }}>{k.label}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, marginTop: 4, color: '#0f172a' }}>{k.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Orders table */}
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            {['#', 'เลขที่', 'วันที่', 'ร้านค้า', 'รายการวัตถุดิบ', 'ยอดรวม', 'สถานะ'].map((h, i) => (
+              <th key={i} style={{ ...s.th, textAlign: i >= 5 ? 'right' as any : 'left' as any }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o, idx) => {
+            const st = STATUS_MAP[o.status] ?? STATUS_MAP.PENDING;
+            const itemSummary = o.items
+              ?.map(i => `${i.rawMaterial?.name} ${i.quantity}${i.rawMaterial?.unit}`)
+              .join(', ') ?? '';
+            return (
+              <tr key={o.id} style={{ background: idx % 2 ? '#f8fafc' : '#fff' }}>
+                <td style={{ ...s.td, color: '#94a3b8', width: 24, textAlign: 'center' }}>{idx + 1}</td>
+                <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700 }}>PO-{String(o.id).padStart(5, '0')}</td>
+                <td style={{ ...s.td, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDateShort(o.createdAt)}</td>
+                <td style={{ ...s.td, fontWeight: 600 }}>{o.supplier?.name}</td>
+                <td style={{ ...s.td, color: '#64748b', maxWidth: 220 }}>{itemSummary}</td>
+                <td style={{ ...s.td, textAlign: 'right', fontWeight: 700, color: o.totalAmount > 0 ? '#0f172a' : '#94a3b8' }}>
+                  {o.totalAmount > 0 ? `฿${Number(o.totalAmount).toLocaleString()}` : '-'}
+                </td>
+                <td style={{ ...s.td, textAlign: 'right', color: st.pdfColor, fontWeight: 700 }}>{st.label}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: '2px solid #0f172a', background: '#f8fafc' }}>
+            <td colSpan={5} style={{ ...s.td, textAlign: 'right', fontWeight: 700, fontSize: 10 }}>ยอดรวมทั้งสิ้น</td>
+            <td style={{ ...s.td, textAlign: 'right', fontWeight: 900, fontSize: 12, color: '#0f172a' }}>
+              {stats.totalAmount > 0 ? `฿${stats.totalAmount.toLocaleString()}` : '-'}
+            </td>
+            <td />
+          </tr>
+        </tfoot>
+      </table>
+
+      {/* Signatures */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 32, marginTop: 40 }}>
+        {['ผู้จัดทำรายงาน', 'ผู้ตรวจสอบ', 'ผู้อนุมัติ'].map(r => (
+          <div key={r} style={{ textAlign: 'center' }}>
+            <div style={{ borderBottom: '1px dashed #0f172a', margin: '0 24px 8px', height: 28 }} />
+            <div style={{ fontWeight: 700, fontSize: 10 }}>{r}</div>
+            <div style={{ fontSize: 8, color: '#94a3b8', marginTop: 3 }}>วันที่ _____/_____/_____</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={s.footer}>
+        <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr} {timeStr}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared PDF download helper
+// ─────────────────────────────────────────────────────────────────────────────
+async function renderToPdf(
+  element: React.ReactElement,
+  filename: string,
+  toastId: string | number,
+) {
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;top:-9999px;left:-9999px;z-index:-1;pointer-events:none;';
+  document.body.appendChild(container);
+  const root = createRoot(container);
+
+  try {
+    await new Promise<void>(resolve => { root.render(element); setTimeout(resolve, 300); });
+
+    const el  = container.firstElementChild as HTMLElement;
+    const png = await toPng(el, { pixelRatio: 2, backgroundColor: '#ffffff' });
+
+    const img = new Image();
+    await new Promise<void>(r => { img.onload = () => r(); img.src = png; });
+
+    const imgW = 210, pageH = 297;
+    const imgH = (img.height * imgW) / img.width;
+    let left   = imgH;
+
+    let Cls: any = jsPDF;
+    if (typeof Cls !== 'function') Cls = (jsPDF as any).default ?? Cls;
+    if (typeof Cls !== 'function' && (jsPDF as any).jsPDF) Cls = (jsPDF as any).jsPDF;
+    if (typeof Cls !== 'function') throw new Error('jsPDF not available');
+
+    const pdf = new Cls('p', 'mm', 'a4');
+    pdf.addImage(png, 'PNG', 0, 0, imgW, imgH, undefined, 'FAST');
+    left -= pageH;
+
+    while (left >= 0) {
+      pdf.addPage();
+      pdf.addImage(png, 'PNG', 0, left - imgH, imgW, imgH, undefined, 'FAST');
+      left -= pageH;
+    }
+
+    pdf.save(filename);
+    toast.success('ดาวน์โหลด PDF เรียบร้อยแล้ว!', { id: toastId });
+  } finally {
+    root.unmount();
+    document.body.removeChild(container);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
 export default function InventoryDashboard() {
-  const { branchId } = useParams();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activePrintOrder, setActivePrintOrder] = useState<any | null>(null);
+  const { branchId } = useParams<{ branchId: string }>();
+  const { branch }   = useBranch(Number(branchId));
 
-  useEffect(() => {
-    fetchTodayOrders();
-  }, [branchId]);
+  const [allOrders,      setAllOrders]      = useState<PurchaseOrder[]>([]);
+  const [isLoading,      setIsLoading]      = useState(true);
+  const [viewMode,       setViewMode]       = useState<ViewMode>('daily');
+  const [selectedDate,   setSelectedDate]   = useState<Date>(new Date());
+  const [supplierFilter, setSupplierFilter] = useState('all');
+  const [searchQuery,    setSearchQuery]    = useState('');
+  const [printOrder,     setPrintOrder]     = useState<PurchaseOrder | null>(null);
 
-  const fetchTodayOrders = async () => {
+  // ── Fetch ────────────────────────────────────────────────────────────────
+  const fetchOrders = async () => {
+    if (!branchId) return;
+    setIsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`http://localhost:3000/api/purchase-orders/today?branchId=${branchId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setOrders(res.data);
-    } catch (error) {
-      console.error(error);
+      const res = await api.get<PurchaseOrder[]>(`/purchase-orders?branchId=${branchId}`);
+      setAllOrders(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      toast.error('ไม่สามารถโหลดข้อมูลได้');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const safeOrders = Array.isArray(orders) ? orders : [];
-  const totalSpent = safeOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+  useEffect(() => { fetchOrders(); }, [branchId]);
 
-  const handlePrint = (order: any) => {
-    setActivePrintOrder(order);
+  // ── Filtering ────────────────────────────────────────────────────────────
+  const filteredOrders = useMemo(() => {
+    let list = [...allOrders];
+
+    // กรองตามช่วงเวลา
+    if (viewMode !== 'all') {
+      list = list.filter(o => {
+        const d = new Date(o.createdAt);
+        if (viewMode === 'daily')   return isSameDay(d, selectedDate);
+        if (viewMode === 'weekly')  return isSameWeek(d, selectedDate, { weekStartsOn: 1 });
+        if (viewMode === 'monthly') return isSameMonth(d, selectedDate) && isSameYear(d, selectedDate);
+        return true;
+      });
+    }
+
+    if (supplierFilter !== 'all')
+      list = list.filter(o => String(o.supplier?.id) === supplierFilter);
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(o =>
+        o.supplier?.name?.toLowerCase().includes(q) ||
+        o.items?.some(i => i.rawMaterial?.name?.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [allOrders, viewMode, selectedDate, supplierFilter, searchQuery]);
+
+  // ── Stats ────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    count:           filteredOrders.length,
+    totalAmount:     filteredOrders.reduce((s, o) => s + (o.totalAmount || 0), 0),
+    uniqueSuppliers: new Set(filteredOrders.map(o => o.supplier?.id)).size,
+    totalItems:      filteredOrders.reduce((s, o) => s + (o.items?.length || 0), 0),
+  }), [filteredOrders]);
+
+  const allSuppliers = useMemo(() => {
+    const m = new Map<number, string>();
+    allOrders.forEach(o => { if (o.supplier) m.set(o.supplier.id, o.supplier.name); });
+    return Array.from(m.entries()).map(([id, name]) => ({ id, name }));
+  }, [allOrders]);
+
+  const periodLabel = viewMode === 'all'
+    ? 'ทั้งหมด'
+    : viewMode === 'daily'
+    ? format(selectedDate, 'd MMM yyyy', { locale: th })
+    : viewMode === 'weekly'
+    ? `สัปดาห์ที่ ${format(selectedDate, 'w')} · ${format(selectedDate, 'MMM yyyy', { locale: th })}`
+    : format(selectedDate, 'MMMM yyyy', { locale: th });
+  const branchName  = branch?.name ?? `สาขา #${branchId}`;
+  const dateStr     = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  // ── Print (window.print) handlers — FIXED: visibility approach ───────────
+  const handlePrintSingle = (order: PurchaseOrder) => {
+    setPrintOrder(order);
     setTimeout(() => {
+      document.body.classList.add('cpos-print-single');
       window.print();
-    }, 100);
+      setTimeout(() => document.body.classList.remove('cpos-print-single'), 600);
+    }, 150);
   };
 
-  if (isLoading) {
-    return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-  }
+  const handlePrintAll = () => {
+    if (!filteredOrders.length) { toast.error('ไม่มีข้อมูลสำหรับพิมพ์'); return; }
+    setTimeout(() => {
+      document.body.classList.add('cpos-print-all');
+      window.print();
+      setTimeout(() => document.body.classList.remove('cpos-print-all'), 600);
+    }, 150);
+  };
 
+  // ── PDF (html-to-image + jsPDF) handlers ─────────────────────────────────
+  const handleSavePdfSingle = async (order: PurchaseOrder) => {
+    const toastId = toast.loading('กำลังสร้าง PDF...');
+    try {
+      await renderToPdf(
+        <PdfSingleTemplate order={order} branchName={branchName} />,
+        `ใบสั่งซื้อ_PO-${String(order.id).padStart(5, '0')}_${dateStr}.pdf`,
+        toastId,
+      );
+    } catch (e: any) {
+      toast.error(`สร้าง PDF ล้มเหลว: ${e?.message}`, { id: toastId });
+    }
+  };
+
+  const handleSavePdfAll = async () => {
+    if (!filteredOrders.length) { toast.error('ไม่มีข้อมูลสำหรับบันทึก PDF'); return; }
+    const toastId = toast.loading('กำลังสร้าง PDF รายงาน...');
+    try {
+      await renderToPdf(
+        <PdfAllTemplate
+          orders={filteredOrders}
+          branchName={branchName}
+          periodLabel={periodLabel}
+          stats={stats}
+        />,
+        `รายงานสั่งซื้อวัตถุดิบ_${branchName}_${periodLabel}_${dateStr}.pdf`,
+        toastId,
+      );
+    } catch (e: any) {
+      toast.error(`สร้าง PDF ล้มเหลว: ${e?.message}`, { id: toastId });
+    }
+  };
+
+  // ── Loading ───────────────────────────────────────────────────────────────
+  if (isLoading) return (
+    <div className="flex justify-center p-16">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="bg-gradient-to-br from-primary/10 to-transparent border-none shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-4 bg-primary rounded-2xl text-white">
-                <Package className="w-6 h-6" />
+    <>
+      {/* ── Print CSS: FIXED — visibility approach works regardless of nesting ── */}
+      <style>{`
+        @media print {
+          /* ── Single order ── */
+          body.cpos-print-single * { visibility: hidden !important; }
+          body.cpos-print-single #cpos-print-single {
+            visibility: visible !important;
+            display: block !important;
+            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
+          }
+          body.cpos-print-single #cpos-print-single * { visibility: visible !important; }
+
+          /* ── All orders ── */
+          body.cpos-print-all * { visibility: hidden !important; }
+          body.cpos-print-all #cpos-print-all {
+            visibility: visible !important;
+            display: block !important;
+            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
+          }
+          body.cpos-print-all #cpos-print-all * { visibility: visible !important; }
+
+          @page { size: A4; margin: 1.5cm; }
+        }
+      `}</style>
+
+      {/* ═══════════════════════ SCREEN UI ══════════════════════════════════ */}
+      <div className="space-y-5 print:hidden">
+
+        {/* Header row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black text-slate-900">ประวัติการสั่งซื้อวัตถุดิบ</h2>
+            <p className="text-sm text-slate-500 mt-0.5">รายการสั่งซื้อทั้งหมดจากร้านค้า เรียงตามวันที่ล่าสุด</p>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center shrink-0">
+            <Button variant="outline" size="icon" onClick={fetchOrders}
+                    className="rounded-xl h-9 w-9 border-slate-200" title="รีเฟรช">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+            {/* Print all */}
+            <Button onClick={handlePrintAll} disabled={!filteredOrders.length}
+                    variant="outline"
+                    className="rounded-xl font-bold gap-1.5 h-9 border-slate-300 text-slate-700">
+              <Printer className="w-4 h-4" />
+              พิมพ์ ({filteredOrders.length})
+            </Button>
+            {/* Save PDF all */}
+            <Button onClick={handleSavePdfAll} disabled={!filteredOrders.length}
+                    className="rounded-xl font-bold gap-1.5 h-9 bg-slate-800 hover:bg-slate-900 text-white">
+              <Download className="w-4 h-4" />
+              บันทึก PDF ({filteredOrders.length} บิล)
+            </Button>
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex flex-col sm:flex-row gap-3">
+
+          {/* ── View mode toggle ── */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl shrink-0">
+            {([
+              { mode: 'daily'   as ViewMode, label: 'รายวัน',    icon: <CalendarDays  className="w-3.5 h-3.5" /> },
+              { mode: 'weekly'  as ViewMode, label: 'รายสัปดาห์', icon: <CalendarClock className="w-3.5 h-3.5" /> },
+              { mode: 'monthly' as ViewMode, label: 'รายเดือน',  icon: <CalendarRange className="w-3.5 h-3.5" /> },
+              { mode: 'all'     as ViewMode, label: 'ทั้งหมด',   icon: <List          className="w-3.5 h-3.5" /> },
+            ] as const).map(({ mode, label, icon }) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                  viewMode === mode ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {icon}
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Date picker — ซ่อนเมื่อ viewMode = 'all' ── */}
+          {viewMode !== 'all' && (
+            <div className="relative shrink-0" style={{ isolation: 'isolate' }}>
+              {/* styled label (pointer-events-none ให้คลิกทะลุไปถึง input) */}
+              <div className="flex items-center gap-2 h-9 px-4 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors whitespace-nowrap min-w-[160px] pointer-events-none select-none">
+                <CalendarDays className="w-4 h-4 shrink-0" />
+                <span>{periodLabel}</span>
               </div>
-              <div>
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">บิลสั่งซื้อวันนี้</p>
-                <h3 className="text-3xl font-black">{orders.length}</h3>
-              </div>
+              {/* native input ลอยทับ — รับ event จริง */}
+              <input
+                type={viewMode === 'monthly' ? 'month' : 'date'}
+                value={viewMode === 'monthly'
+                  ? format(selectedDate, 'yyyy-MM')
+                  : format(selectedDate, 'yyyy-MM-dd')}
+                onChange={e => {
+                  if (!e.target.value) return;
+                  setSelectedDate(new Date(e.target.value + (viewMode === 'monthly' ? '-01' : '')));
+                }}
+                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 1, width: '100%', height: '100%' }}
+              />
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-emerald-500/10 to-transparent border-none shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-4 bg-emerald-500 rounded-2xl text-white">
-                <TrendingUp className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-emerald-600 uppercase tracking-widest">ยอดสั่งซื้อรวมวันนี้ (฿)</p>
-                <h3 className="text-3xl font-black text-emerald-700">฿{totalSpent.toLocaleString()}</h3>
-              </div>
+          )}
+
+          <div className="flex gap-2 flex-1 min-w-0">
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="rounded-xl h-9 w-44 bg-white border-slate-200 shrink-0 text-sm">
+                <SelectValue placeholder="ร้านค้าทั้งหมด">
+                  {supplierFilter === 'all'
+                    ? 'ร้านค้าทั้งหมด'
+                    : (allSuppliers.find(s => String(s.id) === supplierFilter)?.name || supplierFilter)}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">ร้านค้าทั้งหมด</SelectItem>
+                {allSuppliers.map(s => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input type="text" placeholder="ค้นหาร้านค้า / วัตถุดิบ..."
+                     value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                     className="w-full pl-9 pr-4 h-9 border border-slate-200 rounded-xl text-sm
+                                bg-white focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-slate-400" />
             </div>
+          </div>
+        </div>
+
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { icon: <ClipboardList className="w-5 h-5" />, bg: 'bg-primary',       from: 'from-primary/10',       label: 'บิลสั่งซื้อ',       value: stats.count,                                                       suffix: 'บิล',     textCl: 'text-slate-900' },
+            { icon: <TrendingUp    className="w-5 h-5" />, bg: 'bg-emerald-500',   from: 'from-emerald-500/10',   label: 'ยอดรวม',            value: `฿${stats.totalAmount.toLocaleString()}`,                           suffix: '',        textCl: 'text-emerald-700' },
+            { icon: <Store         className="w-5 h-5" />, bg: 'bg-blue-500',      from: 'from-blue-500/10',      label: 'ร้านค้า',           value: stats.uniqueSuppliers,                                             suffix: 'แห่ง',    textCl: 'text-blue-700' },
+            { icon: <Package       className="w-5 h-5" />, bg: 'bg-violet-500',    from: 'from-violet-500/10',    label: 'รายการวัตถุดิบ',    value: stats.totalItems,                                                  suffix: 'รายการ',  textCl: 'text-violet-700' },
+          ].map((c, i) => (
+            <Card key={i} className={`border-none shadow-sm bg-gradient-to-br ${c.from} to-transparent`}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 ${c.bg} rounded-xl text-white shrink-0`}>{c.icon}</div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">{c.label}</p>
+                    <h3 className={`text-xl font-black ${c.textCl} leading-none mt-0.5`}>
+                      {c.value}
+                      {c.suffix && <span className="text-sm font-bold ml-1">{c.suffix}</span>}
+                    </h3>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Orders table */}
+        <Card className="border-slate-100 shadow-sm overflow-hidden">
+          <CardHeader className="py-3 px-5 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                {viewMode === 'daily'   && <CalendarDays  className="w-4 h-4 text-primary" />}
+                {viewMode === 'weekly'  && <CalendarClock className="w-4 h-4 text-primary" />}
+                {viewMode === 'monthly' && <CalendarRange className="w-4 h-4 text-primary" />}
+                {viewMode === 'all'     && <List          className="w-4 h-4 text-primary" />}
+                รายการสั่งซื้อ — {periodLabel}
+                {searchQuery && <span className="text-sm font-normal text-slate-400 ml-1">· ค้นหา "{searchQuery}"</span>}
+              </CardTitle>
+              <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
+                {filteredOrders.length} รายการ
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {!filteredOrders.length ? (
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                  {viewMode === 'daily'   && <CalendarDays  className="w-8 h-8 text-slate-300" />}
+                  {viewMode === 'weekly'  && <CalendarClock className="w-8 h-8 text-slate-300" />}
+                  {viewMode === 'monthly' && <CalendarRange className="w-8 h-8 text-slate-300" />}
+                  {viewMode === 'all'     && <List          className="w-8 h-8 text-slate-300" />}
+                </div>
+                <p className="font-bold text-slate-600 text-base">ไม่มีรายการสั่งซื้อ</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  {viewMode === 'daily'   && `ไม่พบบิลในวันที่ ${periodLabel}`}
+                  {viewMode === 'weekly'  && `ไม่พบบิลใน${periodLabel}`}
+                  {viewMode === 'monthly' && `ไม่พบบิลในเดือน ${periodLabel}`}
+                  {viewMode === 'all'     && 'ยังไม่มีรายการสั่งซื้อในระบบ'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50 border-b border-slate-100 hover:bg-slate-50">
+                      <TableHead className="pl-5 font-bold text-slate-600 h-10 w-[160px]">วันที่ / เวลา</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-10 w-[100px]">เลขที่บิล</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-10 w-[130px]">ร้านค้า</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-10">วัตถุดิบที่สั่ง</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-10 text-right w-[100px]">ยอดรวม</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-10 text-center w-[110px]">สถานะ</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-10 text-center pr-4 w-[140px]">จัดการ</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredOrders.map(order => {
+                      const st     = STATUS_MAP[order.status] ?? STATUS_MAP.PENDING;
+                      const items  = order.items ?? [];
+                      const preview = items.slice(0, 2)
+                        .map(i => `${i.rawMaterial?.name} ${i.quantity} ${i.rawMaterial?.unit}`)
+                        .join(', ');
+                      const more = items.length > 2 ? ` +${items.length - 2}` : '';
+
+                      return (
+                        <TableRow key={order.id} className="border-b border-slate-100/60 hover:bg-slate-50/40">
+                          <TableCell className="pl-5 py-3 text-sm text-slate-600 whitespace-nowrap">
+                            {fmtDate(order.createdAt)}
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <span className="font-mono font-bold text-slate-800 text-sm">
+                              PO-{String(order.id).padStart(5, '0')}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3 font-semibold text-slate-800">
+                            {order.supplier?.name}
+                          </TableCell>
+                          <TableCell className="py-3 max-w-[240px]">
+                            <p className="text-sm text-slate-600 truncate">{preview}{more}</p>
+                          </TableCell>
+                          <TableCell className="py-3 text-right font-bold">
+                            {order.totalAmount > 0
+                              ? <span className="text-primary">฿{Number(order.totalAmount).toLocaleString()}</span>
+                              : <span className="text-slate-400 text-xs font-normal">ไม่ระบุ</span>}
+                          </TableCell>
+                          <TableCell className="py-3 text-center">
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${st.cls}`}>
+                              {st.label}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3 pr-4">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {/* Print single */}
+                              <Button variant="outline" size="sm"
+                                      onClick={() => handlePrintSingle(order)}
+                                      className="h-7 px-2 rounded-lg text-xs font-bold gap-1 border-slate-200">
+                                <Printer className="w-3 h-3" />
+                                พิมพ์
+                              </Button>
+                              {/* Save PDF single */}
+                              <Button size="sm"
+                                      onClick={() => handleSavePdfSingle(order)}
+                                      className="h-7 px-2 rounded-lg text-xs font-bold gap-1
+                                                 bg-emerald-600 hover:bg-emerald-700 text-white">
+                                <Download className="w-3 h-3" />
+                                PDF
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      <Card className="border-none shadow-sm">
-        <CardHeader>
-          <CardTitle>รายการสั่งซื้อล่าสุดของวันนี้</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {safeOrders.length === 0 ? (
-            <div className="text-center py-10 text-slate-500">
-              ยังไม่มีรายการสั่งซื้อในวันนี้
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {safeOrders.map((order: any) => (
-                <div key={order.id} className="p-4 border rounded-2xl flex flex-col md:flex-row justify-between md:items-center gap-4">
-                  <div>
-                    <h4 className="font-bold">รหัสบิล: #{order.id} - {order.supplier.name}</h4>
-                    <p className="text-sm text-slate-500">{formatDate(order.createdAt)}</p>
-                    <div className="mt-2 text-sm text-slate-600">
-                      {Array.isArray(order.items) && order.items.map((item: any, i: number) => (
-                        <span key={item.id}>
-                          {item.rawMaterial?.name} ({item.quantity} {item.rawMaterial?.unit}){i < order.items.length - 1 ? ', ' : ''}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-right flex flex-col items-end gap-2">
-                    <span className="font-black text-lg text-primary">฿{order.totalAmount.toLocaleString()}</span>
-                    <Button variant="outline" size="sm" onClick={() => handlePrint(order)} className="rounded-xl font-bold h-8">
-                      <Printer className="w-4 h-4 mr-2" />
-                      พิมพ์ใบสั่งซื้อ
-                    </Button>
+      {/* ═══════════════════════ PRINT: SINGLE ORDER ════════════════════════ */}
+      {/*
+          Visibility is controlled by CSS + body class.
+          display:none is overridden by print media query.
+      */}
+      <div id="cpos-print-single" style={{ display: 'none' }}>
+        {printOrder && (
+          <div style={{ padding: 0, background: '#fff' }}>
+            {/* Re-use layout from PDF template (same look) */}
+            <div style={{ width: '100%', backgroundColor: '#fff', padding: '1.5cm 2cm', fontFamily: "'Segoe UI', Arial, sans-serif", color: '#1e293b' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 14, marginBottom: 18 }}>
+                <div>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CHABA POS SYSTEM</div>
+                  <div style={{ fontSize: 20, fontWeight: 900 }}>ใบสั่งซื้อวัตถุดิบ</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                    สาขา: <strong>{branchName}</strong>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 8, color: '#94a3b8', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>เลขที่เอกสาร</div>
+                  <div style={{ fontSize: 14, fontWeight: 900, fontFamily: 'monospace', marginTop: 2 }}>PO-{String(printOrder.id).padStart(5, '0')}</div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{fmtDate(printOrder.createdAt)}</div>
+                  <div style={{ marginTop: 6, display: 'inline-block', fontSize: 9, fontWeight: 700, color: (STATUS_MAP[printOrder.status] ?? STATUS_MAP.PENDING).pdfColor, background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>
+                    {(STATUS_MAP[printOrder.status] ?? STATUS_MAP.PENDING).label}
+                  </div>
+                </div>
+              </div>
 
-      {/* Printable PO Section */}
-      <style>
-        {`
-          @media print {
-            body * {
-              visibility: hidden;
-            }
-            #printable-po, #printable-po * {
-              visibility: visible;
-            }
-            #printable-po {
-              position: absolute;
-              left: 0;
-              top: 0;
-              width: 100%;
-            }
-            @page {
-              size: A4;
-              margin: 1.5cm;
-            }
-          }
-        `}
-      </style>
+              {/* Supplier box */}
+              {(() => {
+                const sup = printOrder.supplier;
+                return (
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', marginBottom: 18 }}>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>ข้อมูลคู่ค้า</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '4px 8px', fontSize: 11 }}>
+                      <span style={{ fontWeight: 700 }}>ชื่อร้านค้า:</span>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>{sup?.name ?? '-'}</span>
+                      {sup?.phone       && <><span style={{ fontWeight: 700 }}>โทรศัพท์:</span><span>{sup.phone}</span></>}
+                      {sup?.lineId      && <><span style={{ fontWeight: 700 }}>Line ID:</span><span>{sup.lineId}</span></>}
+                      {sup?.bankAccount && <><span style={{ fontWeight: 700 }}>บัญชีธนาคาร:</span><span>{sup.bankAccount}{sup.bankName ? ` (${sup.bankName})` : ''}</span></>}
+                    </div>
+                  </div>
+                );
+              })()}
 
-      {activePrintOrder && (
-        <div id="printable-po" className="hidden print:block bg-white text-black p-8 max-w-[21cm] mx-auto text-sm">
-          {/* Header */}
-          <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
-            <div>
-              <h1 className="text-2xl font-black">ChabaPOS</h1>
-              <p className="text-slate-600 mt-1">สาขา ID: {branchId}</p>
-            </div>
-            <div className="text-right">
-              <h2 className="text-xl font-bold uppercase tracking-wider">ใบสั่งซื้อวัตถุดิบ</h2>
-              <p className="text-slate-600 font-bold mt-1">Purchase Order</p>
-              <div className="mt-4 grid grid-cols-2 gap-x-4 text-left">
-                <span className="font-bold">เลขที่เอกสาร:</span>
-                <span>PO-{String(activePrintOrder.id).padStart(5, '0')}</span>
-                <span className="font-bold">วันที่สั่งซื้อ:</span>
-                <span>{formatDate(activePrintOrder.createdAt)}</span>
+              {/* Items table */}
+              {(() => {
+                const isCompleted  = printOrder.status === 'COMPLETED';
+                const printItems   = printOrder.items ?? [];
+                const grandTotal   = printItems.reduce((s, i) => s + i.quantity * (i.price ?? 0), 0);
+                const td: React.CSSProperties = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid #e2e8f0' };
+                const headers = isCompleted
+                  ? ['#', 'รายการวัตถุดิบ', 'หมวดหมู่', 'จำนวน', 'หน่วย', 'ราคา/หน่วย (฿)', 'ราคารวม (฿)']
+                  : ['#', 'รายการวัตถุดิบ', 'หมวดหมู่', 'จำนวน', 'หน่วย'];
+                return (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24, fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #0f172a' }}>
+                        {headers.map((h, i) => (
+                          <th key={i} style={{ padding: '7px 10px', fontSize: 8, fontWeight: 700, color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase', textAlign: i < 3 ? 'left' : 'right' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {printItems.map((item, i) => {
+                        const lineTotal = item.quantity * (item.price ?? 0);
+                        return (
+                          <tr key={item.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
+                            <td style={{ ...td, color: '#94a3b8', textAlign: 'center', width: 28 }}>{i + 1}</td>
+                            <td style={{ ...td, fontWeight: 600 }}>{item.rawMaterial?.name}</td>
+                            <td style={{ ...td, color: '#64748b' }}>{item.rawMaterial?.category?.name ?? '-'}</td>
+                            <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{item.quantity}</td>
+                            <td style={{ ...td, textAlign: 'right', color: '#64748b' }}>{item.rawMaterial?.unit}</td>
+                            {isCompleted && (
+                              <>
+                                <td style={{ ...td, textAlign: 'right' }}>
+                                  ฿{(item.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#065f46' }}>
+                                  ฿{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: '2px solid #0f172a', background: '#f8fafc' }}>
+                        {isCompleted ? (
+                          <>
+                            <td colSpan={5} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11 }}>ยอดรวมทั้งสิ้น</td>
+                            <td colSpan={2} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 900, fontSize: 15, color: '#065f46' }}>
+                              ฿{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td colSpan={3} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11 }}>จำนวนรายการทั้งหมด</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 900, fontSize: 14 }}>{printItems.length}</td>
+                            <td style={{ padding: '8px 10px', color: '#64748b' }}>รายการ</td>
+                          </>
+                        )}
+                      </tr>
+                    </tfoot>
+                  </table>
+                );
+              })()}
+
+              {/* Signatures */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginTop: 40 }}>
+                {['ผู้จัดซื้อ', 'ผู้ตรวจสอบ / อนุมัติ'].map(r => (
+                  <div key={r} style={{ textAlign: 'center' }}>
+                    <div style={{ borderBottom: '1px dashed #0f172a', margin: '0 32px 8px', height: 30 }} />
+                    <div style={{ fontWeight: 700, fontSize: 11 }}>{r}</div>
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 4 }}>วันที่ _____/_____/_____</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8' }}>
+                <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+                <span>{dateStr}</span>
               </div>
             </div>
           </div>
+        )}
+      </div>
 
-          {/* Supplier Info */}
-          <div className="mb-6 p-4 border rounded-xl bg-slate-50">
-            <h3 className="font-bold uppercase text-slate-500 mb-2">ข้อมูลคู่ค้า (Supplier)</h3>
-            <div className="grid grid-cols-[100px_1fr] gap-2">
-              <span className="font-bold">ชื่อร้านค้า:</span>
-              <span className="font-bold text-lg">{activePrintOrder.supplier?.name}</span>
-              <span className="font-bold">ติดต่อ:</span>
-              <span>{activePrintOrder.supplier?.contact || '-'}</span>
+      {/* ═══════════════════════ PRINT: ALL ORDERS ══════════════════════════ */}
+      <div id="cpos-print-all" style={{ display: 'none' }}>
+        <div style={{ width: '100%', backgroundColor: '#fff', padding: '1.5cm 2cm', fontFamily: "'Segoe UI', Arial, sans-serif", color: '#1e293b', fontSize: 11 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 14, marginBottom: 18 }}>
+            <div>
+              <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CHABA POS SYSTEM</div>
+              <div style={{ fontSize: 20, fontWeight: 900 }}>รายงานการสั่งซื้อวัตถุดิบ</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                สาขา: <strong>{branchName}</strong> &nbsp;·&nbsp; ช่วงเวลา: <strong style={{ color: '#dc2626' }}>{periodLabel}</strong>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 8, color: '#94a3b8', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>วันที่ออกรายงาน</div>
+              <div style={{ fontSize: 12, fontWeight: 800, marginTop: 2 }}>{dateStr}</div>
             </div>
           </div>
 
-          {/* Items Table */}
-          <table className="w-full mb-8 border-collapse">
+          {/* KPI row */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
+            {[
+              { label: 'จำนวนบิล', value: `${stats.count} บิล` },
+              { label: 'ยอดรวม',  value: stats.totalAmount > 0 ? `฿${stats.totalAmount.toLocaleString()}` : 'ไม่ระบุ' },
+              { label: 'ร้านค้า', value: `${stats.uniqueSuppliers} แห่ง` },
+            ].map(k => (
+              <div key={k.label} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 7, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>{k.label}</div>
+                <div style={{ fontSize: 16, fontWeight: 900, marginTop: 3 }}>{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Table */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
             <thead>
-              <tr className="border-b-2 border-black bg-slate-100">
-                <th className="p-3 text-left w-16">ลำดับ</th>
-                <th className="p-3 text-left">รายการวัตถุดิบ</th>
-                <th className="p-3 text-right">จำนวน</th>
-                <th className="p-3 text-left">หน่วย</th>
-                <th className="p-3 text-right">ราคา/หน่วย</th>
-                <th className="p-3 text-right">ราคารวม</th>
+              <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #0f172a' }}>
+                {['#', 'เลขที่', 'วันที่', 'ร้านค้า', 'รายการวัตถุดิบ', 'ยอดรวม', 'สถานะ'].map((h, i) => (
+                  <th key={i} style={{ padding: '6px 8px', fontSize: 7, fontWeight: 700, color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase', textAlign: i >= 5 ? 'right' : 'left' }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {Array.isArray(activePrintOrder.items) && activePrintOrder.items.map((item: any, index: number) => (
-                <tr key={item.id} className="border-b break-inside-avoid">
-                  <td className="p-3 text-left">{index + 1}</td>
-                  <td className="p-3 text-left font-bold">{item.rawMaterial?.name}</td>
-                  <td className="p-3 text-right">{item.quantity}</td>
-                  <td className="p-3 text-left">{item.rawMaterial?.unit}</td>
-                  <td className="p-3 text-right">฿{Number(item.price).toLocaleString()}</td>
-                  <td className="p-3 text-right font-bold">฿{(Number(item.price) * Number(item.quantity)).toLocaleString()}</td>
-                </tr>
-              ))}
+              {filteredOrders.map((o, idx) => {
+                const st = STATUS_MAP[o.status] ?? STATUS_MAP.PENDING;
+                const summary = o.items?.map(i => `${i.rawMaterial?.name} ${i.quantity}${i.rawMaterial?.unit}`).join(', ') ?? '';
+                return (
+                  <tr key={o.id} style={{ background: idx % 2 ? '#f8fafc' : '#fff', borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '5px 8px', color: '#94a3b8', textAlign: 'center', width: 22 }}>{idx + 1}</td>
+                    <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontWeight: 700 }}>PO-{String(o.id).padStart(5, '0')}</td>
+                    <td style={{ padding: '5px 8px', color: '#475569', whiteSpace: 'nowrap' }}>{fmtDateShort(o.createdAt)}</td>
+                    <td style={{ padding: '5px 8px', fontWeight: 600 }}>{o.supplier?.name}</td>
+                    <td style={{ padding: '5px 8px', color: '#64748b' }}>{summary}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: o.totalAmount > 0 ? '#0f172a' : '#94a3b8' }}>
+                      {o.totalAmount > 0 ? `฿${Number(o.totalAmount).toLocaleString()}` : '-'}
+                    </td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: st.pdfColor }}>{st.label}</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-black">
-                <td colSpan={5} className="p-4 text-right font-bold text-lg">ยอดรวมสุทธิทั้งหมด (Grand Total)</td>
-                <td className="p-4 text-right font-black text-xl">฿{activePrintOrder.totalAmount.toLocaleString()}</td>
+              <tr style={{ borderTop: '2px solid #0f172a', background: '#f8fafc' }}>
+                <td colSpan={5} style={{ padding: '8px', textAlign: 'right', fontWeight: 700 }}>ยอดรวมทั้งสิ้น</td>
+                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, fontSize: 13 }}>
+                  {stats.totalAmount > 0 ? `฿${stats.totalAmount.toLocaleString()}` : '-'}
+                </td>
+                <td />
               </tr>
             </tfoot>
           </table>
 
           {/* Signatures */}
-          <div className="grid grid-cols-2 gap-12 mt-16 break-inside-avoid">
-            <div className="text-center">
-              <div className="border-b border-black border-dashed mx-8 mb-2 h-8"></div>
-              <p className="font-bold">ผู้จัดซื้อ</p>
-              <p className="text-slate-500 mt-1">วันที่ _______/_______/_______</p>
-            </div>
-            <div className="text-center">
-              <div className="border-b border-black border-dashed mx-8 mb-2 h-8"></div>
-              <p className="font-bold">ผู้ตรวจสอบ / อนุมัติ</p>
-              <p className="text-slate-500 mt-1">วันที่ _______/_______/_______</p>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 32, marginTop: 40 }}>
+            {['ผู้จัดทำรายงาน', 'ผู้ตรวจสอบ', 'ผู้อนุมัติ'].map(r => (
+              <div key={r} style={{ textAlign: 'center' }}>
+                <div style={{ borderBottom: '1px dashed #0f172a', margin: '0 24px 8px', height: 28 }} />
+                <div style={{ fontWeight: 700, fontSize: 10 }}>{r}</div>
+                <div style={{ fontSize: 8, color: '#94a3b8', marginTop: 3 }}>วันที่ _____/_____/_____</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 7, color: '#94a3b8' }}>
+            <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+            <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr}</span>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 }

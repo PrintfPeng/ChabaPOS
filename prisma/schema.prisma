@@ -56,6 +56,8 @@ model Branch {
   rawMaterials RawMaterial[]
   purchaseOrders PurchaseOrder[]
   expenses     Expense[]
+  customers    Customer[]
+  promotions   Promotion[]
 
   @@index([brandId])
 }
@@ -181,26 +183,40 @@ enum PaymentType {
 enum OrderSource {
   CUSTOMER
   STAFF
+  QR
+}
+
+enum PromotionType {
+  PERCENT
+  FIXED
+  POINTS_REDEMPTION
 }
 
 model Order {
-  id          Int         @id @default(autoincrement())
-  orderNumber String      @unique
-  status      OrderStatus @default(PENDING)
-  source      OrderSource @default(CUSTOMER)
-  totalAmount Float
-  paymentType PaymentType?
-  branchId    Int
-  branch      Branch      @relation(fields: [branchId], references: [id])
-  tableId     Int?
-  table       Table?      @relation(fields: [tableId], references: [id])
-  notes       String?
-  items       OrderItem[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id             Int         @id @default(autoincrement())
+  orderNumber    String      @unique
+  status         OrderStatus @default(PENDING)
+  source         OrderSource @default(CUSTOMER)
+  totalAmount    Float
+  discountAmount Float       @default(0)
+  paymentType    PaymentType?
+  branchId       Int
+  branch         Branch      @relation(fields: [branchId], references: [id])
+  tableId        Int?
+  table          Table?      @relation(fields: [tableId], references: [id])
+  customerId     Int?
+  customer       Customer?   @relation(fields: [customerId], references: [id])
+  promotionId    Int?
+  promotion      Promotion?  @relation(fields: [promotionId], references: [id])
+  notes          String?
+  items          OrderItem[]
+  redemptions    RedemptionHistory[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   @@index([branchId])
   @@index([tableId])
+  @@index([customerId])
 }
 
 enum OrderItemStatus {
@@ -351,11 +367,69 @@ model PurchaseOrderItem {
   rawMaterialId   Int
   rawMaterial     RawMaterial   @relation(fields: [rawMaterialId], references: [id])
   quantity        Float
-  price           Float         @default(0) // Price per unit
+  price           Float         @default(0)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   @@index([purchaseOrderId])
   @@index([rawMaterialId])
+}
+
+// ============================================
+// MEMBERS & PROMOTIONS SYSTEM
+// ============================================
+
+model Customer {
+  id          Int      @id @default(autoincrement())
+  phone       String
+  name        String
+  points      Int      @default(0)
+  branchId    Int
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  orders      Order[]
+  redemptions RedemptionHistory[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([phone, branchId])
+  @@index([branchId])
+}
+
+model Promotion {
+  id           Int           @id @default(autoincrement())
+  name         String
+  code         String?
+  type         PromotionType
+  value        Float
+  minSpend     Float         @default(0)
+  pointsNeeded Int           @default(0)
+  memberOnly   Boolean       @default(false)
+  isActive     Boolean       @default(true)
+  startDate    DateTime?
+  endDate      DateTime?
+  branchId     Int
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  orders       Order[]
+  redemptions  RedemptionHistory[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([branchId])
+}
+
+model RedemptionHistory {
+  id             Int       @id @default(autoincrement())
+  customerId     Int
+  customer       Customer  @relation(fields: [customerId], references: [id])
+  promotionId    Int
+  promotion      Promotion @relation(fields: [promotionId], references: [id])
+  pointsSpent    Int       @default(0)
+  discountAmount Float
+  orderId        Int?
+  order          Order?    @relation(fields: [orderId], references: [id])
+  createdAt      DateTime  @default(now())
+
+  @@index([customerId])
+  @@index([promotionId])
 }
 

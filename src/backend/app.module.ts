@@ -16,12 +16,14 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { MaterialCategoriesModule } from './material-categories/material-categories.module';
 import { RawMaterialsModule } from './raw-materials/raw-materials.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
+import { CustomersModule } from './customers/customers.module';
+import { PromotionsModule } from './promotions/promotions.module';
 
 @Module({
   imports: [
-    PrismaModule, 
-    AuthModule, 
-    BrandsModule, 
+    PrismaModule,
+    AuthModule,
+    BrandsModule,
     BranchesModule,
     KitchensModule,
     MenusModule,
@@ -33,7 +35,9 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
     SuppliersModule,
     MaterialCategoriesModule,
     RawMaterialsModule,
-    PurchaseOrdersModule
+    PurchaseOrdersModule,
+    CustomersModule,
+    PromotionsModule,
   ],
   providers: [
     {

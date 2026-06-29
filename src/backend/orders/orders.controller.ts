@@ -49,9 +49,16 @@ export class OrdersController {
   @Post('table/:tableId/pay')
   completePayment(
     @Param('tableId', ParseIntPipe) tableId: number,
-    @Body('paymentType') paymentType: 'CASH' | 'TRANSFER'
+    @Body('paymentType') paymentType: 'CASH' | 'TRANSFER',
+    @Body('customerId')  customerId?: number,
+    @Body('promotionId') promotionId?: number,
+    @Body('discountAmount') discountAmount?: number,
   ) {
-    return this.ordersService.completePayment(tableId, paymentType);
+    return this.ordersService.completePayment(tableId, paymentType, {
+      customerId:     customerId     ? Number(customerId)     : undefined,
+      promotionId:    promotionId    ? Number(promotionId)    : undefined,
+      discountAmount: discountAmount ? Number(discountAmount) : undefined,
+    });
   }
 
   @Patch('items/:id/status')

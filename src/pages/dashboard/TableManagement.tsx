@@ -171,11 +171,12 @@ export default function TableManagement() {
       const url = await getQRCode(table.id);
       setQrCodeUrl(url);
       setSelectedTableForQr(table);
-      
-      // Delay briefly to allow React to render the PrintableQRCode in the hidden div
+      setPrintAllData(null);
       setTimeout(() => {
         toast.dismiss(toastId);
+        document.body.classList.add('cpos-print-qr-single');
         window.print();
+        setTimeout(() => document.body.classList.remove('cpos-print-qr-single'), 600);
       }, 300);
     } catch (error) {
       toast.dismiss(toastId);
@@ -190,19 +191,18 @@ export default function TableManagement() {
 
     const toastId = toast.loading('กำลังเตรียมพิมพ์ QR Code ทั้งหมด...');
     try {
-      // Set the first table for the single print component to be null so it doesn't print
       setSelectedTableForQr(null);
-      
+      setQrCodeUrl(null);
       const qrData = await Promise.all(allTables.map(async (table) => {
         const url = await getQRCode(table.id);
         return { table, qrCodeUrl: url };
       }));
       setPrintAllData(qrData);
-      
-      // Delay to allow React to render the printable area
       setTimeout(() => {
         toast.dismiss(toastId);
+        document.body.classList.add('cpos-print-qr-all');
         window.print();
+        setTimeout(() => document.body.classList.remove('cpos-print-qr-all'), 600);
       }, 500);
     } catch (error) {
       toast.dismiss(toastId);
@@ -385,30 +385,52 @@ export default function TableManagement() {
         )}
       </div>
 
-      {/* Hidden printable area always present, just waits for data */}
-      {qrCodeUrl && selectedTableForQr && (
-        <div className="hidden print:block">
-          <PrintableQRCode 
-            qrCodeUrl={qrCodeUrl} 
-            tableName={selectedTableForQr.name} 
-            branchName={branchName} 
-          />
-        </div>
-      )}
+      {/* ── Print CSS ── */}
+      <style>{`
+        @media print {
+          body.cpos-print-qr-single * { visibility: hidden !important; }
+          body.cpos-print-qr-single #cpos-print-qr-single {
+            visibility: visible !important;
+            display: block !important;
+            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
+          }
+          body.cpos-print-qr-single #cpos-print-qr-single * { visibility: visible !important; }
 
-      {printAllData && !selectedTableForQr && (
-        <div className="hidden print:block">
-          {printAllData.map((data, idx) => (
-            <div key={idx} className="break-after-page">
-              <PrintableQRCode 
-                qrCodeUrl={data.qrCodeUrl} 
-                tableName={data.table.name} 
-                branchName={branchName} 
-              />
-            </div>
-          ))}
-        </div>
-      )}
+          body.cpos-print-qr-all * { visibility: hidden !important; }
+          body.cpos-print-qr-all #cpos-print-qr-all {
+            visibility: visible !important;
+            display: block !important;
+            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
+          }
+          body.cpos-print-qr-all #cpos-print-qr-all * { visibility: visible !important; }
+
+          @page { size: auto; margin: 1cm; }
+        }
+      `}</style>
+
+      {/* Single QR print container */}
+      <div id="cpos-print-qr-single" style={{ display: 'none' }}>
+        {qrCodeUrl && selectedTableForQr && (
+          <PrintableQRCode
+            qrCodeUrl={qrCodeUrl}
+            tableName={selectedTableForQr.name}
+            branchName={branchName}
+          />
+        )}
+      </div>
+
+      {/* All QR print container */}
+      <div id="cpos-print-qr-all" style={{ display: 'none' }}>
+        {printAllData && printAllData.map((data, idx) => (
+          <div key={idx} style={{ pageBreakAfter: idx < printAllData.length - 1 ? 'always' : 'auto' }}>
+            <PrintableQRCode
+              qrCodeUrl={data.qrCodeUrl}
+              tableName={data.table.name}
+              branchName={branchName}
+            />
+          </div>
+        ))}
+      </div>
 
       <PinVerificationDialog
         isOpen={isPinDialogOpen}

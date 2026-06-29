@@ -1,191 +1,313 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../../lib/api';
 import { Button } from '../../../components/ui/button';
-import { Input } from '../../../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from '../../../components/ui/select';
 import { ScrollArea } from '../../../components/ui/scroll-area';
-import { Plus, Minus, Trash2, ShoppingCart, Loader2, ArrowRight } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Loader2, ArrowRight, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Supplier      { id: number; name: string }
+interface Category      { id: number; name: string }
+interface RawMaterial   { id: number; name: string; unit: string; categoryId: number; category?: { id: number; name: string } }
+interface CartItem      { rawMaterialId: number; name: string; unit: string; quantity: number }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function CreatePurchaseOrder() {
-  const { branchId, brandId } = useParams();
+  const { branchId, brandId } = useParams<{ branchId: string; brandId: string }>();
   const navigate = useNavigate();
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [materials, setMaterials] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const [selectedSupplier, setSelectedSupplier] = useState('');
-  const [cart, setCart] = useState<any[]>([]);
+
+  const [suppliers,    setSuppliers]    = useState<Supplier[]>([]);
+  const [materials,    setMaterials]    = useState<RawMaterial[]>([]);
+  const [categories,   setCategories]   = useState<Category[]>([]);
+  const [isLoading,    setIsLoading]    = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [branchId]);
+  const [selectedSupplier,  setSelectedSupplier]  = useState('');
+  const [selectedCategory,  setSelectedCategory]  = useState<number | null>(null);
+  const [cart,               setCart]              = useState<CartItem[]>([]);
+
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  useEffect(() => { if (branchId) fetchData(); }, [branchId]);
 
   const fetchData = async () => {
+    setIsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const [supRes, matRes] = await Promise.all([
-        axios.get(`http://localhost:3000/api/suppliers?branchId=${branchId}`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`http://localhost:3000/api/raw-materials?branchId=${branchId}`, { headers: { Authorization: `Bearer ${token}` } })
+      const [supRes, matRes, catRes] = await Promise.all([
+        api.get<Supplier[]>(`/suppliers?branchId=${branchId}`),
+        api.get<RawMaterial[]>(`/raw-materials?branchId=${branchId}`),
+        api.get<Category[]>(`/material-categories?branchId=${branchId}`),
       ]);
-      setSuppliers(supRes.data);
-      setMaterials(matRes.data);
-    } catch (error) {
+      setSuppliers(Array.isArray(supRes.data) ? supRes.data : []);
+      setMaterials(Array.isArray(matRes.data) ? matRes.data : []);
+      setCategories(Array.isArray(catRes.data) ? catRes.data : []);
+    } catch {
       toast.error('โหลดข้อมูลล้มเหลว');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const addToCart = (mat: any) => {
-    const existing = cart.find(i => i.rawMaterialId === mat.id);
-    if (existing) {
-      setCart(cart.map(i => i.rawMaterialId === mat.id ? { ...i, quantity: i.quantity + 1 } : i));
-    } else {
-      setCart([...cart, { rawMaterialId: mat.id, name: mat.name, unit: mat.unit, quantity: 1, price: 0 }]);
-    }
+  // ── Filtered materials (client-side by category tab) ──────────────────────
+  const filteredMaterials = useMemo(() =>
+    selectedCategory === null
+      ? materials
+      : materials.filter(m => m.categoryId === selectedCategory),
+    [materials, selectedCategory],
+  );
+
+  // ── Cart helpers ───────────────────────────────────────────────────────────
+  const addToCart = (mat: RawMaterial) => {
+    setCart(prev => {
+      const hit = prev.find(i => i.rawMaterialId === mat.id);
+      if (hit) return prev.map(i => i.rawMaterialId === mat.id ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { rawMaterialId: mat.id, name: mat.name, unit: mat.unit, quantity: 1 }];
+    });
   };
 
-  const updateQuantity = (id: number, delta: number) => {
-    setCart(cart.map(i => {
-      if (i.rawMaterialId === id) {
-        const newQty = Math.max(1, i.quantity + delta);
-        return { ...i, quantity: newQty };
-      }
-      return i;
-    }));
-  };
+  const updateQuantity = (id: number, delta: number) =>
+    setCart(prev =>
+      prev.map(i => i.rawMaterialId === id
+        ? { ...i, quantity: Math.max(1, i.quantity + delta) }
+        : i
+      )
+    );
 
-  const updatePrice = (id: number, priceStr: string) => {
-    const price = parseFloat(priceStr) || 0;
-    setCart(cart.map(i => i.rawMaterialId === id ? { ...i, price } : i));
-  };
+  const removeFromCart = (id: number) =>
+    setCart(prev => prev.filter(i => i.rawMaterialId !== id));
 
-  const removeFromCart = (id: number) => {
-    setCart(cart.filter(i => i.rawMaterialId !== id));
-  };
+  const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
 
-  const totalAmount = cart.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-
+  // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!selectedSupplier) return toast.error('กรุณาเลือกร้านค้า (Supplier)');
-    if (cart.length === 0) return toast.error('กรุณาเลือกวัตถุดิบอย่างน้อย 1 รายการ');
-    
+    if (!cart.length)       return toast.error('กรุณาเลือกวัตถุดิบอย่างน้อย 1 รายการ');
+
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post('http://localhost:3000/api/purchase-orders', {
-        branchId: Number(branchId),
+      await api.post('/purchase-orders', {
+        branchId:   Number(branchId),
         supplierId: Number(selectedSupplier),
-        items: cart.map(i => ({ rawMaterialId: i.rawMaterialId, quantity: i.quantity, price: i.price }))
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
+        items: cart.map(i => ({ rawMaterialId: i.rawMaterialId, quantity: i.quantity, price: 0 })),
       });
-      toast.success('สั่งซื้อสำเร็จ');
+      toast.success('สั่งซื้อสำเร็จ!');
       navigate(`/brands/${brandId}/branches/${branchId}/inventory`);
-    } catch (error) {
+    } catch {
       toast.error('เกิดข้อผิดพลาดในการสั่งซื้อ');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  // ── Loading state ──────────────────────────────────────────────────────────
+  if (isLoading) return (
+    <div className="flex justify-center p-16">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row h-full gap-6">
-      {/* Left side: Materials Selection */}
-      <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-bold flex items-center gap-2">
+    <div className="flex flex-col lg:flex-row h-full gap-5 min-h-0">
+
+      {/* ══════════════════════ LEFT: Materials panel ══════════════════════ */}
+      <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-0">
+
+        {/* Panel header */}
+        <div className="p-4 border-b border-slate-100 shrink-0">
+          <h2 className="text-base font-bold flex items-center gap-2 text-slate-900">
             <ShoppingCart className="w-5 h-5 text-primary" />
             สั่งวัตถุดิบเข้าร้าน
           </h2>
         </div>
-        <ScrollArea className="flex-1 p-4 bg-slate-50">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-            {Array.isArray(materials) && materials.map(m => (
-              <div 
-                key={m.id} 
-                onClick={() => addToCart(m)}
-                className="bg-white p-4 rounded-2xl border shadow-sm cursor-pointer hover:border-primary hover:shadow-md transition-all active:scale-95 flex flex-col items-center justify-center text-center aspect-square"
-              >
-                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center mb-3">
-                  <Plus className="w-5 h-5 text-primary" />
-                </div>
-                <h3 className="font-bold text-sm text-slate-800 line-clamp-2">{m.name}</h3>
-                <span className="text-xs text-slate-500 mt-1">{m.category?.name}</span>
-              </div>
-            ))}
+
+        {/* ── Category filter tabs ────────────────────────────────────────── */}
+        <div className="px-4 pt-3 pb-2 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                selectedCategory === null
+                  ? 'bg-primary text-white shadow-sm shadow-primary/20'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800'
+              }`}
+            >
+              <Tag className="w-3 h-3" />
+              ทั้งหมด
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                selectedCategory === null ? 'bg-white/25' : 'bg-slate-200'
+              }`}>
+                {materials.length}
+              </span>
+            </button>
+
+            {categories.map(cat => {
+              const count = materials.filter(m => m.categoryId === cat.id).length;
+              const active = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(active ? null : cat.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                    active
+                      ? 'bg-primary text-white shadow-sm shadow-primary/20'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800'
+                  }`}
+                >
+                  {cat.name}
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                    active ? 'bg-white/25' : 'bg-slate-200'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+        </div>
+
+        {/* ── Materials grid ──────────────────────────────────────────────── */}
+        <ScrollArea className="flex-1 p-4 bg-slate-50">
+          {!filteredMaterials.length ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+              <Tag className="w-10 h-10 mb-3 opacity-20" />
+              <p className="font-semibold text-sm">ไม่มีวัตถุดิบในหมวดหมู่นี้</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+              {filteredMaterials.map(m => {
+                const inCart = cart.find(c => c.rawMaterialId === m.id);
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => addToCart(m)}
+                    className={`relative bg-white p-4 rounded-2xl border-2 shadow-sm cursor-pointer
+                                hover:shadow-md transition-all active:scale-95 flex flex-col
+                                items-center justify-center text-center aspect-square select-none ${
+                      inCart
+                        ? 'border-primary ring-2 ring-primary/10'
+                        : 'border-transparent hover:border-primary/40'
+                    }`}
+                  >
+                    {/* In-cart badge */}
+                    {inCart && (
+                      <span className="absolute top-2 right-2 bg-primary text-white text-[10px] font-black
+                                       w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
+                        {inCart.quantity}
+                      </span>
+                    )}
+
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2.5 transition-colors ${
+                      inCart ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
+                    }`}>
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <h3 className="font-bold text-sm text-slate-800 line-clamp-2 leading-snug">{m.name}</h3>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <span className="text-xs text-slate-400">{m.unit}</span>
+                      {m.category && (
+                        <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-semibold">
+                          {m.category.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </ScrollArea>
       </div>
 
-      {/* Right side: Cart and Supplier Selection */}
-      <div className="w-full lg:w-[400px] xl:w-[450px] shrink-0 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+      {/* ══════════════════════ RIGHT: Cart panel ═════════════════════════ */}
+      <div className="w-full lg:w-[380px] xl:w-[420px] shrink-0 bg-white rounded-2xl shadow-sm
+                       border border-slate-200 flex flex-col overflow-hidden min-h-0">
+
+        {/* Cart header */}
         <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
           <h2 className="font-bold">รายการที่เลือก</h2>
-          <span className="bg-white/20 px-2 py-1 rounded-md text-xs">{cart.length} รายการ</span>
+          <span className="bg-white/20 px-2.5 py-1 rounded-lg text-xs font-bold">
+            {cart.length} รายการ
+          </span>
         </div>
-        
-        <div className="p-4 border-b space-y-2 shrink-0 bg-slate-50">
+
+        {/* Supplier selector */}
+        <div className="p-4 border-b border-slate-100 bg-slate-50 shrink-0 space-y-2">
           <label className="text-xs font-bold uppercase tracking-widest text-slate-500">ร้านค้า (Supplier)</label>
-          <Select 
-            value={selectedSupplier ? String(selectedSupplier) : undefined} 
+          <Select
+            value={selectedSupplier || undefined}
             onValueChange={setSelectedSupplier}
-            items={Array.isArray(suppliers) ? suppliers.map(s => ({ value: String(s.id), label: s.name })) : []}
           >
-            <SelectTrigger className="h-12 rounded-xl bg-white">
-              <SelectValue placeholder="เลือกร้านค้า..." />
+            <SelectTrigger className="h-11 rounded-xl bg-white border-slate-200">
+              <SelectValue placeholder="เลือกร้านค้า...">
+                {selectedSupplier
+                  ? (suppliers.find(s => String(s.id) === selectedSupplier)?.name || selectedSupplier)
+                  : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {Array.isArray(suppliers) && suppliers.map(s => (
+              {suppliers.map(s => (
                 <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
+        {/* Cart items */}
         <ScrollArea className="flex-1 p-4">
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 py-20">
+          {!cart.length ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <ShoppingCart className="w-12 h-12 mb-4 opacity-20" />
-              <p>ยังไม่มีรายการวัตถุดิบ</p>
+              <p className="font-semibold">ยังไม่มีรายการวัตถุดิบ</p>
+              <p className="text-xs mt-1">คลิกที่วัตถุดิบด้านซ้ายเพื่อเพิ่ม</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {cart.map((item) => (
-                <div key={item.rawMaterialId} className="p-3 border border-slate-100 rounded-xl bg-white shadow-sm space-y-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <h4 className="font-bold text-sm leading-tight">{item.name}</h4>
-                    <button onClick={() => removeFromCart(item.rawMaterialId)} className="text-slate-300 hover:text-red-500 transition-colors shrink-0">
+            <div className="space-y-3">
+              {cart.map(item => (
+                <div
+                  key={item.rawMaterialId}
+                  className="p-3 border border-slate-100 rounded-xl bg-white shadow-sm"
+                >
+                  {/* Item name + remove */}
+                  <div className="flex justify-between items-start gap-2 mb-3">
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-800 leading-snug">{item.name}</h4>
+                      <span className="text-xs text-slate-400 font-medium">{item.unit}</span>
+                    </div>
+                    <button
+                      onClick={() => removeFromCart(item.rawMaterialId)}
+                      className="text-slate-300 hover:text-red-500 transition-colors shrink-0 mt-0.5"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border">
-                      <button onClick={() => updateQuantity(item.rawMaterialId, -1)} className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-slate-600 hover:text-primary"><Minus className="w-4 h-4" /></button>
-                      <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.rawMaterialId, 1)} className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-slate-600 hover:text-primary"><Plus className="w-4 h-4" /></button>
+
+                  {/* Quantity stepper */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 font-bold">จำนวน</span>
+                    <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-100">
+                      <button
+                        onClick={() => updateQuantity(item.rawMaterialId, -1)}
+                        className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm
+                                   text-slate-600 hover:text-primary transition-colors"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="w-10 text-center font-black text-sm text-slate-800">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => updateQuantity(item.rawMaterialId, 1)}
+                        className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm
+                                   text-slate-600 hover:text-primary transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-400">ราคา/หน่วย</span>
-                      <Input 
-                        type="number" 
-                        value={item.price || ''} 
-                        onChange={(e) => updatePrice(item.rawMaterialId, e.target.value)}
-                        className="w-20 h-9 rounded-lg text-right font-bold focus-visible:ring-1"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-dashed">
-                    <span className="text-xs text-slate-500">รวม</span>
-                    <span className="font-black text-primary">฿{(item.quantity * item.price).toLocaleString()}</span>
                   </div>
                 </div>
               ))}
@@ -193,19 +315,26 @@ export default function CreatePurchaseOrder() {
           )}
         </ScrollArea>
 
-        <div className="p-4 bg-white border-t shrink-0">
-          <div className="flex justify-between items-end mb-4 px-1">
-            <span className="text-sm font-bold text-slate-500">ยอดรวมทั้งสิ้น</span>
-            <span className="text-3xl font-black text-slate-900">฿{totalAmount.toLocaleString()}</span>
+        {/* Footer / submit */}
+        <div className="p-4 bg-white border-t border-slate-100 shrink-0 space-y-3">
+          {/* Summary */}
+          <div className="flex justify-between items-center text-sm px-1">
+            <span className="text-slate-500 font-semibold">รวม</span>
+            <div className="text-right">
+              <p className="font-black text-2xl text-slate-900 leading-none">{totalItems}</p>
+              <p className="text-xs text-slate-400">หน่วยทั้งหมด</p>
+            </div>
           </div>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={isSubmitting || cart.length === 0} 
-            className="w-full h-14 rounded-xl text-lg font-bold bg-primary hover:bg-primary/90"
+
+          <Button
+            onClick={handleSubmit}
+            disabled={isSubmitting || !cart.length}
+            className="w-full h-13 rounded-xl text-base font-bold bg-primary hover:bg-primary/90 gap-2"
           >
-            {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-              <>ยืนยันการสั่งซื้อ <ArrowRight className="w-5 h-5 ml-2" /></>
-            )}
+            {isSubmitting
+              ? <Loader2 className="w-5 h-5 animate-spin" />
+              : <>ยืนยันการสั่งซื้อ <ArrowRight className="w-5 h-5" /></>
+            }
           </Button>
         </div>
       </div>

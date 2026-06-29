@@ -34,7 +34,7 @@ export class CreateOrderDto {
 
   @IsString()
   @IsOptional()
-  source?: 'CUSTOMER' | 'STAFF';
+  source?: 'CUSTOMER' | 'STAFF' | 'QR';
 
   @IsArray()
   @ValidateNested({ each: true })

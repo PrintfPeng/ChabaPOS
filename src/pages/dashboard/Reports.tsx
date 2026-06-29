@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useBranch } from '../../hooks/useBranches';
+import api from '../../lib/api';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Button } from '../../components/ui/button';
@@ -18,7 +22,9 @@ import {
   ArrowUpRight,
   ShoppingBag,
   Percent,
-  Calendar
+  Calendar,
+  Loader2,
+  Printer
 } from 'lucide-react';
 
 type PeriodType = 'today' | 'week' | 'month' | '6months' | 'year';
@@ -46,7 +52,6 @@ interface PeriodData {
     period: string;
     orders: number;
     sales: number;
-    discount: number;
     net: number;
   }[];
 }
@@ -65,167 +70,176 @@ const getThaiDateString = () => {
   return `${dayName}ที่ ${date} ${monthName} ${year}`;
 };
 
-const PERIOD_DATA: Record<PeriodType, PeriodData> = {
-  today: {
-    title: 'วันนี้',
-    summary: {
-      totalSales: 48100,
-      salesChange: '+12.5%',
-      totalOrders: 184,
-      ordersChange: '+8.3%',
-      aov: 261,
-      aovChange: '+3.8%',
-      topMenu: 'ชานมไต้หวันพ่นไฟ',
-      topMenuQty: 45,
-    },
-    chartData: [
-      { label: '08:00', value: 1200, orders: 5 },
-      { label: '10:00', value: 3400, orders: 12 },
-      { label: '12:00', value: 8900, orders: 34 },
-      { label: '14:00', value: 4500, orders: 18 },
-      { label: '16:00', value: 5600, orders: 22 },
-      { label: '18:00', value: 12000, orders: 45 },
-      { label: '20:00', value: 9500, orders: 38 },
-      { label: '22:00', value: 3000, orders: 10 },
-    ],
-    tableData: [
-      { period: '22:00 - 23:59', orders: 10, sales: 3000, discount: 150, net: 2850 },
-      { period: '20:00 - 21:59', orders: 38, sales: 9500, discount: 475, net: 9025 },
-      { period: '18:00 - 19:59', orders: 45, sales: 12000, discount: 600, net: 11400 },
-      { period: '16:00 - 17:59', orders: 22, sales: 5600, discount: 280, net: 5320 },
-      { period: '14:00 - 15:59', orders: 18, sales: 4500, discount: 225, net: 4275 },
-      { period: '12:00 - 13:59', orders: 34, sales: 8900, discount: 445, net: 8455 },
-      { period: '10:00 - 11:59', orders: 12, sales: 3400, discount: 170, net: 3230 },
-      { period: '08:00 - 09:59', orders: 5, sales: 1200, discount: 60, net: 1140 },
-    ],
-  },
-  week: {
-    title: 'สัปดาห์นี้',
-    summary: {
-      totalSales: 319200,
-      salesChange: '+14.2%',
-      totalOrders: 1241,
-      ordersChange: '+11.5%',
-      aov: 257,
-      aovChange: '+2.4%',
-      topMenu: 'ชาไทยพรีเมียม',
-      topMenuQty: 290,
-    },
-    chartData: [
-      { label: 'จันทร์', value: 25400, orders: 98 },
-      { label: 'อังคาร', value: 28900, orders: 110 },
-      { label: 'พุธ', value: 31200, orders: 124 },
-      { label: 'พฤหัสบดี', value: 48100, orders: 184 },
-      { label: 'ศุกร์', value: 54200, orders: 210 },
-      { label: 'เสาร์', value: 68900, orders: 270 },
-      { label: 'อาทิตย์', value: 62500, orders: 245 },
-    ],
-    tableData: [
-      { period: 'วันอาทิตย์', orders: 245, sales: 62500, discount: 3125, net: 59375 },
-      { period: 'วันเสาร์', orders: 270, sales: 68900, discount: 3445, net: 65455 },
-      { period: 'วันศุกร์', orders: 210, sales: 54200, discount: 2710, net: 51490 },
-      { period: 'วันพฤหัสบดี', orders: 184, sales: 48100, discount: 2405, net: 45695 },
-      { period: 'วันพุธ', orders: 124, sales: 31200, discount: 1560, net: 29640 },
-      { period: 'วันอังคาร', orders: 110, sales: 28900, discount: 1445, net: 27455 },
-      { period: 'วันจันทร์', orders: 98, sales: 25400, discount: 1270, net: 24130 },
-    ],
-  },
-  month: {
-    title: 'เดือนนี้',
-    summary: {
-      totalSales: 830000,
-      salesChange: '+8.7%',
-      totalOrders: 3190,
-      ordersChange: '+5.2%',
-      aov: 260,
-      aovChange: '+3.3%',
-      topMenu: 'ครัวซองต์เนยฝรั่งเศส',
-      topMenuQty: 740,
-    },
-    chartData: [
-      { label: 'สัปดาห์ที่ 1', value: 180000, orders: 680 },
-      { label: 'สัปดาห์ที่ 2', value: 195000, orders: 750 },
-      { label: 'สัปดาห์ที่ 3', value: 210000, orders: 810 },
-      { label: 'สัปดาห์ที่ 4', value: 245000, orders: 950 },
-    ],
-    tableData: [
-      { period: 'สัปดาห์ที่ 4', orders: 950, sales: 245000, discount: 12250, net: 232750 },
-      { period: 'สัปดาห์ที่ 3', orders: 810, sales: 210000, discount: 10500, net: 199500 },
-      { period: 'สัปดาห์ที่ 2', orders: 750, sales: 195000, discount: 9750, net: 185250 },
-      { period: 'สัปดาห์ที่ 1', orders: 680, sales: 180000, discount: 9000, net: 171000 },
-    ],
-  },
-  '6months': {
-    title: '6 เดือนที่ผ่านมา',
-    summary: {
-      totalSales: 4570000,
-      salesChange: '+18.1%',
-      totalOrders: 17590,
-      ordersChange: '+15.4%',
-      aov: 260,
-      aovChange: '+2.3%',
-      topMenu: 'สปาเก็ตตี้คาโบนาร่า',
-      topMenuQty: 3420,
-    },
-    chartData: [
-      { label: 'มกราคม', value: 620000, orders: 2400 },
-      { label: 'กุมภาพันธ์', value: 680000, orders: 2650 },
-      { label: 'มีนาคม', value: 740000, orders: 2800 },
-      { label: 'เมษายน', value: 810000, orders: 3100 },
-      { label: 'พฤษภาคม', value: 890000, orders: 3450 },
-      { label: 'มิถุนายน', value: 830000, orders: 3190 },
-    ],
-    tableData: [
-      { period: 'มิถุนายน 2026', orders: 3190, sales: 830000, discount: 41500, net: 788500 },
-      { period: 'พฤษภาคม 2026', orders: 3450, sales: 890000, discount: 44500, net: 845500 },
-      { period: 'เมษายน 2026', orders: 3100, sales: 810000, discount: 40500, net: 769500 },
-      { period: 'มีนาคม 2026', orders: 2800, sales: 740000, discount: 37000, net: 703000 },
-      { period: 'กุมภาพันธ์ 2026', orders: 2650, sales: 680000, discount: 34000, net: 646000 },
-      { period: 'มกราคม 2026', orders: 2400, sales: 620000, discount: 31000, net: 589000 },
-    ],
-  },
-  year: {
-    title: '1 ปีที่ผ่านมา',
-    summary: {
-      totalSales: 8190000,
-      salesChange: '+22.4%',
-      totalOrders: 31460,
-      ordersChange: '+19.8%',
-      aov: 260,
-      aovChange: '+2.1%',
-      topMenu: 'สปาเก็ตตี้คาโบนาร่า',
-      topMenuQty: 6250,
-    },
-    chartData: [
-      { label: 'ก.ค. 2025', value: 550000, orders: 2100 },
-      { label: 'ส.ค. 2025', value: 580000, orders: 2200 },
-      { label: 'ก.ย. 2025', value: 600000, orders: 2300 },
-      { label: 'ต.ค. 2025', value: 610000, orders: 2350 },
-      { label: 'พ.ย. 2025', value: 630000, orders: 2420 },
-      { label: 'ธ.ค. 2025', value: 650000, orders: 2500 },
-      { label: 'ม.ค. 2026', value: 620000, orders: 2400 },
-      { label: 'ก.พ. 2026', value: 680000, orders: 2650 },
-      { label: 'มี.ค. 2026', value: 740000, orders: 2800 },
-      { label: 'เม.ย. 2026', value: 810000, orders: 3100 },
-      { label: 'พ.ค. 2026', value: 890000, orders: 3450 },
-      { label: 'มิ.ย. 2026', value: 830000, orders: 3190 },
-    ],
-    tableData: [
-      { period: 'มิถุนายน 2026', orders: 3190, sales: 830000, discount: 41500, net: 788500 },
-      { period: 'พฤษภาคม 2026', orders: 3450, sales: 890000, discount: 44500, net: 845500 },
-      { period: 'เมษายน 2026', orders: 3100, sales: 810000, discount: 40500, net: 769500 },
-      { period: 'มีนาคม 2026', orders: 2800, sales: 740000, discount: 37000, net: 703000 },
-      { period: 'กุมภาพันธ์ 2026', orders: 2650, sales: 680000, discount: 34000, net: 646000 },
-      { period: 'มกราคม 2026', orders: 2400, sales: 620000, discount: 31000, net: 589000 },
-      { period: 'ธันวาคม 2025', orders: 2500, sales: 650000, discount: 32500, net: 617500 },
-      { period: 'พฤศจิกายน 2025', orders: 2420, sales: 630000, discount: 31500, net: 598500 },
-      { period: 'ตุลาคม 2025', orders: 2350, sales: 610000, discount: 30500, net: 579500 },
-      { period: 'กันยายน 2025', orders: 2300, sales: 600000, discount: 30000, net: 570000 },
-      { period: 'สิงหาคม 2025', orders: 2200, sales: 580000, discount: 29000, net: 551000 },
-      { period: 'กรกฎาคม 2025', orders: 2100, sales: 550000, discount: 27500, net: 522500 },
-    ],
-  },
-};
+const periodOptions: { key: PeriodType; label: string }[] = [
+  { key: 'today', label: 'วันนี้' },
+  { key: 'week', label: 'สัปดาห์นี้' },
+  { key: 'month', label: 'เดือนนี้' },
+  { key: '6months', label: '6 เดือน' },
+  { key: 'year', label: '1 ปี' },
+];
+
+// ─── PDF-only template — inline styles only, no CSS variables ───────────────
+function PdfReportTemplate({ data, periodLabel, branchName }: {
+  data: PeriodData;
+  periodLabel: string;
+  branchName: string;
+}) {
+  const now = new Date();
+  const dateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear() + 543}`;
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} น.`;
+
+  // Chart geometry
+  const svgW = 714, svgH = 150;
+  const pL = 48, pR = 16, pT = 12, pB = 28;
+  const cW = svgW - pL - pR, cH = svgH - pT - pB;
+  const pts = data.chartData;
+  const rawMax = Math.max(...pts.map(p => p.value), 1000);
+  const maxVal = Math.ceil(rawMax * 1.2);
+  const dx = pts.length > 1 ? cW / (pts.length - 1) : cW;
+
+  const linePts = pts.map((p, i) => ({
+    x: pL + i * dx,
+    y: pT + cH - (p.value / maxVal) * cH,
+  }));
+
+  const linePath = linePts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const areaPath = pts.length > 0
+    ? `${linePath} L ${linePts[linePts.length - 1].x.toFixed(1)} ${(pT + cH).toFixed(1)} L ${linePts[0].x.toFixed(1)} ${(pT + cH).toFixed(1)} Z`
+    : '';
+
+  const kpis = [
+    { label: 'ยอดขายรวม', value: `฿${data.summary.totalSales.toLocaleString()}`, change: data.summary.salesChange, color: '#dc2626', bg: '#fff1f2', border: '#fecaca' },
+    { label: 'จำนวนออเดอร์', value: `${data.summary.totalOrders.toLocaleString()} บิล`, change: data.summary.ordersChange, color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+    { label: 'เฉลี่ย / บิล (AOV)', value: `฿${data.summary.aov.toLocaleString()}`, change: data.summary.aovChange, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+    { label: 'เมนูขายดีสุด', value: data.summary.topMenu, change: `${data.summary.topMenuQty} จาน`, color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+  ];
+
+  const s: Record<string, React.CSSProperties> = {
+    root: { width: 794, backgroundColor: '#fff', padding: '28px 40px 24px', fontFamily: "'Segoe UI', Arial, sans-serif", color: '#1e293b', boxSizing: 'border-box' },
+    headerWrap: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingBottom: 14, marginBottom: 18, borderBottom: '3px solid #dc2626' },
+    brandLabel: { fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 3 },
+    title: { fontSize: 22, fontWeight: 900, color: '#0f172a', letterSpacing: -0.5 },
+    subtitle: { fontSize: 11, color: '#64748b', marginTop: 4 },
+    metaBlock: { textAlign: 'right' as const },
+    metaLabel: { fontSize: 8, color: '#94a3b8', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' as const },
+    metaValue: { fontSize: 13, fontWeight: 800, color: '#0f172a', marginTop: 2 },
+    metaSub: { fontSize: 9, color: '#94a3b8', marginTop: 1 },
+    kpiRow: { display: 'flex', gap: 10, marginBottom: 18 },
+    kpiCard: { flex: 1, borderRadius: 8, padding: '11px 14px', borderWidth: 1, borderStyle: 'solid' },
+    kpiLabel: { fontSize: 8, fontWeight: 700, color: '#64748b', letterSpacing: 1, textTransform: 'uppercase' as const, marginBottom: 5 },
+    kpiValue: { fontSize: 16, fontWeight: 900, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+    kpiBadge: { marginTop: 5, display: 'inline-block', fontSize: 8, fontWeight: 700, color: '#065f46', backgroundColor: '#d1fae5', padding: '2px 6px', borderRadius: 4 },
+    chartBox: { border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 14px', marginBottom: 18, backgroundColor: '#f8fafc' },
+    chartTitle: { fontSize: 10, fontWeight: 700, color: '#475569', marginBottom: 10 },
+    tableBox: { border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' },
+    tableHead: { backgroundColor: '#f1f5f9', display: 'flex', padding: '8px 14px', borderBottom: '1px solid #e2e8f0' },
+    tableTitle: { fontSize: 10, fontWeight: 700, color: '#475569' },
+    th: { padding: '7px 12px', fontSize: 8, fontWeight: 700, color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase' as const, borderBottom: '1px solid #e2e8f0' },
+    td: { padding: '7px 12px', fontSize: 10 },
+    footer: { marginTop: 18, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8' },
+  };
+
+  return (
+    <div style={s.root}>
+      {/* Header */}
+      <div style={s.headerWrap}>
+        <div>
+          <div style={s.brandLabel}>CHABA POS SYSTEM</div>
+          <div style={s.title}>รายงานการขาย</div>
+          <div style={s.subtitle}>
+            สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong>
+            &nbsp;·&nbsp;
+            ช่วงเวลา: <strong style={{ color: '#dc2626' }}>{periodLabel}</strong>
+            &nbsp;·&nbsp;{data.title}
+          </div>
+        </div>
+        <div style={s.metaBlock}>
+          <div style={s.metaLabel}>วันที่ออกเอกสาร</div>
+          <div style={s.metaValue}>{dateStr}</div>
+          <div style={s.metaSub}>{timeStr}</div>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div style={s.kpiRow}>
+        {kpis.map((k, i) => (
+          <div key={i} style={{ ...s.kpiCard, backgroundColor: k.bg, borderColor: k.border }}>
+            <div style={s.kpiLabel}>{k.label}</div>
+            <div style={{ ...s.kpiValue, color: k.color, fontSize: i === 3 ? 13 : 16 }}>{k.value}</div>
+            <div style={s.kpiBadge}>{k.change}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <div style={s.chartBox}>
+        <div style={s.chartTitle}>แนวโน้มยอดขาย</div>
+        <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ overflow: 'visible', display: 'block' }}>
+          <defs>
+            <linearGradient id="pdfGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#dc2626" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="#dc2626" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+          {[0, 1, 2, 3].map(i => {
+            const y = pT + (cH / 3) * i;
+            const val = Math.round(maxVal - (i * maxVal) / 3);
+            const label = val >= 1000 ? `${(val / 1000).toFixed(1)}k` : String(val);
+            return (
+              <g key={i}>
+                <line x1={pL} y1={y} x2={svgW - pR} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
+                <text x={pL - 4} y={y + 3.5} textAnchor="end" fontSize="7.5" fill="#94a3b8">{label}</text>
+              </g>
+            );
+          })}
+          {pts.length > 0 && (
+            <>
+              <path d={areaPath} fill="url(#pdfGrad)" />
+              <path d={linePath} fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              {linePts.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r="3.5" fill="#fff" stroke="#dc2626" strokeWidth="2" />
+              ))}
+              {linePts.map((p, i) => (
+                <text key={i} x={p.x} y={pT + cH + 18} textAnchor="middle" fontSize="7.5" fill="#94a3b8">{pts[i].label}</text>
+              ))}
+            </>
+          )}
+        </svg>
+      </div>
+
+      {/* Table */}
+      <div style={s.tableBox}>
+        <div style={s.tableHead}><span style={s.tableTitle}>ตารางสรุปยอดขาย</span></div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f8fafc' }}>
+              <th style={{ ...s.th, textAlign: 'left' }}>ช่วงเวลา</th>
+              <th style={{ ...s.th, textAlign: 'right' }}>จำนวนออเดอร์</th>
+              <th style={{ ...s.th, textAlign: 'right' }}>ยอดขายรวม</th>
+              <th style={{ ...s.th, textAlign: 'right' }}>รายรับสุทธิ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.tableData.map((row, i) => (
+              <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                <td style={{ ...s.td, color: '#1e293b', fontWeight: 600 }}>{row.period}</td>
+                <td style={{ ...s.td, color: '#475569', textAlign: 'right' }}>{row.orders}</td>
+                <td style={{ ...s.td, color: '#475569', textAlign: 'right' }}>฿{row.sales.toLocaleString()}</td>
+                <td style={{ ...s.td, color: '#059669', fontWeight: 700, textAlign: 'right' }}>฿{row.net.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer */}
+      <div style={s.footer}>
+        <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr} {timeStr}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function Reports() {
   const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
@@ -236,19 +250,135 @@ export default function Reports() {
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [reportData, setReportData] = useState<PeriodData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const currentData = PERIOD_DATA[activePeriod];
+  useEffect(() => {
+    if (!branchId) return;
+
+    const fetchReportData = async () => {
+      setIsLoading(true);
+      try {
+        const res = await api.get<PeriodData>(`/dashboard/reports/sales?branchId=${branchId}&filter=${activePeriod}`);
+        setReportData(res.data);
+      } catch (error) {
+        console.error('Failed to fetch report data:', error);
+        toast.error('ไม่สามารถโหลดข้อมูลรายงานการขายได้');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReportData();
+  }, [branchId, activePeriod]);
 
   const handleExport = (type: 'PDF' | 'Excel') => {
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 1500)),
-      {
-        loading: `กำลังสร้างไฟล์รายงาน ${type}...`,
-        success: `ส่งออกข้อมูลสำเร็จ! ไฟล์รายงาน ${type} ถูกบันทึกแล้ว`,
-        error: 'เกิดข้อผิดพลาดในการส่งออกรายงาน',
+    if (type === 'Excel') {
+      try {
+        const headers = ['ช่วงเวลา', 'จำนวนออเดอร์', 'ยอดขายรวม (บาท)', 'รายรับสุทธิ (บาท)'];
+        const rows = reportData.tableData.map(row => [
+          `"${row.period.replace(/"/g, '""')}"`,
+          row.orders,
+          row.sales,
+          row.net
+        ]);
+        
+        const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        
+        const branchName = branch?.name || 'branch';
+        const dateStr = new Date().toISOString().slice(0, 10);
+        link.setAttribute('download', `รายงานการขาย_${branchName}_${activePeriod}_${dateStr}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success(`ส่งออกข้อมูล Excel สำหรับช่วงเวลา "${periodOptions.find(p => p.key === activePeriod)?.label}" สำเร็จ!`);
+      } catch (error) {
+        console.error('Failed to export Excel:', error);
+        toast.error('เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel');
       }
-    );
+    } else if (type === 'PDF') {
+      window.print();
+    }
   };
+
+  const handleDownloadPDF = async () => {
+    if (!reportData) return;
+    const toastId = toast.loading('กำลังสร้างไฟล์ PDF...');
+
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;top:-9999px;left:-9999px;z-index:-1;pointer-events:none;';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      const periodLabel = periodOptions.find(p => p.key === activePeriod)?.label ?? activePeriod;
+      const branchName = branch?.name ?? 'สาขา';
+
+      await new Promise<void>(resolve => {
+        root.render(
+          <PdfReportTemplate data={reportData} periodLabel={periodLabel} branchName={branchName} />
+        );
+        setTimeout(resolve, 300);
+      });
+
+      const templateEl = container.firstElementChild as HTMLElement;
+      const dataUrl = await toPng(templateEl, { pixelRatio: 2, backgroundColor: '#ffffff' });
+
+      const img = new Image();
+      await new Promise<void>(resolve => { img.onload = () => resolve(); img.src = dataUrl; });
+
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (img.height * imgWidth) / img.width;
+      let heightLeft = imgHeight;
+
+      let jsPDFClass: any = jsPDF;
+      if (typeof jsPDFClass !== 'function') jsPDFClass = (jsPDF as any).default ?? jsPDFClass;
+      if (typeof jsPDFClass !== 'function' && (jsPDF as any).jsPDF) jsPDFClass = (jsPDF as any).jsPDF;
+      if (typeof jsPDFClass !== 'function') throw new Error('jsPDF is not available.');
+
+      const pdf = new jsPDFClass('p', 'mm', 'a4');
+      let position = 0;
+
+      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pageHeight;
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      pdf.save(`รายงานการขาย_${branchName}_${activePeriod}_${dateStr}.pdf`);
+      toast.success('ดาวน์โหลดไฟล์ PDF เรียบร้อยแล้ว!', { id: toastId });
+    } catch (error: any) {
+      console.error('Failed to generate PDF:', error);
+      toast.error(`ไม่สามารถดาวน์โหลด PDF ได้ในขณะนี้: ${error?.message || String(error)}`, { id: toastId });
+    } finally {
+      root.unmount();
+      document.body.removeChild(container);
+    }
+  };
+
+  if (isBranchLoading || isLoading || !reportData) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 space-y-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="text-slate-500">กำลังโหลดข้อมูลรายงาน...</p>
+      </div>
+    );
+  }
+
+  const currentData = reportData;
 
   // SVG Chart sizing
   const svgWidth = 800;
@@ -293,21 +423,24 @@ export default function Reports() {
   );
 
   return (
-    <div className="space-y-6 max-w-7xl pb-10">
+    <div id="sales-report-content" className="space-y-6 max-w-7xl pb-10 bg-white p-4 sm:p-8 rounded-3xl shadow-sm border border-slate-100">
       {/* 1. Header with Breadcrumb and Action buttons */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 pb-5">
         <div>
           <button 
             onClick={() => navigate(`/brands/${brandId}/branches/${branchId}`)}
-            className="flex items-center text-slate-400 hover:text-primary transition-colors mb-2 text-xs font-semibold tracking-wide group"
+            className="flex items-center text-slate-400 hover:text-primary transition-colors mb-2 text-xs font-semibold tracking-wide group print:hidden"
           >
             <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             กลับหน้าภาพรวม
           </button>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">รายงานการขายฉบับเต็ม</h1>
-          <p className="text-slate-500 text-sm mt-1">วิเคราะห์ข้อมูลสถิติ ยอดขาย ออเดอร์ และแนวโน้มรายได้สาขา {branch?.name}</p>
+          <p className="text-slate-500 text-sm mt-1">
+            วิเคราะห์ข้อมูลสถิติ ยอดขาย ออเดอร์ และแนวโน้มรายได้สาขา {branch?.name}
+            <span className="hidden print:inline font-bold text-primary ml-1">({periodOptions.find(o => o.key === activePeriod)?.label})</span>
+          </p>
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto print:hidden">
           <Button 
             variant="outline" 
             onClick={() => handleExport('Excel')}
@@ -317,32 +450,39 @@ export default function Reports() {
             Excel
           </Button>
           <Button 
+            onClick={handleDownloadPDF}
+            className="flex-1 sm:flex-initial shadow-md shadow-emerald-500/10 bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:opacity-90 font-bold transition-all rounded-xl gap-2"
+          >
+            <Download className="w-4 h-4" />
+            บันทึก PDF
+          </Button>
+          <Button 
             onClick={() => handleExport('PDF')}
             className="flex-1 sm:flex-initial shadow-md shadow-red-500/10 bg-gradient-to-r from-primary to-red-500 text-white hover:opacity-90 font-bold transition-all rounded-xl gap-2"
           >
-            <Download className="w-4 h-4" />
-            PDF Report
+            <Printer className="w-4 h-4" />
+            พิมพ์รายงาน
           </Button>
         </div>
       </div>
 
       {/* 2. Tabs Selector for Period */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-3 rounded-2xl border border-red-100/60 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-3 rounded-2xl border border-red-100/60 shadow-sm print:hidden">
         <div className="flex flex-wrap gap-1 w-full sm:w-auto">
-          {(Object.keys(PERIOD_DATA) as PeriodType[]).map((period) => (
+          {periodOptions.map((opt) => (
             <button
-              key={period}
+              key={opt.key}
               onClick={() => {
-                setActivePeriod(period);
+                setActivePeriod(opt.key);
                 setHoveredIndex(null);
               }}
               className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all duration-200 w-[18%] sm:w-auto min-w-[65px] ${
-                activePeriod === period
+                activePeriod === opt.key
                   ? 'bg-primary text-white shadow-md shadow-primary/20 scale-102'
                   : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
               }`}
             >
-              {PERIOD_DATA[period].title}
+              {opt.label}
             </button>
           ))}
         </div>
@@ -685,7 +825,7 @@ export default function Reports() {
               <CardDescription>แสดงรายละเอียดข้อมูลยอดขายรายรับสุทธิแยกตามช่วงเวลา</CardDescription>
             </div>
             {/* Search filter input */}
-            <div className="relative w-full sm:w-72">
+            <div className="relative w-full sm:w-72 print:hidden">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -704,7 +844,6 @@ export default function Reports() {
                 <TableHead className="font-bold text-slate-700 h-11 pl-4">ช่วงเวลา</TableHead>
                 <TableHead className="font-bold text-slate-700 h-11 text-center">จำนวนออเดอร์</TableHead>
                 <TableHead className="font-bold text-slate-700 h-11 text-right">ยอดขายรวม</TableHead>
-                <TableHead className="font-bold text-slate-700 h-11 text-right">ส่วนลด (5%)</TableHead>
                 <TableHead className="font-bold text-slate-700 h-11 text-right pr-4">รายรับสุทธิ</TableHead>
               </TableRow>
             </TableHeader>
@@ -715,13 +854,12 @@ export default function Reports() {
                     <TableCell className="font-semibold text-slate-800 py-3.5 pl-4">{row.period}</TableCell>
                     <TableCell className="text-center text-slate-600 py-3.5 font-medium">{row.orders}</TableCell>
                     <TableCell className="text-right text-slate-600 py-3.5 font-medium">฿{row.sales.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-red-600 py-3.5 font-medium">-฿{row.discount.toLocaleString()}</TableCell>
                     <TableCell className="text-right text-emerald-600 font-bold py-3.5 pr-4">฿{row.net.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-slate-400 font-medium">
+                  <TableCell colSpan={4} className="text-center py-10 text-slate-400 font-medium">
                     ไม่พบข้อมูลที่สอดคล้องกับการค้นหา
                   </TableCell>
                 </TableRow>

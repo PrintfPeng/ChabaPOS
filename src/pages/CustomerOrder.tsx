@@ -1,98 +1,261 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useCart } from '../contexts/CartContext';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
-import { Loader2, ShoppingCart, Plus, Minus, ChevronRight, X, UtensilsCrossed } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
-import { toast } from 'sonner';
-import { ScrollArea } from '../components/ui/scroll-area';
-import { cn } from '../lib/utils';
+import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { Card, CardContent } from '../components/ui/card';
+import { ScrollArea } from '../components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '../components/ui/sheet';
+import { cn } from '../lib/utils';
+import { toast } from 'sonner';
+import {
+  ShoppingCart, Plus, Minus, X, Loader2, UtensilsCrossed,
+  Tag, CheckCircle2, ChevronLeft, ChevronRight,
+} from 'lucide-react';
 
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
+interface OptionItem { id: number; name: string; price: number }
+interface OptionGroup { id: number; name: string; isMultiple: boolean; options: OptionItem[] }
 interface MenuItem {
-  id: number;
-  name: string;
-  price: number;
-  imageUrl?: string;
-  categoryId: number;
-  optionGroups: {
-    id: number;
-    name: string;
-    isMultiple: boolean;
-    options: {
-      id: number;
-      name: string;
-      price: number;
-    }[];
-  }[];
+  id: number; name: string; price: number; imageUrl?: string; categoryId: number;
+  optionGroups: OptionGroup[];
+}
+interface Category { id: number; name: string; items: MenuItem[] }
+interface Promotion {
+  id: number; name: string;
+  type: 'PERCENT' | 'FIXED' | 'POINTS_REDEMPTION';
+  value: number; minSpend: number; code?: string;
 }
 
-interface Category {
-  id: number;
-  name: string;
-  items: MenuItem[];
+// Promo gradient palette (cycles per promo)
+const PROMO_GRADIENTS = [
+  'from-orange-500 via-red-500 to-rose-600',
+  'from-violet-600 via-purple-500 to-pink-500',
+  'from-sky-500 via-blue-500 to-indigo-600',
+  'from-emerald-500 via-teal-500 to-cyan-600',
+  'from-amber-500 via-orange-400 to-yellow-500',
+];
+
+// ─────────────────────────────────────────────
+// Promo Carousel
+// ─────────────────────────────────────────────
+function PromoBanner({ promotions }: { promotions: Promotion[] }) {
+  const [idx, setIdx] = useState(0);
+  const timer = useRef<ReturnType<typeof setInterval>>();
+
+  useEffect(() => {
+    if (promotions.length <= 1) return;
+    timer.current = setInterval(() => setIdx(i => (i + 1) % promotions.length), 3800);
+    return () => clearInterval(timer.current);
+  }, [promotions.length]);
+
+  if (promotions.length === 0) return null;
+
+  const promoLabel = (p: Promotion) => {
+    if (p.type === 'PERCENT') return `ลด ${p.value}%`;
+    if (p.type === 'FIXED') return `ลด ฿${p.value.toLocaleString()}`;
+    return `แลกแต้ม ${p.value} แต้ม`;
+  };
+
+  return (
+    <div className="px-4 pt-4 pb-1">
+      <div className="relative rounded-2xl overflow-hidden shadow-md">
+        {/* Slides */}
+        <div
+          className="flex transition-transform duration-500 ease-out"
+          style={{ transform: `translateX(-${idx * 100}%)` }}
+        >
+          {promotions.map((promo, i) => (
+            <div
+              key={promo.id}
+              className={cn(
+                'w-full shrink-0 bg-gradient-to-r text-white px-5 py-4 flex items-center justify-between gap-3',
+                PROMO_GRADIENTS[i % PROMO_GRADIENTS.length],
+              )}
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 mb-1 opacity-80">
+                  <Tag className="w-3 h-3" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">โปรโมชั่น</span>
+                </div>
+                <p className="font-black text-base leading-tight">{promo.name}</p>
+                <p className="text-xs mt-0.5 opacity-80">
+                  {promoLabel(promo)}
+                  {promo.minSpend > 0 && ` · ขั้นต่ำ ฿${promo.minSpend.toLocaleString()}`}
+                </p>
+              </div>
+              <div className="shrink-0 text-4xl select-none">🎉</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Nav arrows */}
+        {promotions.length > 1 && (
+          <>
+            <button
+              onClick={() => setIdx(i => (i - 1 + promotions.length) % promotions.length)}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-black/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setIdx(i => (i + 1) % promotions.length)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-black/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+
+        {/* Dots */}
+        {promotions.length > 1 && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+            {promotions.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setIdx(i)}
+                className={cn(
+                  'rounded-full transition-all',
+                  i === idx ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50',
+                )}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
+// ─────────────────────────────────────────────
+// Food Card — same style as CounterService
+// ─────────────────────────────────────────────
+function FoodCard({
+  item, cartCount, onClick,
+}: { item: MenuItem; cartCount: number; onClick: () => void }) {
+  return (
+    <Card
+      onClick={onClick}
+      className="overflow-hidden cursor-pointer hover:border-primary hover:shadow-md transition-all group border-white shadow-sm active:scale-95 flex flex-col"
+    >
+      <CardContent className="p-0 flex flex-col h-full">
+        {/* Image — same aspect ratio as CounterService */}
+        <div className="relative aspect-[4/3] sm:aspect-video overflow-hidden shrink-0">
+          {item.imageUrl ? (
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="absolute inset-0 w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="absolute inset-0 w-full h-full bg-slate-100 flex items-center justify-center">
+              <UtensilsCrossed className="w-8 h-8 text-slate-300" />
+            </div>
+          )}
+          {/* Price badge — top-right like CounterService */}
+          <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10">
+            <Badge className="bg-white/95 text-primary border-none font-black shadow-sm text-[10px] sm:text-xs">
+              ฿{item.price.toLocaleString()}
+            </Badge>
+          </div>
+          {/* In-cart counter badge */}
+          {cartCount > 0 && (
+            <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-10 w-5 h-5 bg-primary text-white text-[9px] font-black rounded-full flex items-center justify-center shadow">
+              {cartCount}
+            </div>
+          )}
+        </div>
+
+        {/* Name only — price is in badge */}
+        <div className="p-2 sm:p-3 flex-1 flex flex-col justify-center">
+          <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors text-xs sm:text-sm line-clamp-2 leading-tight">
+            {item.name}
+          </h3>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Main Page
+// ─────────────────────────────────────────────
 export default function CustomerOrder() {
   const { branchId, tableId } = useParams<{ branchId: string; tableId: string }>();
   const navigate = useNavigate();
   const { cart, addToCart, updateQuantity, removeFromCart, totalAmount, clearCart } = useCart();
-  
+
   const [categories, setCategories] = useState<Category[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [branchName, setBranchName] = useState('');
   const [tableName, setTableName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  const [selectedOptions, setSelectedOptions] = useState<any[]>([]);
+  const [selectedOptions, setSelectedOptions] = useState<OptionItem[]>([]);
   const [quantity, setQuantity] = useState(1);
+  const [itemNotes, setItemNotes] = useState('');
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [itemNotes, setItemNotes] = useState('');
 
-  const categoryRefs = React.useRef<{ [key: number]: HTMLDivElement | null }>({});
+  const categoryRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
+  // ── Fetch data ──────────────────────────────
   useEffect(() => {
-    const fetchData = async () => {
+    const load = async () => {
       try {
-        const [menuRes, tableRes] = await Promise.all([
+        const [menuRes, tableRes, promoRes] = await Promise.all([
           api.get(`/branches/${branchId}/menu`),
-          api.get(`/tables/by-qrcode/${tableId}`)
+          api.get(`/tables/by-qrcode/${tableId}`),
+          api.get(`/promotions?branchId=${branchId}&activeOnly=true`).catch(() => ({ data: [] })),
         ]);
-        
-        setCategories(menuRes.data.categories);
-        setBranchName(menuRes.data.name);
-        setTableName(tableRes.data.name);
-        
-        if (menuRes.data.categories.length > 0) {
-          setActiveCategory(menuRes.data.categories[0].id);
-        }
-      } catch (error) {
+        const cats: Category[] = menuRes.data.categories || [];
+        setCategories(cats);
+        setBranchName(menuRes.data.name || '');
+        setTableName(tableRes.data.name || '');
+        setPromotions(promoRes.data || []);
+        if (cats.length > 0) setActiveCategory(cats[0].id);
+      } catch {
         toast.error('ไม่สามารถโหลดข้อมูลได้');
       } finally {
         setIsLoading(false);
       }
     };
-    fetchData();
+    load();
   }, [branchId, tableId]);
 
-  const scrollToCategory = (categoryId: number) => {
-    setActiveCategory(categoryId);
-    const element = categoryRefs.current[categoryId];
-    if (element) {
-      const offset = 120; // Header + Category Nav height
-      const bodyRect = document.body.getBoundingClientRect().top;
-      const elementRect = element.getBoundingClientRect().top;
-      const elementPosition = elementRect - bodyRect;
-      const offsetPosition = elementPosition - offset;
+  // ── Intersection Observer (active category highlight) ──
+  useEffect(() => {
+    if (!categories.length) return;
+    observerRef.current?.disconnect();
+    observerRef.current = new IntersectionObserver(
+      entries => {
+        const visible = entries.filter(e => e.isIntersecting);
+        if (visible.length > 0) {
+          setActiveCategory(Number(visible[0].target.getAttribute('data-cat-id')));
+        }
+      },
+      { rootMargin: '-110px 0px -55% 0px', threshold: 0 },
+    );
+    Object.values(categoryRefs.current).forEach(el => {
+      if (el) observerRef.current?.observe(el);
+    });
+    return () => observerRef.current?.disconnect();
+  }, [categories]);
 
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
-    }
+  // ── Helpers ─────────────────────────────────
+  const scrollToCategory = (id: number) => {
+    const el = categoryRefs.current[id];
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 130;
+    window.scrollTo({ top, behavior: 'smooth' });
   };
 
   const handleSelectItem = (item: MenuItem) => {
@@ -102,28 +265,18 @@ export default function CustomerOrder() {
     setItemNotes('');
   };
 
-  const toggleOption = (group: any, option: any) => {
+  const toggleOption = (group: OptionGroup, option: OptionItem) => {
     setSelectedOptions(prev => {
       const exists = prev.find(o => o.id === option.id);
-      
       if (group.isMultiple) {
-        // Multi-select logic (Checkbox)
-        if (exists) return prev.filter(o => o.id !== option.id);
-        return [...prev, option];
-      } else {
-        // Single-select logic (Radio)
-        // Remove any other options from the same group
-        const groupOptionIds = group.options.map((o: any) => o.id);
-        const filtered = prev.filter(o => !groupOptionIds.includes(o.id));
-        
-        // If it was already selected, and we click it again, we might want to deselect?
-        // Usually radio buttons don't deselect on click if already selected, 
-        // but for POS options, sometimes they do. 
-        // Let's follow standard radio behavior: if clicked, it's selected.
-        return [...filtered, option];
+        return exists ? prev.filter(o => o.id !== option.id) : [...prev, option];
       }
+      const groupIds = group.options.map(o => o.id);
+      return [...prev.filter(o => !groupIds.includes(o.id)), option];
     });
   };
+
+  const itemExtraPrice = selectedOptions.reduce((s, o) => s + o.price, 0);
 
   const handleAddToCart = () => {
     if (!selectedItem) return;
@@ -133,335 +286,390 @@ export default function CustomerOrder() {
       price: selectedItem.price,
       quantity,
       notes: itemNotes || undefined,
-      options: selectedOptions.map(o => ({
-        optionId: o.id,
-        name: o.name,
-        price: o.price
-      }))
+      options: selectedOptions.map(o => ({ optionId: o.id, name: o.name, price: o.price })),
     });
     setSelectedItem(null);
-    toast.success('เพิ่มลงตะกร้าแล้ว');
+    toast.success(`เพิ่ม "${selectedItem.name}" ลงตะกร้าแล้ว 🛒`);
   };
 
   const handleSubmitOrder = async () => {
     if (cart.length === 0) return;
     setIsSubmitting(true);
     try {
-      // We already have table info if we want, but we need the numeric ID
       const tableRes = await api.get(`/tables/by-qrcode/${tableId}`);
-      const table = tableRes.data;
-
       await api.post('/orders', {
         branchId: Number(branchId),
-        tableId: table.id,
+        tableId: tableRes.data.id,
+        source: 'QR',
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
           quantity: item.quantity,
           notes: item.notes,
-          options: item.options.map(o => ({ optionId: o.optionId }))
-        }))
+          options: item.options.map(o => ({ optionId: o.optionId })),
+        })),
       });
-
       clearCart();
       setIsCartOpen(false);
-      toast.success('สั่งอาหารสำเร็จ! กรุณารอสักครู่');
       navigate('/order-success');
-    } catch (error) {
+    } catch {
       toast.error('สั่งอาหารไม่สำเร็จ กรุณาลองใหม่');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
+
+  // ── Loading ──────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-primary/5 to-white gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+        <p className="text-sm text-slate-400 font-semibold">กำลังโหลดเมนู...</p>
       </div>
     );
   }
 
+  // ── Render ───────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
-      {/* Header */}
-      <div className="bg-white sticky top-0 z-30 shadow-sm">
-        <div className="p-4 border-b">
-          <h1 className="text-xl font-black text-slate-900 tracking-tight">{branchName}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">
-              โต๊ะ: {tableName || '...'}
-            </p>
+    <div className="min-h-screen bg-slate-50" style={{ paddingBottom: cartCount > 0 ? '100px' : '32px' }}>
+
+      {/* ── Sticky Header ─────────────────────── */}
+      <div className="sticky top-0 z-30">
+        {/* Brand bar */}
+        <div className="bg-gradient-to-r from-primary to-primary/80 px-4 pt-safe pt-4 pb-3 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="font-black text-lg leading-tight truncate">{branchName}</h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse" />
+                <span className="text-[11px] font-semibold text-white/75">เปิดให้บริการอยู่</span>
+              </div>
+            </div>
+            <div className="shrink-0 bg-white/20 backdrop-blur-sm rounded-xl px-3 py-1.5 text-center">
+              <p className="text-[9px] font-bold text-white/60 uppercase tracking-widest">โต๊ะ</p>
+              <p className="text-xl font-black leading-none">{tableName || '—'}</p>
+            </div>
           </div>
         </div>
-        
-        {/* Category Navigation */}
-        <div className="flex overflow-x-auto no-scrollbar p-2 gap-2 bg-white/80 backdrop-blur-md">
-          {Array.isArray(categories) && categories.map(category => (
+
+        {/* Category tabs */}
+        <div className="bg-white border-b flex overflow-x-auto scrollbar-none px-3 py-2.5 gap-2 shadow-sm">
+          {categories.map(cat => (
             <button
-              key={category.id}
-              onClick={() => scrollToCategory(category.id)}
-              className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                activeCategory === category.id
-                  ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-105'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+              key={cat.id}
+              onClick={() => scrollToCategory(cat.id)}
+              className={cn(
+                'px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 transition-all',
+                activeCategory === cat.id
+                  ? 'bg-primary text-white shadow-md shadow-primary/30 scale-105'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+              )}
             >
-              {category.name}
+              {cat.name}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Menu Categories */}
-      <div className="p-4 space-y-10">
-        {Array.isArray(categories) && categories.map(category => (
-          <div 
-            key={category.id} 
-            className="scroll-mt-32"
-            ref={el => { categoryRefs.current[category.id] = el; }}
+      {/* ── Promo Banner ──────────────────────── */}
+      <PromoBanner promotions={promotions} />
+
+      {/* ── Menu Sections ─────────────────────── */}
+      <div className="px-4 pt-4 space-y-8">
+        {categories.map(cat => (
+          <div
+            key={cat.id}
+            data-cat-id={cat.id}
+            ref={el => { categoryRefs.current[cat.id] = el; }}
+            className="scroll-mt-36"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">
-                {category.name}
-              </h2>
-              <div className="h-px flex-1 bg-slate-200" />
+            {/* Category heading */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-5 bg-primary rounded-full shrink-0" />
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">{cat.name}</h2>
+              <Badge variant="secondary" className="text-[10px] font-bold px-1.5 py-0 ml-auto">
+                {cat.items.length}
+              </Badge>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {Array.isArray(category.items) && category.items.map(item => (
-                <Card 
-                  key={item.id} 
-                  className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer group" 
-                  onClick={() => handleSelectItem(item)}
-                >
-                  <CardContent className="p-0 flex h-28 sm:h-32 min-w-0 overflow-hidden">
-                    <div className="p-3 sm:p-4 flex-1 min-w-0 flex flex-col justify-between overflow-hidden">
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors line-clamp-1 text-sm sm:text-base">{item.name}</h3>
-                        <p className="text-[10px] sm:text-xs text-slate-400 mt-1 line-clamp-2">อร่อย สดใหม่ ทันใจ</p>
-                      </div>
-                      <div className="flex justify-between items-end mt-2">
-                        <p className="text-base sm:text-lg font-black text-primary shrink-0">฿{item.price.toLocaleString()}</p>
-                        <div className="bg-primary/10 p-1.5 sm:p-2 rounded-xl group-hover:bg-primary group-hover:text-white transition-all text-primary shrink-0">
-                          <Plus className="w-4 h-4 sm:w-5 h-5" />
-                        </div>
-                      </div>
-                    </div>
-                    {item.imageUrl && (
-                      <div className="w-28 sm:w-32 h-full relative overflow-hidden shrink-0 aspect-square">
-                        <img 
-                          src={item.imageUrl} 
-                          alt={item.name} 
-                          className="absolute inset-0 w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" 
-                          referrerPolicy="no-referrer" 
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-l from-black/10 to-transparent" />
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+
+            {/* Food grid — columns match CounterService */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+              {cat.items.map(item => {
+                const inCart = cart
+                  .filter(c => c.menuItemId === item.id)
+                  .reduce((s, c) => s + c.quantity, 0);
+                return (
+                  <FoodCard
+                    key={item.id}
+                    item={item}
+                    cartCount={inCart}
+                    onClick={() => handleSelectItem(item)}
+                  />
+                );
+              })}
             </div>
           </div>
         ))}
       </div>
 
-      {/* Floating Cart Button */}
-      {cart.length > 0 && (
-        <div className="fixed bottom-6 left-4 right-4 z-20">
-          <Button className="w-full h-14 rounded-2xl shadow-xl flex justify-between items-center px-6" onClick={() => setIsCartOpen(true)}>
+      {/* ── Sticky Cart Footer ────────────────── */}
+      {cartCount > 0 && (
+        <div className="fixed bottom-0 inset-x-0 z-40 px-4 pb-5 pt-4 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none">
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="w-full pointer-events-auto bg-primary text-white rounded-2xl h-14 flex items-center justify-between px-5 shadow-2xl shadow-primary/40 active:scale-[0.98] transition-transform"
+          >
             <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-2 rounded-lg relative">
+              <div className="relative bg-white/20 rounded-xl p-1.5">
                 <ShoppingCart className="w-5 h-5" />
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-primary">
-                  {cart.reduce((s, i) => s + i.quantity, 0)}
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border border-primary">
+                  {cartCount}
                 </span>
               </div>
-              <span className="font-bold">ดูตะกร้าสินค้า</span>
+              <span className="font-bold text-sm">{cartCount} รายการ</span>
             </div>
-            <span className="font-bold text-lg">฿{totalAmount.toLocaleString()}</span>
-          </Button>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-base">฿{totalAmount.toLocaleString()}</span>
+              <ChevronRight className="w-4 h-4 opacity-70" />
+            </div>
+          </button>
         </div>
       )}
 
-      {/* Item Selection Dialog */}
+      {/* ─────────────────────────────────────────
+          Item Detail Dialog
+      ───────────────────────────────────────── */}
       <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>
-        <DialogContent className="w-[95vw] sm:max-w-[480px] p-0 overflow-hidden rounded-[24px] sm:rounded-3xl border-none max-h-[90vh] flex flex-col">
+        <DialogContent className="w-[95vw] max-w-[480px] p-0 rounded-3xl border-none max-h-[92vh] flex flex-col overflow-hidden">
           {selectedItem && (
             <>
-              <div className="relative h-32 sm:h-44 overflow-hidden shrink-0">
-                 {selectedItem.imageUrl ? (
-                    <img 
-                      src={selectedItem.imageUrl} 
-                      alt={selectedItem.name} 
-                      className="absolute inset-0 w-full h-full object-contain" 
-                      referrerPolicy="no-referrer" 
-                    />
-                 ) : (
-                    <div className="absolute inset-0 w-full h-full bg-slate-100 flex items-center justify-center">
-                       <UtensilsCrossed className="w-12 h-12 text-slate-300" />
-                    </div>
-                 )}
-                 <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute top-2 right-2 rounded-full bg-white/80 backdrop-blur-sm hover:bg-white z-20 h-8 w-8" 
-                    onClick={() => setSelectedItem(null)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-              </div>
-              
-              <div className="flex-1 overflow-hidden flex flex-col">
-                <ScrollArea className="flex-1 px-1">
-                  <div className="p-4 sm:p-6 space-y-5">
-                    <DialogHeader className="space-y-1">
-                      <div className="flex justify-between items-start gap-4">
-                        <DialogTitle className="text-xl sm:text-2xl font-black leading-tight">{selectedItem.name}</DialogTitle>
-                        <span className="text-lg sm:text-xl font-black text-primary italic shrink-0">฿{selectedItem.price.toLocaleString()}</span>
-                      </div>
-                    </DialogHeader>
-
-                    {Array.isArray(selectedItem.optionGroups) && selectedItem.optionGroups.length > 0 && (
-                      <div className="space-y-5">
-                        {selectedItem.optionGroups.map(group => (
-                          <div key={group.id} className="space-y-2.5">
-                            <div className="flex justify-between items-center px-1">
-                              <h4 className="font-black text-slate-400 text-[10px] uppercase tracking-widest leading-none">{group.name}</h4>
-                              <div className="bg-slate-100 text-[9px] font-black tracking-tighter text-slate-400 px-1.5 py-0.5 rounded uppercase">
-                                {group.isMultiple ? 'หลายรายการ' : 'เลือก 1 รายการ'}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-1 gap-2">
-                              {Array.isArray(group.options) && group.options.map(option => {
-                                const isSelected = selectedOptions.find(o => o.id === option.id);
-                                return (
-                                  <div 
-                                    key={option.id} 
-                                    className={cn(
-                                      "flex justify-between items-center p-3 rounded-xl border-2 transition-all cursor-pointer active:scale-[0.98]",
-                                      isSelected 
-                                      ? 'border-primary bg-primary/5 text-primary' 
-                                      : 'border-slate-100 hover:border-slate-200 bg-white'
-                                    )}
-                                    onClick={() => toggleOption(group, option)}
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className={cn(
-                                        "w-4 h-4 border flex items-center justify-center transition-all shrink-0",
-                                        isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300',
-                                        !group.isMultiple ? 'rounded-full' : 'rounded-[4px]'
-                                      )}>
-                                        {isSelected && <div className={cn("bg-white", group.isMultiple ? "w-2 h-2 rounded-[1px]" : "w-1.5 h-1.5 rounded-full")} />}
-                                      </div>
-                                      <span className="font-bold text-sm truncate">{option.name}</span>
-                                    </div>
-                                    <span className="text-xs font-black text-slate-400 shrink-0 ml-1">
-                                      {option.price > 0 ? `+฿${option.price}` : 'ฟรี'}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    <div className="space-y-2.5 pt-2">
-                       <div className="flex justify-between items-center px-1">
-                          <h4 className="font-black text-slate-400 text-[10px] uppercase tracking-widest leading-none">หมายเหตุเพิ่มเติม</h4>
-                       </div>
-                       <Input 
-                         placeholder="เช่น ไม่ใส่ผัก, เผ็ดน้อย" 
-                         className="h-11 rounded-xl text-sm border-slate-200 focus:border-primary shadow-sm"
-                         value={itemNotes}
-                         onChange={(e) => setItemNotes(e.target.value)}
-                       />
-                    </div>
+              {/* Hero image */}
+              <div className="relative h-48 shrink-0 bg-slate-100">
+                {selectedItem.imageUrl ? (
+                  <img
+                    src={selectedItem.imageUrl}
+                    alt={selectedItem.name}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <UtensilsCrossed className="w-16 h-16 text-slate-200" />
                   </div>
-                </ScrollArea>
-
-                <div className="p-4 sm:p-6 bg-white border-t border-slate-100 space-y-4 shrink-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-slate-900 text-sm italic">QUANTITY</span>
-                    <div className="flex items-center gap-4 bg-slate-50 p-1 rounded-full border border-slate-100">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-white shadow-sm hover:text-primary" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
-                        <Minus className="w-3.5 h-3.5" />
-                      </Button>
-                      <span className="font-black text-lg w-6 text-center tabular-nums">{quantity}</span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-white shadow-sm hover:text-primary" onClick={() => setQuantity(q => q + 1)}>
-                        <Plus className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <Button className="w-full h-14 sm:h-16 text-lg font-black rounded-2xl shadow-xl shadow-primary/20 transition-all hover:scale-[1.01] active:scale-95 flex justify-between px-6" onClick={handleAddToCart}>
-                    <span>เพิ่มลงตะกร้า</span>
-                    <span className="bg-white/20 px-3 py-1 rounded-lg text-sm">฿{((selectedItem.price + selectedOptions.reduce((s, o) => s + o.price, 0)) * quantity).toLocaleString()}</span>
-                  </Button>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                <div className="absolute bottom-4 left-4 right-12 text-white">
+                  <DialogHeader>
+                    <DialogTitle asChild>
+                      <h3 className="font-black text-xl leading-tight">{selectedItem.name}</h3>
+                    </DialogTitle>
+                  </DialogHeader>
+                  <span className="text-lg font-black text-yellow-300">฿{selectedItem.price.toLocaleString()}</span>
                 </div>
+                <button
+                  onClick={() => setSelectedItem(null)}
+                  className="absolute top-3 right-3 w-8 h-8 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/50 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Options + notes scroll area */}
+              <ScrollArea className="flex-1">
+                <div className="p-5 space-y-5">
+                  {selectedItem.optionGroups?.map(group => (
+                    <div key={group.id}>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <h4 className="text-sm font-black text-slate-800">{group.name}</h4>
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          {group.isMultiple ? 'เลือกได้หลายรายการ' : 'เลือก 1 รายการ'}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {group.options.map(opt => {
+                          const sel = !!selectedOptions.find(o => o.id === opt.id);
+                          return (
+                            <div
+                              key={opt.id}
+                              onClick={() => toggleOption(group, opt)}
+                              className={cn(
+                                'flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all active:scale-[0.98]',
+                                sel ? 'border-primary bg-primary/5' : 'border-slate-100 bg-white',
+                              )}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  'w-4 h-4 border-2 flex items-center justify-center shrink-0 transition-all',
+                                  group.isMultiple ? 'rounded-[4px]' : 'rounded-full',
+                                  sel ? 'border-primary bg-primary' : 'border-slate-300',
+                                )}>
+                                  {sel && <div className={cn('bg-white', group.isMultiple ? 'w-1.5 h-1.5 rounded-sm' : 'w-1.5 h-1.5 rounded-full')} />}
+                                </div>
+                                <span className={cn('text-sm font-semibold', sel ? 'text-primary' : 'text-slate-700')}>
+                                  {opt.name}
+                                </span>
+                              </div>
+                              <span className="text-xs font-bold text-slate-400 shrink-0">
+                                {opt.price > 0 ? `+฿${opt.price}` : 'ฟรี'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Notes */}
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800 mb-2">หมายเหตุ</h4>
+                    <Input
+                      placeholder="เช่น ไม่ใส่ผัก, เผ็ดน้อย, ไม่ใส่น้ำแข็ง"
+                      value={itemNotes}
+                      onChange={e => setItemNotes(e.target.value)}
+                      className="rounded-xl border-slate-200 text-sm"
+                    />
+                  </div>
+                </div>
+              </ScrollArea>
+
+              {/* Qty + Add to cart */}
+              <div className="p-4 border-t bg-white shrink-0 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-slate-600">จำนวน</span>
+                  <div className="flex items-center gap-3 bg-slate-50 rounded-full px-2 py-1 border border-slate-100">
+                    <button
+                      onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                      className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-500 hover:text-primary transition-colors"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="w-6 text-center font-black text-lg tabular-nums">{quantity}</span>
+                    <button
+                      onClick={() => setQuantity(q => q + 1)}
+                      className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-500 hover:text-primary transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={handleAddToCart}
+                  className="w-full h-14 bg-primary text-white rounded-2xl font-black text-base flex items-center justify-between px-5 shadow-lg shadow-primary/25 active:scale-[0.98] transition-transform"
+                >
+                  <span>เพิ่มลงตะกร้า</span>
+                  <span className="bg-white/20 px-3 py-1 rounded-lg text-sm">
+                    ฿{((selectedItem.price + itemExtraPrice) * quantity).toLocaleString()}
+                  </span>
+                </button>
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Cart Sheet (Dialog for mobile) */}
-      <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <DialogContent className="sm:max-w-[425px] h-[90vh] flex flex-col p-0 rounded-t-3xl">
-          <DialogHeader className="p-6 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5" />
-              ตะกร้าสินค้าของคุณ
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {Array.isArray(cart) && cart.map(item => (
-              <div key={item.id} className="flex gap-4 border-b pb-4 last:border-0">
-                <div className="flex-1 space-y-1">
-                  <h4 className="font-bold text-slate-900">{item.name}</h4>
-                  {Array.isArray(item.options) && item.options.length > 0 && (
-                    <p className="text-xs text-slate-500">
-                      {item.options.map(o => o.name).join(', ')}
-                    </p>
-                  )}
-                  {item.notes && (
-                    <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight mt-0.5 italic">
-                      * {item.notes}
-                    </p>
-                  )}
-                  <p className="font-bold text-primary">฿{((item.price + item.options.reduce((s, o) => s + o.price, 0)) * item.quantity).toLocaleString()}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => updateQuantity(item.id, -1)}>
-                    <Minus className="w-3 h-3" />
-                  </Button>
-                  <span className="font-bold">{item.quantity}</span>
-                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => updateQuantity(item.id, 1)}>
-                    <Plus className="w-3 h-3" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeFromCart(item.id)}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+      {/* ─────────────────────────────────────────
+          Cart Bottom Sheet
+      ───────────────────────────────────────── */}
+      <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="rounded-t-3xl max-h-[88vh] flex flex-col p-0 gap-0 border-0"
+        >
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1 shrink-0">
+            <div className="w-10 h-1 bg-slate-200 rounded-full" />
           </div>
 
-          <div className="p-6 bg-slate-50 border-t space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-slate-600 font-medium">ราคารวมทั้งสิ้น</span>
-              <span className="text-2xl font-bold text-slate-900">฿{totalAmount.toLocaleString()}</span>
+          <SheetHeader className="px-5 pb-3 border-b shrink-0 gap-0">
+            <div className="flex items-center justify-between">
+              <SheetTitle className="font-black text-lg flex items-center gap-2 text-slate-900">
+                <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center">
+                  <ShoppingCart className="w-4 h-4 text-primary" />
+                </div>
+                ตะกร้าของคุณ
+                <Badge className="text-xs">{cartCount}</Badge>
+              </SheetTitle>
+              <button
+                onClick={() => setIsCartOpen(false)}
+                className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <Button className="w-full h-14 rounded-2xl text-lg font-bold" disabled={isSubmitting} onClick={handleSubmitOrder}>
-              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'ยืนยันการสั่งซื้อ'}
-            </Button>
+          </SheetHeader>
+
+          {/* Cart items */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            {cart.map(item => {
+              const lineTotal = (item.price + item.options.reduce((s, o) => s + o.price, 0)) * item.quantity;
+              return (
+                <div key={item.id} className="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-100 flex gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-slate-900 leading-snug">{item.name}</p>
+                    {item.options.length > 0 && (
+                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                        {item.options.map(o => o.name).join(', ')}
+                      </p>
+                    )}
+                    {item.notes && (
+                      <p className="text-[10px] text-slate-400 mt-0.5 italic">* {item.notes}</p>
+                    )}
+                    <p className="font-black text-primary text-sm mt-1.5">
+                      ฿{lineTotal.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <button
+                      onClick={() => removeFromCart(item.id)}
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="flex items-center gap-2 mt-auto bg-slate-50 rounded-xl px-2 py-1">
+                      <button
+                        onClick={() => updateQuantity(item.id, -1)}
+                        className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-primary hover:text-primary transition-colors"
+                      >
+                        <Minus className="w-2.5 h-2.5" />
+                      </button>
+                      <span className="w-5 text-center font-black text-sm tabular-nums">{item.quantity}</span>
+                      <button
+                        onClick={() => updateQuantity(item.id, 1)}
+                        className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-primary hover:text-primary transition-colors"
+                      >
+                        <Plus className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </DialogContent>
-      </Dialog>
+
+          {/* Sheet footer */}
+          <SheetFooter className="border-t bg-white px-5 pb-6 pt-4 gap-3">
+            <div className="flex justify-between items-baseline w-full">
+              <span className="text-slate-500 font-medium text-sm">ยอดรวมทั้งหมด</span>
+              <span className="text-2xl font-black text-slate-900">฿{totalAmount.toLocaleString()}</span>
+            </div>
+            <Button
+              onClick={handleSubmitOrder}
+              disabled={isSubmitting || cart.length === 0}
+              className="w-full h-14 rounded-2xl text-base font-black shadow-xl shadow-primary/25 flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {isSubmitting ? (
+                <><Loader2 className="w-5 h-5 animate-spin" />กำลังส่งออเดอร์...</>
+              ) : (
+                <><CheckCircle2 className="w-5 h-5" />ยืนยันสั่งอาหาร</>
+              )}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

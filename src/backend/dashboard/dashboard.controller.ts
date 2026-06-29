@@ -22,4 +22,12 @@ export class DashboardController {
   async getLogs(@Query('branchId') branchId: string) {
     return this.dashboardService.getLogs(Number(branchId));
   }
+
+  @Get('reports/sales')
+  async getSalesReport(
+    @Query('branchId') branchId: string,
+    @Query('filter') filter: 'today' | 'week' | 'month' | '6months' | 'year',
+  ) {
+    return this.dashboardService.getSalesReport(Number(branchId), filter);
+  }
 }

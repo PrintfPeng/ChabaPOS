@@ -1,0 +1,123 @@
+import {
+  Injectable, NotFoundException, BadRequestException, Inject,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  CreatePromotionDto, UpdatePromotionDto, ValidatePromotionDto,
+} from './dto/promotion.dto';
+
+@Injectable()
+export class PromotionsService {
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  async findAll(branchId: number, activeOnly = false) {
+    return this.prisma.promotion.findMany({
+      where: {
+        branchId,
+        ...(activeOnly ? { isActive: true } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOne(id: number) {
+    const promo = await this.prisma.promotion.findUnique({ where: { id } });
+    if (!promo) throw new NotFoundException('Promotion not found');
+    return promo;
+  }
+
+  async create(dto: CreatePromotionDto) {
+    return this.prisma.promotion.create({
+      data: {
+        name:         dto.name,
+        code:         dto.code ?? null,
+        type:         dto.type,
+        value:        dto.value,
+        minSpend:     dto.minSpend ?? 0,
+        pointsNeeded: dto.pointsNeeded ?? 0,
+        memberOnly:   dto.memberOnly ?? false,
+        isActive:     dto.isActive ?? true,
+        startDate:    dto.startDate ? new Date(dto.startDate) : null,
+        endDate:      dto.endDate   ? new Date(dto.endDate)   : null,
+        branchId:     dto.branchId,
+      },
+    });
+  }
+
+  async update(id: number, dto: UpdatePromotionDto) {
+    await this.findOne(id);
+    return this.prisma.promotion.update({
+      where: { id },
+      data: {
+        ...dto,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate:   dto.endDate   ? new Date(dto.endDate)   : undefined,
+      },
+    });
+  }
+
+  async toggle(id: number) {
+    const promo = await this.findOne(id);
+    return this.prisma.promotion.update({
+      where: { id },
+      data: { isActive: !promo.isActive },
+    });
+  }
+
+  async remove(id: number) {
+    await this.findOne(id);
+    return this.prisma.promotion.delete({ where: { id } });
+  }
+
+  /**
+   * Condition Checker — ตรวจสอบเงื่อนไขก่อนใช้โปรโมชั่น
+   * คืนค่า discountAmount ที่คำนวณแล้ว
+   */
+  async validate(dto: ValidatePromotionDto) {
+    const promo = await this.prisma.promotion.findFirst({
+      where: { id: dto.promotionId, branchId: dto.branchId, isActive: true },
+    });
+    if (!promo) throw new NotFoundException('โปรโมชั่นนี้ไม่พบหรือถูกปิดใช้งานแล้ว');
+
+    const now = new Date();
+    if (promo.startDate && now < promo.startDate)
+      throw new BadRequestException('โปรโมชั่นนี้ยังไม่เริ่มต้น');
+    if (promo.endDate && now > promo.endDate)
+      throw new BadRequestException('โปรโมชั่นนี้หมดอายุแล้ว');
+    if (dto.totalAmount < promo.minSpend)
+      throw new BadRequestException(
+        `ยอดชำระขั้นต่ำ ฿${promo.minSpend.toLocaleString()} เพื่อใช้โปรโมชั่นนี้`,
+      );
+    if (promo.memberOnly && !dto.customerId)
+      throw new BadRequestException('โปรโมชั่นนี้สำหรับสมาชิกเท่านั้น กรุณาค้นหาสมาชิกก่อน');
+
+    // Points redemption — เช็คแต้มให้พอ
+    if (promo.type === 'POINTS_REDEMPTION') {
+      if (!dto.customerId)
+        throw new BadRequestException('กรุณาค้นหาสมาชิกก่อนแลกแต้ม');
+      const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
+      if (!customer)
+        throw new NotFoundException('ไม่พบข้อมูลสมาชิก');
+      if (customer.points < promo.pointsNeeded)
+        throw new BadRequestException(
+          `แต้มไม่พอ (มี ${customer.points} แต้ม ต้องการ ${promo.pointsNeeded} แต้ม)`,
+        );
+    }
+
+    // คำนวณส่วนลด
+    let discountAmount = 0;
+    if (promo.type === 'PERCENT')
+      discountAmount = (dto.totalAmount * promo.value) / 100;
+    else
+      discountAmount = promo.value; // FIXED หรือ POINTS_REDEMPTION ใช้ value เป็นบาท
+
+    discountAmount = Math.min(discountAmount, dto.totalAmount);
+
+    return {
+      valid:         true,
+      discountAmount: Math.round(discountAmount * 100) / 100,
+      finalAmount:    Math.round((dto.totalAmount - discountAmount) * 100) / 100,
+      promotion:      promo,
+    };
+  }
+}

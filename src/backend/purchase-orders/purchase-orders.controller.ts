@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, UseGuards, Request, Query, Inject } from '@nestjs/common';
 import { PurchaseOrdersService } from './purchase-orders.service';
-import { CreatePurchaseOrderDto, UpdatePurchaseOrderStatusDto } from './dto/purchase-order.dto';
+import { CreatePurchaseOrderDto, UpdatePurchaseOrderStatusDto, ReceivePurchaseOrderDto } from './dto/purchase-order.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
@@ -21,6 +21,11 @@ export class PurchaseOrdersController {
   @Get('today')
   getTodayOrders(@Request() req, @Query('branchId', ParseIntPipe) branchId: number) {
     return this.purchaseOrdersService.getTodayOrders(req.user.userId, branchId);
+  }
+
+  @Post(':id/receive')
+  receive(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() receivePurchaseOrderDto: ReceivePurchaseOrderDto) {
+    return this.purchaseOrdersService.receive(req.user.userId, id, receivePurchaseOrderDto);
   }
 
   @Patch(':id/status')
