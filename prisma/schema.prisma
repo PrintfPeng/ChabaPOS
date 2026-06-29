@@ -47,10 +47,11 @@ model Branch {
   optionGroups OptionGroup[]
   orders       Order[]
   activityLogs ActivityLog[]
-  qrCodeUrl    String?
-  pin          String?
-  createdAt    DateTime      @default(now())
-  updatedAt  DateTime   @updatedAt
+  qrCodeUrl        String?
+  pin              String?
+  rewardPointRate  Float         @default(100)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
   suppliers    Supplier[]
   materialCategories MaterialCategory[]
   rawMaterials RawMaterial[]

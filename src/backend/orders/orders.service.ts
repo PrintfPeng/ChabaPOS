@@ -286,8 +286,6 @@ export class OrdersService {
       discountAmount?: number;
     },
   ) {
-    const POINTS_RATE = 100; // 1 แต้ม ต่อ 100 บาท
-
     await this.prisma.$transaction(async (tx) => {
       // 1. ดึง order ที่ยังไม่ได้ชำระทั้งหมด
       const unpaid = await tx.order.findMany({
@@ -295,9 +293,19 @@ export class OrdersService {
           tableId: tableId === 0 ? null : tableId,
           status: { notIn: ['PAID', 'CANCELLED'] },
         },
-        select: { id: true, totalAmount: true },
+        select: { id: true, totalAmount: true, branchId: true },
       });
       if (!unpaid.length) return;
+
+      // ดึง rewardPointRate ของสาขา (fallback 100)
+      const branchId = unpaid[0].branchId;
+      const branch = await tx.branch.findUnique({
+        where: { id: branchId },
+        select: { rewardPointRate: true },
+      });
+      const POINTS_RATE = branch?.rewardPointRate && branch.rewardPointRate > 0
+        ? branch.rewardPointRate
+        : 100;
 
       const grossTotal   = unpaid.reduce((s, o) => s + o.totalAmount, 0);
       const discount     = opts?.discountAmount ?? 0;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../../../lib/api';
+import { useBranch } from '../../../hooks/useBranches';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import {
@@ -12,8 +13,10 @@ import {
 import { Card, CardContent } from '../../../components/ui/card';
 import {
   Users, Star, Search, Plus, Pencil, Loader2, Phone, UserCheck,
+  Settings2, BadgePercent, ArrowRight, CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '../../../lib/utils';
 
 interface Customer {
   id: number;
@@ -26,15 +29,168 @@ interface Customer {
 
 const EMPTY_FORM = { phone: '', name: '' };
 
+/* ─── Reward Rate Setting Card ─────────────────────── */
+function RewardRateCard({ branchId }: { branchId: number }) {
+  const { branch, updateBranch } = useBranch(branchId);
+
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [rateInput,    setRateInput]    = useState('');
+  const [isSaving,     setIsSaving]     = useState(false);
+
+  const currentRate = branch?.rewardPointRate ?? 100;
+
+  const openDialog = () => {
+    setRateInput(String(currentRate));
+    setIsDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    const parsed = parseFloat(rateInput);
+    if (!rateInput || isNaN(parsed) || parsed < 1) {
+      return toast.error('กรุณากรอกตัวเลขที่ถูกต้อง (ขั้นต่ำ 1 บาท)');
+    }
+    setIsSaving(true);
+    try {
+      await updateBranch({ rewardPointRate: parsed });
+      toast.success(`บันทึกสำเร็จ — ทุก ฿${parsed.toLocaleString()} = 1 แต้ม`);
+      setIsDialogOpen(false);
+    } catch {
+      toast.error('บันทึกไม่สำเร็จ กรุณาลองใหม่');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const presets = [25, 50, 100, 200];
+
+  return (
+    <>
+      <Card className="border-none shadow-sm bg-gradient-to-br from-violet-500/10 to-transparent">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-violet-500 rounded-xl text-white shrink-0">
+                <BadgePercent className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  อัตราสะสมแต้ม
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <h3 className="text-xl font-black text-slate-900 leading-none">
+                    ฿{currentRate.toLocaleString()}
+                  </h3>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-base font-black text-violet-600 leading-none">1 แต้ม</span>
+                </div>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openDialog}
+              className="rounded-xl font-bold gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 shrink-0"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              แก้ไข
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Reward Rate Dialog ── */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="rounded-2xl sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BadgePercent className="w-5 h-5 text-violet-600" />
+              ตั้งค่าอัตราการแจกแต้ม
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Current rate display */}
+            <div className="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
+              <p className="text-xs text-slate-400 font-semibold mb-1">อัตราปัจจุบัน</p>
+              <p className="text-lg font-black text-slate-700">
+                ฿{currentRate.toLocaleString()} = 1 แต้ม
+              </p>
+            </div>
+
+            {/* Preset quick select */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-2">เลือกอัตราสำเร็จรูป</p>
+              <div className="grid grid-cols-4 gap-2">
+                {presets.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setRateInput(String(p))}
+                    className={cn(
+                      'py-2 rounded-xl border-2 text-sm font-black transition-all',
+                      rateInput === String(p)
+                        ? 'border-violet-500 bg-violet-50 text-violet-700'
+                        : 'border-slate-100 text-slate-500 hover:border-slate-200',
+                    )}
+                  >
+                    ฿{p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom input */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-500">หรือกำหนดเอง (บาท / 1 แต้ม)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-slate-400 pointer-events-none">฿</span>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  placeholder="100"
+                  value={rateInput}
+                  onChange={(e) => setRateInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                  className="pl-7 h-11 rounded-xl font-bold text-lg"
+                />
+              </div>
+              {rateInput && !isNaN(parseFloat(rateInput)) && parseFloat(rateInput) >= 1 && (
+                <p className="text-xs text-violet-600 font-semibold flex items-center gap-1.5 pl-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  ลูกค้าจ่ายทุก ฿{parseFloat(rateInput).toLocaleString()} จะได้ 1 แต้ม
+                </p>
+              )}
+            </div>
+
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="w-full h-11 rounded-xl font-bold bg-violet-600 hover:bg-violet-700"
+            >
+              {isSaving
+                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                : <CheckCircle2 className="w-4 h-4 mr-2" />}
+              บันทึกอัตราใหม่
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/* ─── Main Page ─────────────────────────────────────── */
 export default function MembersPage() {
   const { branchId } = useParams<{ branchId: string }>();
-  const [customers, setCustomers]   = useState<Customer[]>([]);
-  const [isLoading, setIsLoading]   = useState(true);
-  const [searchQ, setSearchQ]       = useState('');
+  const { branch } = useBranch(Number(branchId));
+
+  const [customers,    setCustomers]    = useState<Customer[]>([]);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [searchQ,      setSearchQ]      = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editing, setEditing]       = useState<Customer | null>(null);
-  const [form, setForm]             = useState(EMPTY_FORM);
-  const [isSaving, setIsSaving]     = useState(false);
+  const [editing,      setEditing]      = useState<Customer | null>(null);
+  const [form,         setForm]         = useState(EMPTY_FORM);
+  const [isSaving,     setIsSaving]     = useState(false);
 
   const fetchCustomers = async () => {
     try {
@@ -88,6 +244,7 @@ export default function MembersPage() {
   };
 
   const totalPoints = customers.reduce((s, c) => s + c.points, 0);
+  const currentRate = branch?.rewardPointRate ?? 100;
 
   return (
     <div className="space-y-6">
@@ -95,7 +252,9 @@ export default function MembersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-slate-900">จัดการสมาชิก</h2>
-          <p className="text-sm text-slate-500 mt-0.5">ระบบสะสมแต้มลูกค้า (100 บาท = 1 แต้ม)</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            ระบบสะสมแต้ม — ทุก ฿{currentRate.toLocaleString()} = 1 แต้ม
+          </p>
         </div>
         <Button onClick={openCreate} className="rounded-xl font-bold gap-2">
           <Plus className="w-4 h-4" />
@@ -103,12 +262,30 @@ export default function MembersPage() {
         </Button>
       </div>
 
-      {/* KPI row */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* KPI + Reward Rate row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: <Users className="w-5 h-5" />, label: 'สมาชิกทั้งหมด', value: `${customers.length} คน`, bg: 'bg-blue-500', from: 'from-blue-500/10' },
-          { icon: <Star  className="w-5 h-5" />, label: 'แต้มสะสมรวม',   value: `${totalPoints.toLocaleString()} แต้ม`, bg: 'bg-amber-500', from: 'from-amber-500/10' },
-          { icon: <UserCheck className="w-5 h-5" />, label: 'สมาชิกใหม่เดือนนี้', value: `${customers.filter(c => new Date(c.createdAt).getMonth() === new Date().getMonth()).length} คน`, bg: 'bg-emerald-500', from: 'from-emerald-500/10' },
+          {
+            icon: <Users className="w-5 h-5" />,
+            label: 'สมาชิกทั้งหมด',
+            value: `${customers.length} คน`,
+            bg: 'bg-blue-500',
+            from: 'from-blue-500/10',
+          },
+          {
+            icon: <Star className="w-5 h-5" />,
+            label: 'แต้มสะสมรวม',
+            value: `${totalPoints.toLocaleString()} แต้ม`,
+            bg: 'bg-amber-500',
+            from: 'from-amber-500/10',
+          },
+          {
+            icon: <UserCheck className="w-5 h-5" />,
+            label: 'สมาชิกใหม่เดือนนี้',
+            value: `${customers.filter(c => new Date(c.createdAt).getMonth() === new Date().getMonth()).length} คน`,
+            bg: 'bg-emerald-500',
+            from: 'from-emerald-500/10',
+          },
         ].map((k) => (
           <Card key={k.label} className={`border-none shadow-sm bg-gradient-to-br ${k.from} to-transparent`}>
             <CardContent className="p-4 flex items-center gap-3">
@@ -120,6 +297,9 @@ export default function MembersPage() {
             </CardContent>
           </Card>
         ))}
+
+        {/* Reward Rate Card */}
+        <RewardRateCard branchId={Number(branchId)} />
       </div>
 
       {/* Search */}

@@ -7,6 +7,7 @@ export interface Branch {
   imageUrl?: string;
   qrCodeUrl?: string;
   brandId: number;
+  rewardPointRate?: number;
   brand?: {
     id: number;
     name: string;
