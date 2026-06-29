@@ -98,12 +98,15 @@ export class OrdersService {
       data: {
         orderNumber,
         totalAmount,
+        discountAmount: dto.discountAmount ?? 0,
         status: dto.isPrepaid ? 'PAID' : 'PENDING',
         paymentType: dto.isPrepaid ? dto.paymentType : null,
         branchId: dto.branchId,
         tableId: dto.tableId === 0 ? null : dto.tableId,
         source: dto.source || 'CUSTOMER',
         notes: dto.notes || null,
+        ...(dto.customerId  ? { customerId:  dto.customerId }  : {}),
+        ...(dto.promotionId ? { promotionId: dto.promotionId } : {}),
         items: {
           create: orderItemsData,
         },

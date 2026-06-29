@@ -322,9 +322,10 @@ export default function Payment() {
   const [change,          setChange]          = useState(0);
 
   /* ── Member & Promo state ── */
-  const [memberInfo,      setMemberInfo]      = useState<CustomerInfo | null>(null);
-  const [discountAmount,  setDiscountAmount]  = useState(0);
-  const [activePromoId,   setActivePromoId]   = useState<number | null>(null);
+  const [memberInfo,          setMemberInfo]          = useState<CustomerInfo | null>(null);
+  const [discountAmount,      setDiscountAmount]      = useState(0);   // cashier-applied
+  const [preAppliedDiscount,  setPreAppliedDiscount]  = useState(0);   // already saved on QR orders
+  const [activePromoId,       setActivePromoId]       = useState<number | null>(null);
 
   const fetchUnpaidBills = async () => {
     try {
@@ -343,7 +344,9 @@ export default function Payment() {
     return () => clearInterval(interval);
   }, [branchId]);
 
-  const finalTotal = selectedBill ? Math.max(0, selectedBill.totalAmount - discountAmount) : 0;
+  const finalTotal = selectedBill
+    ? Math.max(0, selectedBill.totalAmount - preAppliedDiscount - discountAmount)
+    : 0;
 
   useEffect(() => {
     if (selectedBill && receivedAmount) {
@@ -368,11 +371,12 @@ export default function Payment() {
     setIsProcessing(true);
     try {
       const tableId = selectedBill.tableId ?? selectedBill.table?.id;
+      const totalDiscount = preAppliedDiscount + discountAmount;
       await api.post(`/orders/table/${tableId}/pay`, {
         paymentType:    paymentMode === 'CASH' ? 'CASH' : 'TRANSFER',
-        ...(memberInfo     ? { customerId:     memberInfo.id } : {}),
-        ...(activePromoId  ? { promotionId:    activePromoId } : {}),
-        ...(discountAmount ? { discountAmount: discountAmount } : {}),
+        ...(memberInfo      ? { customerId:     memberInfo.id }  : {}),
+        ...(activePromoId   ? { promotionId:    activePromoId }  : {}),
+        ...(totalDiscount   ? { discountAmount: totalDiscount }  : {}),
       });
 
       const pointsEarned = Math.floor(finalTotal / 100);
@@ -386,6 +390,7 @@ export default function Payment() {
       setReceivedAmount('');
       setMemberInfo(null);
       setDiscountAmount(0);
+      setPreAppliedDiscount(0);
       setActivePromoId(null);
       fetchUnpaidBills();
     } catch (error: any) {
@@ -443,6 +448,11 @@ export default function Payment() {
                   setMemberInfo(null);
                   setDiscountAmount(0);
                   setActivePromoId(null);
+                  // Pre-fill discount already applied from QR ordering
+                  const qrDiscount = (bill.orders as any[]).reduce(
+                    (sum: number, o: any) => sum + (o.discountAmount || 0), 0,
+                  );
+                  setPreAppliedDiscount(qrDiscount);
                 }}
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 p-5 pb-2">
@@ -480,7 +490,7 @@ export default function Payment() {
 
       <AnimatePresence>
       {selectedBill && (
-        <Dialog open={!!selectedBill} onOpenChange={() => setSelectedBill(null)}>
+        <Dialog open={!!selectedBill} onOpenChange={() => { setSelectedBill(null); setPreAppliedDiscount(0); setDiscountAmount(0); }}>
           <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl h-[90vh] sm:h-[80vh] max-h-[850px] p-0 gap-0 border-none overflow-hidden rounded-[24px] sm:rounded-[40px] shadow-2xl flex flex-col sm:flex-row bg-white">
             {/* Left Column: Bill Summary */}
             <div className="w-full sm:w-[300px] lg:w-[350px] shrink-0 h-[30%] sm:h-full flex flex-col bg-slate-50 border-r border-slate-100 overflow-hidden">
@@ -533,15 +543,24 @@ export default function Payment() {
                </ScrollArea>
 
                <div className="p-4 sm:p-6 bg-white border-t border-slate-100 shrink-0 space-y-2">
-                  {discountAmount > 0 && (
+                  {(preAppliedDiscount > 0 || discountAmount > 0) && (
                     <div className="flex justify-between text-sm px-1">
                       <span className="text-slate-400">ราคาปกติ</span>
                       <span className="text-slate-400 line-through">฿{selectedBill.totalAmount.toLocaleString()}</span>
                     </div>
                   )}
+                  {preAppliedDiscount > 0 && (
+                    <div className="flex justify-between text-sm px-1">
+                      <span className="text-primary font-bold flex items-center gap-1">
+                        <Tag className="w-3 h-3" />
+                        ส่วนลด (สั่งผ่าน QR)
+                      </span>
+                      <span className="text-primary font-bold">- ฿{preAppliedDiscount.toLocaleString()}</span>
+                    </div>
+                  )}
                   {discountAmount > 0 && (
                     <div className="flex justify-between text-sm px-1">
-                      <span className="text-primary font-bold">ส่วนลด</span>
+                      <span className="text-primary font-bold">ส่วนลด (แคชเชียร์)</span>
                       <span className="text-primary font-bold">- ฿{discountAmount.toLocaleString()}</span>
                     </div>
                   )}

@@ -1,5 +1,6 @@
 import { IsNumber, IsString, IsArray, ValidateNested, IsOptional, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsInt } from 'class-validator';
 
 class OrderOptionDto {
   @IsNumber()
@@ -52,4 +53,16 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsInt()
+  @IsOptional()
+  customerId?: number;
+
+  @IsInt()
+  @IsOptional()
+  promotionId?: number;
+
+  @IsNumber()
+  @IsOptional()
+  discountAmount?: number;
 }
