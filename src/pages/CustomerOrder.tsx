@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useCart } from '../contexts/CartContext';
+import type { CustomerInfo, PromoInfo } from '../contexts/CartContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -14,25 +15,20 @@ import { toast } from 'sonner';
 import {
   ShoppingCart, Plus, Minus, X, Loader2, UtensilsCrossed,
   Tag, CheckCircle2, ChevronLeft, ChevronRight,
+  Phone, UserPlus, Star, Sparkles,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────
-// Types
+// Types (menu-specific)
 // ─────────────────────────────────────────────
-interface OptionItem { id: number; name: string; price: number }
+interface OptionItem  { id: number; name: string; price: number }
 interface OptionGroup { id: number; name: string; isMultiple: boolean; options: OptionItem[] }
 interface MenuItem {
   id: number; name: string; price: number; imageUrl?: string; categoryId: number;
   optionGroups: OptionGroup[];
 }
 interface Category { id: number; name: string; items: MenuItem[] }
-interface Promotion {
-  id: number; name: string;
-  type: 'PERCENT' | 'FIXED' | 'POINTS_REDEMPTION';
-  value: number; minSpend: number; code?: string;
-}
 
-// Promo gradient palette (cycles per promo)
 const PROMO_GRADIENTS = [
   'from-orange-500 via-red-500 to-rose-600',
   'from-violet-600 via-purple-500 to-pink-500',
@@ -42,9 +38,9 @@ const PROMO_GRADIENTS = [
 ];
 
 // ─────────────────────────────────────────────
-// Promo Carousel
+// Promo Carousel (top banner)
 // ─────────────────────────────────────────────
-function PromoBanner({ promotions }: { promotions: Promotion[] }) {
+function PromoBanner({ promotions }: { promotions: PromoInfo[] }) {
   const [idx, setIdx] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval>>();
 
@@ -54,18 +50,17 @@ function PromoBanner({ promotions }: { promotions: Promotion[] }) {
     return () => clearInterval(timer.current);
   }, [promotions.length]);
 
-  if (promotions.length === 0) return null;
+  if (!promotions.length) return null;
 
-  const promoLabel = (p: Promotion) => {
+  const label = (p: PromoInfo) => {
     if (p.type === 'PERCENT') return `ลด ${p.value}%`;
-    if (p.type === 'FIXED') return `ลด ฿${p.value.toLocaleString()}`;
+    if (p.type === 'FIXED')   return `ลด ฿${p.value.toLocaleString()}`;
     return `แลกแต้ม ${p.value} แต้ม`;
   };
 
   return (
     <div className="px-4 pt-4 pb-1">
       <div className="relative rounded-2xl overflow-hidden shadow-md">
-        {/* Slides */}
         <div
           className="flex transition-transform duration-500 ease-out"
           style={{ transform: `translateX(-${idx * 100}%)` }}
@@ -85,7 +80,7 @@ function PromoBanner({ promotions }: { promotions: Promotion[] }) {
                 </div>
                 <p className="font-black text-base leading-tight">{promo.name}</p>
                 <p className="text-xs mt-0.5 opacity-80">
-                  {promoLabel(promo)}
+                  {label(promo)}
                   {promo.minSpend > 0 && ` · ขั้นต่ำ ฿${promo.minSpend.toLocaleString()}`}
                 </p>
               </div>
@@ -94,7 +89,6 @@ function PromoBanner({ promotions }: { promotions: Promotion[] }) {
           ))}
         </div>
 
-        {/* Nav arrows */}
         {promotions.length > 1 && (
           <>
             <button
@@ -109,23 +103,16 @@ function PromoBanner({ promotions }: { promotions: Promotion[] }) {
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+              {promotions.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setIdx(i)}
+                  className={cn('rounded-full transition-all', i === idx ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50')}
+                />
+              ))}
+            </div>
           </>
-        )}
-
-        {/* Dots */}
-        {promotions.length > 1 && (
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-            {promotions.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setIdx(i)}
-                className={cn(
-                  'rounded-full transition-all',
-                  i === idx ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50',
-                )}
-              />
-            ))}
-          </div>
         )}
       </div>
     </div>
@@ -135,16 +122,15 @@ function PromoBanner({ promotions }: { promotions: Promotion[] }) {
 // ─────────────────────────────────────────────
 // Food Card — same style as CounterService
 // ─────────────────────────────────────────────
-function FoodCard({
-  item, cartCount, onClick,
-}: { item: MenuItem; cartCount: number; onClick: () => void }) {
+function FoodCard({ item, cartCount, onClick }: {
+  item: MenuItem; cartCount: number; onClick: () => void;
+}) {
   return (
     <Card
       onClick={onClick}
       className="overflow-hidden cursor-pointer hover:border-primary hover:shadow-md transition-all group border-white shadow-sm active:scale-95 flex flex-col"
     >
       <CardContent className="p-0 flex flex-col h-full">
-        {/* Image — same aspect ratio as CounterService */}
         <div className="relative aspect-[4/3] sm:aspect-video overflow-hidden shrink-0">
           {item.imageUrl ? (
             <img
@@ -158,21 +144,17 @@ function FoodCard({
               <UtensilsCrossed className="w-8 h-8 text-slate-300" />
             </div>
           )}
-          {/* Price badge — top-right like CounterService */}
           <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10">
             <Badge className="bg-white/95 text-primary border-none font-black shadow-sm text-[10px] sm:text-xs">
               ฿{item.price.toLocaleString()}
             </Badge>
           </div>
-          {/* In-cart counter badge */}
           {cartCount > 0 && (
             <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-10 w-5 h-5 bg-primary text-white text-[9px] font-black rounded-full flex items-center justify-center shadow">
               {cartCount}
             </div>
           )}
         </div>
-
-        {/* Name only — price is in badge */}
         <div className="p-2 sm:p-3 flex-1 flex flex-col justify-center">
           <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors text-xs sm:text-sm line-clamp-2 leading-tight">
             {item.name}
@@ -184,30 +166,309 @@ function FoodCard({
 }
 
 // ─────────────────────────────────────────────
+// MemberCartSection — inline in Cart Sheet
+// Handles: phone lookup → customer card → quick register → promo list → discount summary
+// ─────────────────────────────────────────────
+function MemberCartSection({ branchId, subtotal }: { branchId: string; subtotal: number }) {
+  const {
+    customer, setCustomer,
+    appliedPromotion, applyPromotion, clearPromotion,
+    discountAmount,
+  } = useCart();
+
+  const [phone,        setPhone]        = useState(customer?.phone ?? '');
+  const [isSearching,  setIsSearching]  = useState(false);
+  const [notFound,     setNotFound]     = useState(false);
+  const [promos,       setPromos]       = useState<PromoInfo[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+  const [showQuickReg, setShowQuickReg] = useState(false);
+  const [quickName,    setQuickName]    = useState('');
+  const [isReg,        setIsReg]        = useState(false);
+  const [isExpanded,   setIsExpanded]   = useState(!!customer);
+
+  /* Fetch active promos once */
+  useEffect(() => {
+    api.get(`/promotions?branchId=${branchId}&activeOnly=true`)
+      .then(r => setPromos(r.data))
+      .catch(() => {});
+  }, [branchId]);
+
+  /* Sync phone when customer is restored from context */
+  useEffect(() => {
+    if (customer) setPhone(customer.phone);
+  }, [customer]);
+
+  const visiblePromos = promos.filter(
+    p => subtotal >= p.minSpend && (!p.memberOnly || customer),
+  );
+
+  /* ── Search ── */
+  const searchCustomer = async () => {
+    if (phone.length < 9) return toast.error('กรอกเบอร์โทร 9-10 หลัก');
+    setIsSearching(true); setNotFound(false);
+    setCustomer(null); clearPromotion();
+    try {
+      const res = await api.get(`/customers/lookup?phone=${phone}&branchId=${branchId}`);
+      if (res.data) {
+        setCustomer(res.data);
+        toast.success(`พบสมาชิก "${res.data.name}" — ${res.data.points} แต้ม`);
+      } else {
+        setNotFound(true);
+      }
+    } catch {
+      setNotFound(true);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  /* ── Quick register ── */
+  const handleRegister = async () => {
+    if (!quickName.trim()) return toast.error('กรุณากรอกชื่อ');
+    setIsReg(true);
+    try {
+      const res = await api.post('/customers', {
+        phone, name: quickName.trim(), branchId: Number(branchId),
+      });
+      setCustomer(res.data);
+      setNotFound(false); setShowQuickReg(false);
+      toast.success(`สมัครสมาชิก "${res.data.name}" สำเร็จ 🎉`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'สมัครสมาชิกไม่สำเร็จ');
+    } finally {
+      setIsReg(false);
+    }
+  };
+
+  /* ── Apply promo ── */
+  const handleApplyPromo = async (promo: PromoInfo) => {
+    setIsValidating(true);
+    try {
+      const disc = await applyPromotion(Number(branchId), promo);
+      if (disc !== null && appliedPromotion?.id !== promo.id) {
+        toast.success(`ใช้ "${promo.name}" — ลด ฿${disc.toLocaleString()}`);
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'ไม่สามารถใช้โปรโมชั่นนี้ได้');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  /* ── Remove customer ── */
+  const handleRemoveCustomer = () => {
+    setCustomer(null);
+    clearPromotion();
+    setPhone('');
+    setNotFound(false);
+    setShowQuickReg(false);
+  };
+
+  return (
+    <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white">
+      {/* Toggle header */}
+      <button
+        onClick={() => setIsExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-xl bg-amber-50 flex items-center justify-center">
+            <Star className="w-3.5 h-3.5 text-amber-500" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-bold text-slate-800">สมาชิก & โปรโมชั่น</p>
+            {customer ? (
+              <p className="text-xs text-emerald-600 font-semibold leading-tight">
+                {customer.name} · {customer.points} แต้ม
+                {discountAmount > 0 && ` · ลด ฿${discountAmount.toLocaleString()}`}
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-400">ค้นหาสมาชิกเพื่อใช้โปรโมชั่น</p>
+            )}
+          </div>
+        </div>
+        <div className={cn('text-slate-400 transition-transform', isExpanded ? 'rotate-180' : '')}>
+          <ChevronLeft className="w-4 h-4 rotate-90" />
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-slate-50">
+
+          {/* ── Phone search ── */}
+          {!customer && (
+            <div className="flex gap-2 pt-3">
+              <div className="relative flex-1">
+                <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <Input
+                  type="tel"
+                  placeholder="เบอร์โทรศัพท์"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onKeyDown={e => e.key === 'Enter' && searchCustomer()}
+                  className="pl-8 h-9 rounded-xl text-sm"
+                  maxLength={10}
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={searchCustomer}
+                disabled={isSearching || phone.length < 9}
+                className="h-9 rounded-xl font-bold shrink-0 px-4"
+              >
+                {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'ค้นหา'}
+              </Button>
+            </div>
+          )}
+
+          {/* ── Customer card ── */}
+          {customer && (
+            <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100 mt-3">
+              <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                {customer.name[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-emerald-800 text-sm truncate">{customer.name}</p>
+                <p className="text-xs text-emerald-600">{customer.phone}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-base font-black text-amber-500 leading-none">{customer.points}</p>
+                <p className="text-[9px] text-slate-400 font-bold uppercase">แต้ม</p>
+              </div>
+              <button
+                onClick={handleRemoveCustomer}
+                className="text-slate-300 hover:text-slate-500 ml-1 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* ── Not found + quick register ── */}
+          {notFound && !customer && (
+            <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <p className="text-xs text-slate-500 font-semibold text-center">ไม่พบสมาชิกหมายเลข {phone}</p>
+              {!showQuickReg ? (
+                <button
+                  onClick={() => setShowQuickReg(true)}
+                  className="mt-2 text-xs text-primary font-bold flex items-center gap-1.5 mx-auto"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  สมัครสมาชิกด่วน (รับแต้มทันที)
+                </button>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <Input
+                    placeholder="ชื่อ-นามสกุล"
+                    value={quickName}
+                    onChange={e => setQuickName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleRegister()}
+                    className="h-9 rounded-xl text-sm"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleRegister}
+                    disabled={isReg}
+                    className="w-full h-9 rounded-xl font-bold text-sm"
+                  >
+                    {isReg
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      : <UserPlus className="w-3.5 h-3.5 mr-1.5" />}
+                    ยืนยันสมัครสมาชิก
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Available promotions ── */}
+          {visiblePromos.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mt-1">
+                <Sparkles className="w-3 h-3" /> โปรโมชั่นที่ใช้ได้
+              </p>
+              {visiblePromos.map(p => {
+                const isSelected  = appliedPromotion?.id === p.id;
+                const needsPoints = p.type === 'POINTS_REDEMPTION';
+                const hasEnough   = !needsPoints || (customer?.points ?? 0) >= p.pointsNeeded;
+                return (
+                  <button
+                    key={p.id}
+                    disabled={isValidating || !hasEnough}
+                    onClick={() => handleApplyPromo(p)}
+                    className={cn(
+                      'w-full flex items-center justify-between p-3 rounded-xl border-2 text-left transition-all active:scale-[0.98]',
+                      isSelected
+                        ? 'border-primary bg-primary/5'
+                        : hasEnough
+                        ? 'border-slate-100 bg-white hover:border-slate-200'
+                        : 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed',
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className={cn('text-sm font-bold truncate', isSelected ? 'text-primary' : 'text-slate-800')}>
+                        {p.name}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {p.type === 'PERCENT' && `ลด ${p.value}%`}
+                        {p.type === 'FIXED'   && `ลด ฿${p.value.toLocaleString()}`}
+                        {p.type === 'POINTS_REDEMPTION' &&
+                          `ใช้ ${p.pointsNeeded} แต้ม → ลด ฿${p.value.toLocaleString()}${!hasEnough ? ' (แต้มไม่พอ)' : ''}`}
+                        {p.memberOnly && <span className="ml-1 text-primary/60">(เฉพาะสมาชิก)</span>}
+                      </p>
+                    </div>
+                    {isSelected
+                      ? <CheckCircle2 className="w-5 h-5 text-primary shrink-0 ml-2" />
+                      : <Tag className="w-4 h-4 text-slate-300 shrink-0 ml-2" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Discount summary ── */}
+          {discountAmount > 0 && (
+            <div className="flex items-center justify-between px-3 py-2.5 bg-primary/5 rounded-xl border border-primary/15">
+              <span className="text-sm font-bold text-primary">ส่วนลดที่ได้รับ</span>
+              <span className="text-base font-black text-primary">- ฿{discountAmount.toLocaleString()}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Main Page
 // ─────────────────────────────────────────────
 export default function CustomerOrder() {
   const { branchId, tableId } = useParams<{ branchId: string; tableId: string }>();
   const navigate = useNavigate();
-  const { cart, addToCart, updateQuantity, removeFromCart, totalAmount, clearCart } = useCart();
+  const {
+    cart, addToCart, updateQuantity, removeFromCart, clearCart,
+    subtotal, discountAmount, finalTotal,
+    customer, appliedPromotion,
+  } = useCart();
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [promotions, setPromotions] = useState<Promotion[]>([]);
-  const [branchName, setBranchName] = useState('');
-  const [tableName, setTableName] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [categories, setCategories]   = useState<Category[]>([]);
+  const [promotions, setPromotions]   = useState<PromoInfo[]>([]);
+  const [branchName, setBranchName]   = useState('');
+  const [tableName,  setTableName]    = useState('');
+  const [isLoading,  setIsLoading]    = useState(true);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<OptionItem[]>([]);
-  const [quantity, setQuantity] = useState(1);
-  const [itemNotes, setItemNotes] = useState('');
+  const [quantity,   setQuantity]     = useState(1);
+  const [itemNotes,  setItemNotes]    = useState('');
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen]   = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categoryRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
-  const observerRef = useRef<IntersectionObserver | null>(null);
+  const observerRef  = useRef<IntersectionObserver | null>(null);
 
-  // ── Fetch data ──────────────────────────────
+  /* ── Fetch menu + table + promos ── */
   useEffect(() => {
     const load = async () => {
       try {
@@ -221,7 +482,7 @@ export default function CustomerOrder() {
         setBranchName(menuRes.data.name || '');
         setTableName(tableRes.data.name || '');
         setPromotions(promoRes.data || []);
-        if (cats.length > 0) setActiveCategory(cats[0].id);
+        if (cats.length) setActiveCategory(cats[0].id);
       } catch {
         toast.error('ไม่สามารถโหลดข้อมูลได้');
       } finally {
@@ -231,16 +492,14 @@ export default function CustomerOrder() {
     load();
   }, [branchId, tableId]);
 
-  // ── Intersection Observer (active category highlight) ──
+  /* ── Active category via IntersectionObserver ── */
   useEffect(() => {
     if (!categories.length) return;
     observerRef.current?.disconnect();
     observerRef.current = new IntersectionObserver(
       entries => {
         const visible = entries.filter(e => e.isIntersecting);
-        if (visible.length > 0) {
-          setActiveCategory(Number(visible[0].target.getAttribute('data-cat-id')));
-        }
+        if (visible.length) setActiveCategory(Number(visible[0].target.getAttribute('data-cat-id')));
       },
       { rootMargin: '-110px 0px -55% 0px', threshold: 0 },
     );
@@ -250,12 +509,11 @@ export default function CustomerOrder() {
     return () => observerRef.current?.disconnect();
   }, [categories]);
 
-  // ── Helpers ─────────────────────────────────
+  /* ── Helpers ── */
   const scrollToCategory = (id: number) => {
     const el = categoryRefs.current[id];
     if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - 130;
-    window.scrollTo({ top, behavior: 'smooth' });
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 130, behavior: 'smooth' });
   };
 
   const handleSelectItem = (item: MenuItem) => {
@@ -282,30 +540,34 @@ export default function CustomerOrder() {
     if (!selectedItem) return;
     addToCart({
       menuItemId: selectedItem.id,
-      name: selectedItem.name,
-      price: selectedItem.price,
+      name:       selectedItem.name,
+      price:      selectedItem.price,
       quantity,
-      notes: itemNotes || undefined,
-      options: selectedOptions.map(o => ({ optionId: o.id, name: o.name, price: o.price })),
+      notes:      itemNotes || undefined,
+      options:    selectedOptions.map(o => ({ optionId: o.id, name: o.name, price: o.price })),
     });
     setSelectedItem(null);
     toast.success(`เพิ่ม "${selectedItem.name}" ลงตะกร้าแล้ว 🛒`);
   };
 
+  /* ── Submit order — includes customerId / promotionId / discountAmount ── */
   const handleSubmitOrder = async () => {
-    if (cart.length === 0) return;
+    if (!cart.length) return;
     setIsSubmitting(true);
     try {
       const tableRes = await api.get(`/tables/by-qrcode/${tableId}`);
       await api.post('/orders', {
-        branchId: Number(branchId),
-        tableId: tableRes.data.id,
-        source: 'QR',
+        branchId:      Number(branchId),
+        tableId:       tableRes.data.id,
+        source:        'QR',
+        ...(customer       ? { customerId:     customer.id }        : {}),
+        ...(appliedPromotion ? { promotionId:  appliedPromotion.id } : {}),
+        ...(discountAmount  ? { discountAmount }                     : {}),
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
-          quantity: item.quantity,
-          notes: item.notes,
-          options: item.options.map(o => ({ optionId: o.optionId })),
+          quantity:   item.quantity,
+          notes:      item.notes,
+          options:    item.options.map(o => ({ optionId: o.optionId })),
         })),
       });
       clearCart();
@@ -320,7 +582,7 @@ export default function CustomerOrder() {
 
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
 
-  // ── Loading ──────────────────────────────────
+  /* ── Loading ── */
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-primary/5 to-white gap-4">
@@ -332,14 +594,13 @@ export default function CustomerOrder() {
     );
   }
 
-  // ── Render ───────────────────────────────────
+  /* ── Render ── */
   return (
     <div className="min-h-screen bg-slate-50" style={{ paddingBottom: cartCount > 0 ? '100px' : '32px' }}>
 
-      {/* ── Sticky Header ─────────────────────── */}
+      {/* ── Sticky Header ── */}
       <div className="sticky top-0 z-30">
-        {/* Brand bar */}
-        <div className="bg-gradient-to-r from-primary to-primary/80 px-4 pt-safe pt-4 pb-3 text-white">
+        <div className="bg-gradient-to-r from-primary to-primary/80 px-4 pt-4 pb-3 text-white">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="font-black text-lg leading-tight truncate">{branchName}</h1>
@@ -374,10 +635,10 @@ export default function CustomerOrder() {
         </div>
       </div>
 
-      {/* ── Promo Banner ──────────────────────── */}
+      {/* ── Promo Banner ── */}
       <PromoBanner promotions={promotions} />
 
-      {/* ── Menu Sections ─────────────────────── */}
+      {/* ── Menu sections ── */}
       <div className="px-4 pt-4 space-y-8">
         {categories.map(cat => (
           <div
@@ -386,7 +647,6 @@ export default function CustomerOrder() {
             ref={el => { categoryRefs.current[cat.id] = el; }}
             className="scroll-mt-36"
           >
-            {/* Category heading */}
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1 h-5 bg-primary rounded-full shrink-0" />
               <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">{cat.name}</h2>
@@ -394,13 +654,9 @@ export default function CustomerOrder() {
                 {cat.items.length}
               </Badge>
             </div>
-
-            {/* Food grid — columns match CounterService */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
               {cat.items.map(item => {
-                const inCart = cart
-                  .filter(c => c.menuItemId === item.id)
-                  .reduce((s, c) => s + c.quantity, 0);
+                const inCart = cart.filter(c => c.menuItemId === item.id).reduce((s, c) => s + c.quantity, 0);
                 return (
                   <FoodCard
                     key={item.id}
@@ -415,7 +671,7 @@ export default function CustomerOrder() {
         ))}
       </div>
 
-      {/* ── Sticky Cart Footer ────────────────── */}
+      {/* ── Sticky Cart Footer ── */}
       {cartCount > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-40 px-4 pb-5 pt-4 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none">
           <button
@@ -432,21 +688,24 @@ export default function CustomerOrder() {
               <span className="font-bold text-sm">{cartCount} รายการ</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-black text-base">฿{totalAmount.toLocaleString()}</span>
+              {discountAmount > 0 ? (
+                <span className="font-black text-base">฿{finalTotal.toLocaleString()}</span>
+              ) : (
+                <span className="font-black text-base">฿{subtotal.toLocaleString()}</span>
+              )}
               <ChevronRight className="w-4 h-4 opacity-70" />
             </div>
           </button>
         </div>
       )}
 
-      {/* ─────────────────────────────────────────
+      {/* ────────────────────────────────────────
           Item Detail Dialog
-      ───────────────────────────────────────── */}
+      ──────────────────────────────────────── */}
       <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>
         <DialogContent className="w-[95vw] max-w-[480px] p-0 rounded-3xl border-none max-h-[92vh] flex flex-col overflow-hidden">
           {selectedItem && (
             <>
-              {/* Hero image */}
               <div className="relative h-48 shrink-0 bg-slate-100">
                 {selectedItem.imageUrl ? (
                   <img
@@ -471,21 +730,20 @@ export default function CustomerOrder() {
                 </div>
                 <button
                   onClick={() => setSelectedItem(null)}
-                  className="absolute top-3 right-3 w-8 h-8 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/50 transition-colors"
+                  className="absolute top-3 right-3 w-8 h-8 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Options + notes scroll area */}
               <ScrollArea className="flex-1">
                 <div className="p-5 space-y-5">
                   {selectedItem.optionGroups?.map(group => (
                     <div key={group.id}>
                       <div className="flex items-center justify-between mb-2.5">
                         <h4 className="text-sm font-black text-slate-800">{group.name}</h4>
-                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                          {group.isMultiple ? 'เลือกได้หลายรายการ' : 'เลือก 1 รายการ'}
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full uppercase">
+                          {group.isMultiple ? 'หลายรายการ' : 'เลือก 1'}
                         </span>
                       </div>
                       <div className="space-y-2">
@@ -521,12 +779,10 @@ export default function CustomerOrder() {
                       </div>
                     </div>
                   ))}
-
-                  {/* Notes */}
                   <div>
                     <h4 className="text-sm font-black text-slate-800 mb-2">หมายเหตุ</h4>
                     <Input
-                      placeholder="เช่น ไม่ใส่ผัก, เผ็ดน้อย, ไม่ใส่น้ำแข็ง"
+                      placeholder="เช่น ไม่ใส่ผัก, เผ็ดน้อย"
                       value={itemNotes}
                       onChange={e => setItemNotes(e.target.value)}
                       className="rounded-xl border-slate-200 text-sm"
@@ -535,22 +791,15 @@ export default function CustomerOrder() {
                 </div>
               </ScrollArea>
 
-              {/* Qty + Add to cart */}
               <div className="p-4 border-t bg-white shrink-0 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-slate-600">จำนวน</span>
                   <div className="flex items-center gap-3 bg-slate-50 rounded-full px-2 py-1 border border-slate-100">
-                    <button
-                      onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                      className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-500 hover:text-primary transition-colors"
-                    >
+                    <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-500 hover:text-primary">
                       <Minus className="w-3.5 h-3.5" />
                     </button>
                     <span className="w-6 text-center font-black text-lg tabular-nums">{quantity}</span>
-                    <button
-                      onClick={() => setQuantity(q => q + 1)}
-                      className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-500 hover:text-primary transition-colors"
-                    >
+                    <button onClick={() => setQuantity(q => q + 1)} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-500 hover:text-primary">
                       <Plus className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -570,14 +819,14 @@ export default function CustomerOrder() {
         </DialogContent>
       </Dialog>
 
-      {/* ─────────────────────────────────────────
+      {/* ────────────────────────────────────────
           Cart Bottom Sheet
-      ───────────────────────────────────────── */}
+      ──────────────────────────────────────── */}
       <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
         <SheetContent
           side="bottom"
           showCloseButton={false}
-          className="rounded-t-3xl max-h-[88vh] flex flex-col p-0 gap-0 border-0"
+          className="rounded-t-3xl max-h-[92vh] flex flex-col p-0 gap-0 border-0"
         >
           {/* Drag handle */}
           <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -595,67 +844,80 @@ export default function CustomerOrder() {
               </SheetTitle>
               <button
                 onClick={() => setIsCartOpen(false)}
-                className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200"
+                className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </SheetHeader>
 
-          {/* Cart items */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-            {cart.map(item => {
-              const lineTotal = (item.price + item.options.reduce((s, o) => s + o.price, 0)) * item.quantity;
-              return (
-                <div key={item.id} className="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-100 flex gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm text-slate-900 leading-snug">{item.name}</p>
-                    {item.options.length > 0 && (
-                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-                        {item.options.map(o => o.name).join(', ')}
+          {/* Scrollable area: cart items + member/promo section */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+
+            {/* ── Cart items ── */}
+            <div className="space-y-3">
+              {cart.map(item => {
+                const lineTotal = (item.price + item.options.reduce((s, o) => s + o.price, 0)) * item.quantity;
+                return (
+                  <div key={item.id} className="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-100 flex gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-slate-900 leading-snug">{item.name}</p>
+                      {item.options.length > 0 && (
+                        <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                          {item.options.map(o => o.name).join(', ')}
+                        </p>
+                      )}
+                      {item.notes && (
+                        <p className="text-[10px] text-slate-400 mt-0.5 italic">* {item.notes}</p>
+                      )}
+                      <p className="font-black text-primary text-sm mt-1.5">
+                        ฿{lineTotal.toLocaleString()}
                       </p>
-                    )}
-                    {item.notes && (
-                      <p className="text-[10px] text-slate-400 mt-0.5 italic">* {item.notes}</p>
-                    )}
-                    <p className="font-black text-primary text-sm mt-1.5">
-                      ฿{lineTotal.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="flex items-center gap-2 mt-auto bg-slate-50 rounded-xl px-2 py-1">
-                      <button
-                        onClick={() => updateQuantity(item.id, -1)}
-                        className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-primary hover:text-primary transition-colors"
-                      >
-                        <Minus className="w-2.5 h-2.5" />
+                    </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <button onClick={() => removeFromCart(item.id)} className="w-6 h-6 rounded-full flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                        <X className="w-3.5 h-3.5" />
                       </button>
-                      <span className="w-5 text-center font-black text-sm tabular-nums">{item.quantity}</span>
-                      <button
-                        onClick={() => updateQuantity(item.id, 1)}
-                        className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-primary hover:text-primary transition-colors"
-                      >
-                        <Plus className="w-2.5 h-2.5" />
-                      </button>
+                      <div className="flex items-center gap-2 mt-auto bg-slate-50 rounded-xl px-2 py-1">
+                        <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-primary hover:text-primary transition-colors">
+                          <Minus className="w-2.5 h-2.5" />
+                        </button>
+                        <span className="w-5 text-center font-black text-sm tabular-nums">{item.quantity}</span>
+                        <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:border-primary hover:text-primary transition-colors">
+                          <Plus className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
+            {/* ── Member & Promo Section ── */}
+            <MemberCartSection branchId={branchId!} subtotal={subtotal} />
+
           </div>
 
-          {/* Sheet footer */}
-          <SheetFooter className="border-t bg-white px-5 pb-6 pt-4 gap-3">
-            <div className="flex justify-between items-baseline w-full">
-              <span className="text-slate-500 font-medium text-sm">ยอดรวมทั้งหมด</span>
-              <span className="text-2xl font-black text-slate-900">฿{totalAmount.toLocaleString()}</span>
+          {/* ── Sheet footer — price summary + confirm ── */}
+          <SheetFooter className="border-t bg-white px-5 pb-6 pt-3 gap-2 shrink-0">
+            {/* Price breakdown */}
+            <div className="w-full space-y-1.5 mb-1">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 text-sm font-medium">ราคารวม</span>
+                <span className="text-slate-700 font-bold">฿{subtotal.toLocaleString()}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-primary text-sm font-bold">ส่วนลด ({appliedPromotion?.name})</span>
+                  <span className="text-primary font-bold">- ฿{discountAmount.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-baseline pt-1 border-t border-slate-100">
+                <span className="text-slate-500 font-medium text-sm">ยอดรวมสุทธิ</span>
+                <span className="text-2xl font-black text-slate-900">฿{finalTotal.toLocaleString()}</span>
+              </div>
             </div>
+
             <Button
               onClick={handleSubmitOrder}
               disabled={isSubmitting || cart.length === 0}
@@ -664,7 +926,7 @@ export default function CustomerOrder() {
               {isSubmitting ? (
                 <><Loader2 className="w-5 h-5 animate-spin" />กำลังส่งออเดอร์...</>
               ) : (
-                <><CheckCircle2 className="w-5 h-5" />ยืนยันสั่งอาหาร</>
+                <><CheckCircle2 className="w-5 h-5" />ยืนยันสั่งอาหาร · ฿{finalTotal.toLocaleString()}</>
               )}
             </Button>
           </SheetFooter>
