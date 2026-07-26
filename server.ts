@@ -24,11 +24,30 @@ async function startServer() {
   const { httpAdapter } = app.get(HttpAdapterHost);
   app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapter));
 
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // The QR codes printed for tables embed this origin. Left unset in production
+  // they would point customers at localhost, so fail loudly instead.
+  if (isProd && !process.env.FRONTEND_URL) {
+    throw new Error(
+      'FRONTEND_URL is not set. Table QR codes would be generated pointing at ' +
+      'localhost. Set it to the public site origin, e.g. https://chabapos.com',
+    );
+  }
+
   // Production Hardening
   app.use(helmet({
     contentSecurityPolicy: false, // Disable CSP for Vite development
   }));
-  app.enableCors();
+
+  // The SPA and the API are served from the same origin, so browsers never need
+  // CORS for normal use. Allow only the public origin in production; stay open
+  // in development so tooling and devices on the LAN can reach the API.
+  if (isProd) {
+    app.enableCors({ origin: process.env.FRONTEND_URL, credentials: true });
+  } else {
+    app.enableCors();
+  }
 
   app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({
@@ -38,10 +57,10 @@ async function startServer() {
   }));
 
 
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -56,15 +75,25 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    
-    const server = app.getHttpAdapter().getInstance();
-    server.get("*", (req, res) => {
+
+    // SPA fallback: hand any non-API GET back to index.html so client-side
+    // routes survive a refresh or a direct link.
+    //
+    // Written as middleware rather than `get('*')` because @nestjs/platform-express
+    // bundles Express 5, whose path-to-regexp rejects a bare '*' and throws at
+    // startup. Requests under /api fall through to the Nest router untouched.
+    app.use((req, res, next) => {
+      if (req.method !== "GET" || req.url.startsWith("/api")) return next();
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
   await app.listen(PORT, "0.0.0.0");
-  logger.log(`Server running on http://localhost:${PORT}`);
+  logger.log(
+    isProd
+      ? `Server running in production on port ${PORT} — public origin ${process.env.FRONTEND_URL}`
+      : `Server running on http://localhost:${PORT}`,
+  );
 }
 
 startServer();
