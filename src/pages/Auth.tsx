@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import api from '../lib/api';
 
 export default function Auth() {
@@ -65,10 +65,24 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md mb-4">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-primary"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          กลับหน้าหลัก
+        </Link>
+      </div>
+
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold text-primary">ChabaPOS</CardTitle>
+          <Link to="/" className="mx-auto w-fit">
+            <CardTitle className="text-3xl font-bold text-primary transition-opacity hover:opacity-80">
+              ChabaPOS
+            </CardTitle>
+          </Link>
           <CardDescription>เข้าสู่ระบบเพื่อจัดการร้านอาหารของคุณ</CardDescription>
         </CardHeader>
         <CardContent>

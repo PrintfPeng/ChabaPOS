@@ -26,7 +26,11 @@ function NavItem({ label, href, onClick }: { label: string; href: string; onClic
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 
 function Navbar() {
-  const { user } = useAuth();
+  // `loading` matters: on the first paint `user` is always null because the
+  // session is read from localStorage in an effect. Rendering the signed-out
+  // buttons straight away makes them flash and vanish for a signed-in visitor,
+  // so the block is kept invisible (but still laid out) until auth resolves.
+  const { user, loading } = useAuth();
   const [open, setOpen] = useState(false);
 
   return (
@@ -47,7 +51,7 @@ function Navbar() {
         </div>
 
         {/* Actions — desktop */}
-        <div className="hidden items-center gap-2 md:flex">
+        <div className={cn('hidden items-center gap-2 md:flex', loading && 'invisible')}>
           {user ? (
             <Link to="/brands" className={cn(buttonVariants({ variant: 'default' }), 'h-10 gap-1.5 px-5 font-bold')}>
               ไปที่แดชบอร์ด
@@ -55,7 +59,15 @@ function Navbar() {
             </Link>
           ) : (
             <>
-              <Link to="/auth" className={cn(buttonVariants({ variant: 'outline' }), 'h-10 px-5 font-semibold')}>
+              {/* border-slate-300: the default outline sits on bg-background,
+                  which is near-white against this white navbar and reads faint. */}
+              <Link
+                to="/auth"
+                className={cn(
+                  buttonVariants({ variant: 'outline' }),
+                  'h-10 border-slate-300 px-5 font-semibold hover:border-slate-400',
+                )}
+              >
                 เข้าสู่ระบบ
               </Link>
               <Link
@@ -90,7 +102,7 @@ function Navbar() {
             {NAV_LINKS.map(l => (
               <NavItem key={l.label} label={l.label} href={l.href} onClick={() => setOpen(false)} />
             ))}
-            <div className="flex flex-col gap-2 pt-2">
+            <div className={cn('flex flex-col gap-2 pt-2', loading && 'invisible')}>
               {user ? (
                 <Link to="/brands" onClick={() => setOpen(false)}
                   className={cn(buttonVariants({ variant: 'default' }), 'h-11 font-bold')}>
