@@ -1,5 +1,5 @@
 import {
-  Injectable, NotFoundException, BadRequestException, Inject,
+  Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -10,7 +10,16 @@ import {
 export class PromotionsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async findAll(branchId: number, activeOnly = false) {
+  private async assertBranchOwner(userId: number, branchId: number) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      include: { brand: { select: { userId: true } } },
+    });
+    if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+  }
+
+  async findAll(userId: number, branchId: number, activeOnly = false) {
+    await this.assertBranchOwner(userId, branchId);
     return this.prisma.promotion.findMany({
       where: {
         branchId,
@@ -26,7 +35,8 @@ export class PromotionsService {
     return promo;
   }
 
-  async create(dto: CreatePromotionDto) {
+  async create(userId: number, dto: CreatePromotionDto) {
+    await this.assertBranchOwner(userId, dto.branchId);
     return this.prisma.promotion.create({
       data: {
         name:         dto.name,
@@ -44,8 +54,9 @@ export class PromotionsService {
     });
   }
 
-  async update(id: number, dto: UpdatePromotionDto) {
-    await this.findOne(id);
+  async update(userId: number, id: number, dto: UpdatePromotionDto) {
+    const promo = await this.findOne(id);
+    await this.assertBranchOwner(userId, promo.branchId);
     return this.prisma.promotion.update({
       where: { id },
       data: {
@@ -56,16 +67,18 @@ export class PromotionsService {
     });
   }
 
-  async toggle(id: number) {
+  async toggle(userId: number, id: number) {
     const promo = await this.findOne(id);
+    await this.assertBranchOwner(userId, promo.branchId);
     return this.prisma.promotion.update({
       where: { id },
       data: { isActive: !promo.isActive },
     });
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(userId: number, id: number) {
+    const promo = await this.findOne(id);
+    await this.assertBranchOwner(userId, promo.branchId);
     return this.prisma.promotion.delete({ where: { id } });
   }
 
@@ -73,7 +86,8 @@ export class PromotionsService {
    * Condition Checker — ตรวจสอบเงื่อนไขก่อนใช้โปรโมชั่น
    * คืนค่า discountAmount ที่คำนวณแล้ว
    */
-  async validate(dto: ValidatePromotionDto) {
+  async validate(userId: number, dto: ValidatePromotionDto) {
+    await this.assertBranchOwner(userId, dto.branchId);
     const promo = await this.prisma.promotion.findFirst({
       where: { id: dto.promotionId, branchId: dto.branchId, isActive: true },
     });
@@ -91,7 +105,6 @@ export class PromotionsService {
     if (promo.memberOnly && !dto.customerId)
       throw new BadRequestException('โปรโมชั่นนี้สำหรับสมาชิกเท่านั้น กรุณาค้นหาสมาชิกก่อน');
 
-    // Points redemption — เช็คแต้มให้พอ
     if (promo.type === 'POINTS_REDEMPTION') {
       if (!dto.customerId)
         throw new BadRequestException('กรุณาค้นหาสมาชิกก่อนแลกแต้ม');
@@ -104,17 +117,16 @@ export class PromotionsService {
         );
     }
 
-    // คำนวณส่วนลด
     let discountAmount = 0;
     if (promo.type === 'PERCENT')
       discountAmount = (dto.totalAmount * promo.value) / 100;
     else
-      discountAmount = promo.value; // FIXED หรือ POINTS_REDEMPTION ใช้ value เป็นบาท
+      discountAmount = promo.value;
 
     discountAmount = Math.min(discountAmount, dto.totalAmount);
 
     return {
-      valid:         true,
+      valid:          true,
       discountAmount: Math.round(discountAmount * 100) / 100,
       finalAmount:    Math.round((dto.totalAmount - discountAmount) * 100) / 100,
       promotion:      promo,

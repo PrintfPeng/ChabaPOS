@@ -138,11 +138,7 @@ export default function OptionManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">จัดการตัวเลือกเสริม</h1>
-          <p className="text-slate-500">สร้างตัวเลือกการปรับแต่ง เช่น "ระดับความหวาน" หรือ "ท็อปปิ้ง"</p>
-        </div>
+      <div className="flex justify-end items-center">
         <Dialog open={isGroupDialogOpen} onOpenChange={(open) => {
           setIsGroupDialogOpen(open);
           if (!open) {

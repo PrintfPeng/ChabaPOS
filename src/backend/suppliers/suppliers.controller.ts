@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, UseGua
 import { SuppliersService } from './suppliers.service';
 import { CreateSupplierDto, UpdateSupplierDto } from './dto/supplier.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { validateBody } from '../common/validate-body';
 
 @UseGuards(JwtAuthGuard)
 @Controller('suppliers')
@@ -9,7 +10,7 @@ export class SuppliersController {
   constructor(@Inject(SuppliersService) private readonly suppliersService: SuppliersService) {}
 
   @Post()
-  create(@Request() req, @Body() createSupplierDto: CreateSupplierDto) {
+  create(@Request() req, @Body(validateBody(CreateSupplierDto)) createSupplierDto: CreateSupplierDto) {
     return this.suppliersService.create(req.user.userId, createSupplierDto);
   }
 
@@ -19,7 +20,7 @@ export class SuppliersController {
   }
 
   @Patch(':id')
-  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() updateSupplierDto: UpdateSupplierDto) {
+  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateSupplierDto)) updateSupplierDto: UpdateSupplierDto) {
     return this.suppliersService.update(req.user.userId, id, updateSupplierDto);
   }
 

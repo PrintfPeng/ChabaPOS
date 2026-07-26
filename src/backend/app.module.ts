@@ -18,6 +18,10 @@ import { RawMaterialsModule } from './raw-materials/raw-materials.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { CustomersModule } from './customers/customers.module';
 import { PromotionsModule } from './promotions/promotions.module';
+import { PlansModule } from './plans/plans.module';
+import { SuperAdminModule } from './super-admin/super-admin.module';
+import { SettingsModule } from './settings/settings.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -38,6 +42,10 @@ import { PromotionsModule } from './promotions/promotions.module';
     PurchaseOrdersModule,
     CustomersModule,
     PromotionsModule,
+    PlansModule,
+    SuperAdminModule,
+    SettingsModule,
+    BillingModule,
   ],
   providers: [
     {

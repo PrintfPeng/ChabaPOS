@@ -251,9 +251,8 @@ export default function MembersPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-black text-slate-900">จัดการสมาชิก</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            ระบบสะสมแต้ม — ทุก ฿{currentRate.toLocaleString()} = 1 แต้ม
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+            สะสมแต้ม: ทุก ฿{currentRate.toLocaleString()} = 1 แต้ม
           </p>
         </div>
         <Button onClick={openCreate} className="rounded-xl font-bold gap-2">

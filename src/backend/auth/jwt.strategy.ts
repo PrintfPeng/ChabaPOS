@@ -5,14 +5,16 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error('JWT_SECRET environment variable is not set');
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'your-super-secret-key',
+      secretOrKey: secret,
     });
   }
 
   async validate(payload: any) {
-    return { userId: Number(payload.sub), email: payload.email };
+    return { userId: Number(payload.sub), email: payload.email, role: payload.role };
   }
 }

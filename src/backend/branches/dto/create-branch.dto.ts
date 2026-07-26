@@ -1,11 +1,12 @@
-import { IsString, IsOptional, IsUrl, IsInt } from 'class-validator';
+import { IsString, IsOptional, IsInt } from 'class-validator';
 
 export class CreateBranchDto {
   @IsString()
   name: string;
 
+  // Plain string, not @IsUrl(): the UI legitimately sends '' to clear an image.
   @IsOptional()
-  @IsUrl()
+  @IsString()
   imageUrl?: string;
 
   @IsInt()
@@ -14,4 +15,8 @@ export class CreateBranchDto {
   @IsOptional()
   @IsString()
   pin?: string;
+
+  @IsOptional()
+  @IsString()
+  qrCodeUrl?: string;
 }

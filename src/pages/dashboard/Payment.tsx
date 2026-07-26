@@ -4,14 +4,16 @@ import api from '../../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
 import {
   Loader2, Receipt, CreditCard, Banknote, History, ChevronRight, QrCode,
   Delete, X, Phone, UserPlus, Star, Tag, ChevronDown, ChevronUp, CheckCircle2,
+  Clock, Printer, RefreshCw, Truck, MonitorCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import { ScrollArea } from '../../components/ui/scroll-area';
+import { Sheet, SheetContent, SheetHeader, SheetFooter, SheetTitle } from '../../components/ui/sheet';
 import { Badge } from '../../components/ui/badge';
 import { useBranch } from '../../hooks/useBranches';
 import { cn } from '../../lib/utils';
@@ -32,6 +34,29 @@ interface PromoInfo {
   minSpend: number;
   pointsNeeded: number;
   memberOnly: boolean;
+}
+
+interface PaidOrder {
+  id: number;
+  orderNumber: string;
+  status: string;
+  orderType: string;
+  deliveryProvider: string | null;
+  totalAmount: number;
+  discountAmount: number;
+  paymentType: string | null;
+  createdAt: string;
+  tableId: number | null;
+  table: { id: number; name: string } | null;
+  source: string;
+  items: {
+    id: number;
+    name: string;
+    quantity: number;
+    price: number;
+    notes?: string | null;
+    options?: { id: number; name: string; price: number }[];
+  }[];
 }
 
 /* ─── CustomerPromoPanel ─────────────────────────────── */
@@ -60,7 +85,6 @@ function CustomerPromoPanel({
   const [isRegistering,   setIsRegistering]   = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);
 
-  /* Reset when panel closes */
   const reset = () => {
     setPhone(''); setCustomer(null); setNotFound(false);
     setSelectedPromo(null); setDiscount(0); setShowQuickReg(false); setQuickName('');
@@ -72,14 +96,12 @@ function CustomerPromoPanel({
     setExpanded((v) => !v);
   };
 
-  /* Fetch active promos once */
   useEffect(() => {
     api.get(`/promotions?branchId=${branchId}&activeOnly=true`)
       .then((r) => setPromos(r.data))
       .catch(() => {});
   }, [branchId]);
 
-  /* Customer lookup */
   const searchCustomer = async () => {
     if (phone.length < 9) return toast.error('กรอกเบอร์โทร 9-10 หลัก');
     setIsSearching(true); setNotFound(false); setCustomer(null);
@@ -100,7 +122,6 @@ function CustomerPromoPanel({
     }
   };
 
-  /* Quick register */
   const handleQuickRegister = async () => {
     if (!quickName.trim()) return toast.error('กรุณากรอกชื่อ');
     setIsRegistering(true);
@@ -116,7 +137,6 @@ function CustomerPromoPanel({
     }
   };
 
-  /* Apply promotion */
   const applyPromo = async (promo: PromoInfo) => {
     if (selectedPromo?.id === promo.id) {
       setSelectedPromo(null); setDiscount(0); onDiscountChange(0, null); return;
@@ -140,14 +160,12 @@ function CustomerPromoPanel({
     }
   };
 
-  /* Filter promos: non-member promos are always visible; member-only requires customer */
   const visiblePromos = promos.filter(
     (p) => grossTotal >= p.minSpend && (!p.memberOnly || customer),
   );
 
   return (
     <div className="border border-slate-100 rounded-2xl overflow-hidden">
-      {/* Toggle header */}
       <button
         onClick={handleToggle}
         className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
@@ -170,7 +188,6 @@ function CustomerPromoPanel({
 
       {expanded && (
         <div className="px-4 pb-4 space-y-4 border-t border-slate-100">
-          {/* Phone search */}
           <div className="flex gap-2 pt-3">
             <div className="relative flex-1">
               <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -195,7 +212,6 @@ function CustomerPromoPanel({
             </Button>
           </div>
 
-          {/* Customer card */}
           {customer && (
             <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
               <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-sm shrink-0">
@@ -215,7 +231,6 @@ function CustomerPromoPanel({
             </div>
           )}
 
-          {/* Not found + quick register */}
           {notFound && !customer && (
             <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center">
               <p className="text-sm text-slate-500 font-semibold">ไม่พบสมาชิกหมายเลข {phone}</p>
@@ -251,7 +266,6 @@ function CustomerPromoPanel({
             </div>
           )}
 
-          {/* Promotions */}
           {visiblePromos.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
@@ -296,7 +310,6 @@ function CustomerPromoPanel({
             </div>
           )}
 
-          {/* Discount summary */}
           {discount > 0 && (
             <div className="flex items-center justify-between p-3 bg-primary/5 rounded-xl border border-primary/20">
               <span className="text-sm font-bold text-primary">ส่วนลดที่ได้รับ</span>
@@ -309,29 +322,234 @@ function CustomerPromoPanel({
   );
 }
 
+/* ─── Order type badge ───────────────────────────────── */
+function OrderTypeBadge({ order }: { order: PaidOrder }) {
+  if (order.orderType === 'DELIVERY') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-200">
+        <Truck className="w-2.5 h-2.5" />
+        {order.deliveryProvider ?? 'จัดส่ง'}
+      </span>
+    );
+  }
+  if (order.table) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-200">
+        <Receipt className="w-2.5 h-2.5" />
+        โต๊ะ {order.table.name}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-600 border border-slate-200">
+      <MonitorCheck className="w-2.5 h-2.5" />
+      Counter
+    </span>
+  );
+}
+
+/* ─── Payment method badge ───────────────────────────── */
+function PaymentBadge({ paymentType }: { paymentType: string | null }) {
+  if (paymentType === 'CASH') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-200">
+        <Banknote className="w-2.5 h-2.5" />
+        เงินสด
+      </span>
+    );
+  }
+  if (paymentType === 'TRANSFER') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-violet-100 text-violet-700 border border-violet-200">
+        <QrCode className="w-2.5 h-2.5" />
+        เงินโอน
+      </span>
+    );
+  }
+  return <span className="text-[10px] text-slate-400">-</span>;
+}
+
+/* ─── Bill Card (history grid) ───────────────────────── */
+function BillCard({ order, onClick }: { order: PaidOrder; onClick: () => void }) {
+  const accentColor =
+    order.orderType === 'DELIVERY'     ? 'border-l-blue-400' :
+    order.paymentType === 'CASH'       ? 'border-l-amber-400' :
+    order.paymentType === 'TRANSFER'   ? 'border-l-violet-400' :
+    'border-l-slate-200';
+
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        'bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer active:scale-[0.99] border-l-4',
+        accentColor,
+      )}
+    >
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2 mb-2.5">
+          <div className="min-w-0">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mb-0.5">ออเดอร์</p>
+            <p className="text-lg font-black text-slate-900 leading-tight truncate">#{order.orderNumber}</p>
+          </div>
+          <div className="text-right shrink-0">
+            {order.discountAmount > 0 && (
+              <p className="text-[10px] text-slate-300 line-through leading-none">
+                ฿{(order.totalAmount + order.discountAmount).toLocaleString()}
+              </p>
+            )}
+            <p className="text-xl font-black text-slate-900 italic">฿{order.totalAmount.toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1 mb-3">
+          <OrderTypeBadge order={order} />
+          <PaymentBadge paymentType={order.paymentType} />
+        </div>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400 flex items-center gap-1">
+            <Clock className="w-3 h-3 shrink-0" />
+            {new Date(order.createdAt).toLocaleString('th-TH', {
+              day: '2-digit', month: 'short', year: '2-digit',
+              hour: '2-digit', minute: '2-digit',
+            })}
+          </p>
+          <ChevronRight className="w-4 h-4 text-slate-300" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Bill Detail Sheet ───────────────────────────────── */
+function BillDetailSheet({ order, open, onClose }: { order: PaidOrder | null; open: boolean; onClose: () => void }) {
+  if (!order) return null;
+  const subtotal = order.totalAmount + order.discountAmount;
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <SheetContent side="right" className="sm:max-w-md flex flex-col p-0 gap-0">
+        <SheetHeader className="p-5 pb-4 border-b border-slate-100 pr-14">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="p-1.5 bg-slate-100 rounded-lg">
+              <Receipt className="w-4 h-4 text-slate-600" />
+            </div>
+            <SheetTitle className="text-base font-black">#{order.orderNumber}</SheetTitle>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-0.5">
+            <OrderTypeBadge order={order} />
+            <PaymentBadge paymentType={order.paymentType} />
+          </div>
+          <p className="text-xs text-slate-400 flex items-center gap-1 mt-1.5">
+            <Clock className="w-3 h-3" />
+            {new Date(order.createdAt).toLocaleString('th-TH', {
+              weekday: 'short', day: '2-digit', month: 'short', year: '2-digit',
+              hour: '2-digit', minute: '2-digit',
+            })}
+          </p>
+        </SheetHeader>
+
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="p-5">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">รายการสั่งซื้อ</p>
+            {Array.isArray(order.items) && order.items.length > 0 ? (
+              <div className="space-y-0.5">
+                {order.items.map((item) => {
+                  const optionsTotal = Array.isArray(item.options)
+                    ? item.options.reduce((s, o) => s + o.price, 0)
+                    : 0;
+                  return (
+                    <div key={item.id} className="flex justify-between gap-3 py-3 border-b border-slate-50 last:border-0">
+                      <div className="flex gap-2 min-w-0">
+                        <span className="font-black text-primary text-xs shrink-0 w-5 pt-0.5">{item.quantity}x</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-900 leading-tight">{item.name}</p>
+                          {Array.isArray(item.options) && item.options.length > 0 && (
+                            <p className="text-xs text-slate-400 leading-tight mt-0.5 truncate">
+                              {item.options.map(o => o.name).join(', ')}
+                            </p>
+                          )}
+                          {item.notes && (
+                            <p className="text-xs text-slate-400 italic leading-tight mt-0.5">* {item.notes}</p>
+                          )}
+                        </div>
+                      </div>
+                      <span className="font-bold text-sm shrink-0 text-slate-800 pt-0.5">
+                        ฿{((item.price + optionsTotal) * item.quantity).toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 text-center py-8">ไม่มีข้อมูลรายการสินค้า</p>
+            )}
+          </div>
+        </div>
+
+        <SheetFooter className="p-5 pt-4 border-t border-slate-100 bg-slate-50/60 flex-col gap-3">
+          <div className="space-y-2 w-full">
+            {order.discountAmount > 0 && (
+              <>
+                <div className="flex justify-between text-sm px-1">
+                  <span className="text-slate-400 font-medium">ราคารวม</span>
+                  <span className="text-slate-400">฿{subtotal.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm px-1">
+                  <span className="text-primary font-bold flex items-center gap-1">
+                    <Tag className="w-3 h-3" />
+                    ส่วนลด
+                  </span>
+                  <span className="text-primary font-bold">- ฿{order.discountAmount.toLocaleString()}</span>
+                </div>
+              </>
+            )}
+            <div className="bg-slate-900 p-4 rounded-2xl text-white flex justify-between items-center">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ยอดชำระ</span>
+              <span className="text-2xl font-black italic">฿{order.totalAmount.toLocaleString()}</span>
+            </div>
+          </div>
+          <Button
+            className="w-full h-11 rounded-xl font-bold gap-2"
+            onClick={() => { toast.success('ส่งคำสั่งพิมพ์แล้ว'); onClose(); }}
+          >
+            <Printer className="w-4 h-4" />
+            พิมพ์ใบเสร็จ
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ─── Main component ─────────────────────────────────── */
 export default function Payment() {
   const { branchId } = useParams<{ branchId: string }>();
   const { branch } = useBranch(Number(branchId));
-  const [unpaidBills,   setUnpaidBills]   = useState<any[]>([]);
-  const [isLoading,     setIsLoading]     = useState(true);
-  const [selectedBill,  setSelectedBill]  = useState<any>(null);
-  const [isProcessing,  setIsProcessing]  = useState(false);
 
-  const [paymentMode,     setPaymentMode]     = useState<'CASH' | 'TRANSFER' | null>(null);
-  const [receivedAmount,  setReceivedAmount]  = useState('');
-  const [change,          setChange]          = useState(0);
-
-  /* ── Member & Promo state ── */
+  /* Pending tab state */
+  const [unpaidBills,         setUnpaidBills]         = useState<any[]>([]);
+  const [isLoading,           setIsLoading]           = useState(true);
+  const [selectedBill,        setSelectedBill]        = useState<any>(null);
+  const [isProcessing,        setIsProcessing]        = useState(false);
+  const [paymentMode,         setPaymentMode]         = useState<'CASH' | 'TRANSFER' | null>(null);
+  const [receivedAmount,      setReceivedAmount]      = useState('');
+  const [change,              setChange]              = useState(0);
   const [memberInfo,          setMemberInfo]          = useState<CustomerInfo | null>(null);
-  const [discountAmount,      setDiscountAmount]      = useState(0);   // cashier-applied
-  const [preAppliedDiscount,  setPreAppliedDiscount]  = useState(0);   // already saved on QR orders
+  const [discountAmount,      setDiscountAmount]      = useState(0);
+  const [preAppliedDiscount,  setPreAppliedDiscount]  = useState(0);
   const [activePromoId,       setActivePromoId]       = useState<number | null>(null);
 
+  /* History tab state */
+  const [paidOrders,           setPaidOrders]           = useState<PaidOrder[]>([]);
+  const [isHistoryLoading,     setIsHistoryLoading]     = useState(false);
+  const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<PaidOrder | null>(null);
+  const [paymentFilter, setPaymentFilter] = useState<'ALL' | 'CASH' | 'TRANSFER' | 'DELIVERY'>('ALL');
+
+  /* ── Pending: fetch ── */
   const fetchUnpaidBills = async () => {
     try {
       const res = await api.get(`/orders/branch/${branchId}/unpaid`);
       setUnpaidBills(res.data);
-    } catch (error) {
+    } catch {
       toast.error('โหลดข้อมูลบิลไม่สำเร็จ');
     } finally {
       setIsLoading(false);
@@ -344,6 +562,21 @@ export default function Payment() {
     return () => clearInterval(interval);
   }, [branchId]);
 
+  /* ── History: fetch ── */
+  const fetchPaidOrders = async () => {
+    setIsHistoryLoading(true);
+    try {
+      const res = await api.get(`/orders?branchId=${branchId}`);
+      const all: any[] = Array.isArray(res.data) ? res.data : [];
+      setPaidOrders(all.filter((o: any) => o.status === 'PAID').slice(0, 50));
+    } catch {
+      toast.error('โหลดประวัติบิลไม่สำเร็จ');
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  /* ── Payment calc ── */
   const finalTotal = selectedBill
     ? Math.max(0, selectedBill.totalAmount - preAppliedDiscount - discountAmount)
     : 0;
@@ -405,21 +638,18 @@ export default function Payment() {
     setReceivedAmount((current + amount).toString());
   };
 
-  const appendDigit = (digit: string) => {
-    setReceivedAmount(prev => prev + digit);
-  };
-
-  const clearReceived = () => setReceivedAmount('');
+  const appendDigit = (digit: string) => setReceivedAmount(prev => prev + digit);
   const deleteLastDigit = () => setReceivedAmount(prev => prev.slice(0, -1));
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  /* ── Filtered history ── */
+  const filteredHistory = paidOrders.filter(o =>
+    paymentFilter === 'ALL' ||
+    (paymentFilter === 'CASH'     && o.paymentType === 'CASH') ||
+    (paymentFilter === 'TRANSFER' && o.paymentType === 'TRANSFER') ||
+    (paymentFilter === 'DELIVERY' && o.orderType  === 'DELIVERY'),
+  );
 
+  /* ── Render ── */
   return (
     <div className="space-y-6 sm:space-y-8 max-w-full overflow-hidden min-h-full">
       <div className="flex justify-between items-center px-1">
@@ -429,120 +659,232 @@ export default function Payment() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6">
-        <AnimatePresence mode="popLayout">
-          {Array.isArray(unpaidBills) && unpaidBills.map((bill) => (
-            <motion.div
-              key={bill.tableId}
-              layout
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-            >
-              <Card 
-                className="cursor-pointer hover:shadow-xl transition-all border-l-4 border-l-orange-500 rounded-3xl group active:scale-[0.98] border-none shadow-sm bg-white"
-                onClick={() => {
-                  setSelectedBill(bill);
-                  setPaymentMode(null);
-                  setReceivedAmount('');
-                  setMemberInfo(null);
-                  setDiscountAmount(0);
-                  setActivePromoId(null);
-                  // Pre-fill discount already applied from QR ordering
-                  const qrDiscount = (bill.orders as any[]).reduce(
-                    (sum: number, o: any) => sum + (o.discountAmount || 0), 0,
-                  );
-                  setPreAppliedDiscount(qrDiscount);
-                }}
-              >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 p-5 pb-2">
-                  <CardTitle className="text-lg font-black truncate pr-2">โต๊ะ {bill.table?.name || '---'}</CardTitle>
-                  <Receipt className="h-5 w-5 text-slate-300 group-hover:text-primary transition-colors shrink-0" />
-                </CardHeader>
-                <CardContent className="p-5 pt-2">
-                  <div className="flex justify-between items-end">
-                    <div>
-                        <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest">{bill.orders.length} ออเดอร์</p>
-                        <p className="text-xl font-black text-slate-900 italic tracking-tighter">฿{bill.totalAmount.toLocaleString()}</p>
-                    </div>
-                    <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
-                        <ChevronRight className="w-5 h-5" />
-                    </div>
+      <Tabs
+        defaultValue="pending"
+        onValueChange={(v: string) => { if (v === 'history') fetchPaidOrders(); }}
+      >
+        {/* ── Tab bar ── */}
+        <TabsList className="w-full sm:w-auto h-11 bg-slate-100 rounded-2xl p-1 gap-1">
+          <TabsTrigger
+            value="pending"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl font-bold text-sm px-5 h-9"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            รอชำระเงิน
+            {!isLoading && unpaidBills.length > 0 && (
+              <span className="bg-orange-500 text-white text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center leading-none">
+                {unpaidBills.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl font-bold text-sm px-5 h-9"
+          >
+            <History className="w-3.5 h-3.5" />
+            ประวัติการชำระเงิน
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ══════════ TAB 1: Pending ══════════ */}
+        <TabsContent value="pending" className="mt-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6">
+              <AnimatePresence mode="popLayout">
+                {Array.isArray(unpaidBills) && unpaidBills.map((bill) => (
+                  <motion.div
+                    key={bill.tableId}
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                  >
+                    <Card
+                      className="cursor-pointer hover:shadow-xl transition-all border-l-4 border-l-orange-500 rounded-3xl group active:scale-[0.98] border-none shadow-sm bg-white"
+                      onClick={() => {
+                        setSelectedBill(bill);
+                        setPaymentMode(null);
+                        setReceivedAmount('');
+                        setMemberInfo(null);
+                        setDiscountAmount(0);
+                        setActivePromoId(null);
+                        const qrDiscount = (bill.orders as any[]).reduce(
+                          (sum: number, o: any) => sum + (o.discountAmount || 0), 0,
+                        );
+                        setPreAppliedDiscount(qrDiscount);
+                      }}
+                    >
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 p-5 pb-2">
+                        <CardTitle className="text-lg font-black truncate pr-2">โต๊ะ {bill.table?.name || '---'}</CardTitle>
+                        <Receipt className="h-5 w-5 text-slate-300 group-hover:text-primary transition-colors shrink-0" />
+                      </CardHeader>
+                      <CardContent className="p-5 pt-2">
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <p className="text-[10px] uppercase font-black text-slate-400 tracking-widest">{bill.orders.length} ออเดอร์</p>
+                            <p className="text-xl font-black text-slate-900 italic tracking-tighter">฿{bill.totalAmount.toLocaleString()}</p>
+                          </div>
+                          <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
+                            <ChevronRight className="w-5 h-5" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {(!Array.isArray(unpaidBills) || unpaidBills.length === 0) && (
+                <div className="col-span-full py-20 text-center bg-white rounded-[40px] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center space-y-4">
+                  <div className="p-8 bg-slate-50 rounded-[32px]">
+                    <History className="w-12 h-12 text-slate-200" />
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-black text-slate-900">ไม่มีบิลค้างชำระ</h3>
+                    <p className="text-sm text-slate-400 font-medium italic">All bills are settled. Great job!</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
 
-        {(!Array.isArray(unpaidBills) || unpaidBills.length === 0) && (
-          <div className="col-span-full py-20 text-center bg-white rounded-[40px] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center space-y-4">
-            <div className="p-8 bg-slate-50 rounded-[32px]">
-                <History className="w-12 h-12 text-slate-200" />
-            </div>
-            <div className="space-y-1">
-                <h3 className="text-xl font-black text-slate-900">ไม่มีบิลค้างชำระ</h3>
-                <p className="text-sm text-slate-400 font-medium italic">All bills are settled. Great job!</p>
-            </div>
+        {/* ══════════ TAB 2: History ══════════ */}
+        <TabsContent value="history" className="mt-4">
+          {/* Payment type filter */}
+          <div className="flex gap-2 mb-3 flex-wrap">
+            {([
+              { value: 'ALL',      label: 'ทั้งหมด',  icon: null    },
+              { value: 'CASH',     label: 'เงินสด',   icon: Banknote },
+              { value: 'TRANSFER', label: 'เงินโอน',  icon: QrCode  },
+              { value: 'DELIVERY', label: 'Delivery', icon: Truck   },
+            ] as const).map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                onClick={() => setPaymentFilter(value)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-bold border transition-all',
+                  paymentFilter === value
+                    ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                )}
+              >
+                {Icon && <Icon className="w-3.5 h-3.5" />}
+                {label}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
 
+          {/* Refresh */}
+          <div className="flex justify-end mb-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-xl border-slate-200"
+              onClick={fetchPaidOrders}
+              disabled={isHistoryLoading}
+            >
+              <RefreshCw className={cn('w-4 h-4', isHistoryLoading && 'animate-spin')} />
+            </Button>
+          </div>
+
+          {isHistoryLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="py-20 text-center bg-white rounded-[40px] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center space-y-4">
+              <div className="p-8 bg-slate-50 rounded-[32px]">
+                <Receipt className="w-12 h-12 text-slate-200" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-slate-900">
+                  {paymentFilter !== 'ALL' ? 'ไม่พบบิลในประเภทนี้' : 'ยังไม่มีประวัติการชำระเงิน'}
+                </h3>
+                <p className="text-sm text-slate-400 font-medium italic">
+                  {paymentFilter !== 'ALL' ? 'ลองเปลี่ยนตัวกรองประเภทการชำระเงิน' : 'บิลที่ชำระเงินแล้วจะแสดงที่นี่'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-xs text-slate-400 font-bold px-1 mb-3">
+                แสดง {filteredHistory.length} รายการ{paidOrders.length >= 50 ? ' (ล่าสุด 50 รายการ)' : ''}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredHistory.map((order) => (
+                  <BillCard
+                    key={order.id}
+                    order={order}
+                    onClick={() => setSelectedHistoryOrder(order)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* ══════════ Payment dialog (pending tab) ══════════ */}
       <AnimatePresence>
-      {selectedBill && (
-        <Dialog open={!!selectedBill} onOpenChange={() => { setSelectedBill(null); setPreAppliedDiscount(0); setDiscountAmount(0); }}>
-          <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl h-[90vh] sm:h-[80vh] max-h-[850px] p-0 gap-0 border-none overflow-hidden rounded-[24px] sm:rounded-[40px] shadow-2xl flex flex-col sm:flex-row bg-white">
-            {/* Left Column: Bill Summary */}
-            <div className="w-full sm:w-[300px] lg:w-[350px] shrink-0 h-[30%] sm:h-full flex flex-col bg-slate-50 border-r border-slate-100 overflow-hidden">
-               <div className="p-4 sm:p-5 bg-white border-b shrink-0 flex items-center justify-between">
+        {selectedBill && (
+          <Dialog open={!!selectedBill} onOpenChange={() => { setSelectedBill(null); setPreAppliedDiscount(0); setDiscountAmount(0); }}>
+            <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl h-[90vh] sm:h-[80vh] max-h-[850px] p-0 gap-0 border-none overflow-hidden rounded-[24px] sm:rounded-[40px] shadow-2xl flex flex-col sm:flex-row bg-white">
+              {/* Left Column: Bill Summary */}
+              <div className="w-full sm:w-[300px] lg:w-[350px] shrink-0 h-[30%] sm:h-full flex flex-col bg-slate-50 border-r border-slate-100 overflow-hidden">
+                <div className="p-4 sm:p-5 bg-white border-b shrink-0 flex items-center justify-between">
                   <div className="flex items-center gap-2 sm:gap-3">
                     <div className="p-1.5 sm:p-2 bg-primary/10 rounded-xl">
-                        <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                      <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                     </div>
                     <h3 className="text-base sm:text-lg font-black">โต๊ะ {selectedBill.table?.name}</h3>
                   </div>
                   <Button variant="ghost" size="icon" className="rounded-full sm:hidden h-8 w-8" onClick={() => setSelectedBill(null)}>
                     <X className="w-4 h-4" />
                   </Button>
-               </div>
-               
-               <ScrollArea className="flex-1">
-                  <div className="p-4 sm:p-5 space-y-3 pb-20">
+                </div>
+
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <div className="p-4 sm:p-5 space-y-3 pb-4">
                     {selectedBill.orders.map((order: any) => (
                       <div key={order.id} className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-100 space-y-2 sm:space-y-3">
-                         <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-100">
-                            <span className="text-[9px] font-black text-slate-400">#{order.orderNumber}</span>
-                            <span className="text-[9px] font-bold text-slate-400">{new Date(order.createdAt).toLocaleTimeString()}</span>
-                         </div>
-                         <div className="space-y-2">
-                            {order.items.map((item: any) => (
-                                <div key={item.id} className="flex justify-between gap-2">
-                                   <div className="flex gap-1.5 min-w-0">
-                                      <span className="font-black text-primary text-[10px] sm:text-xs shrink-0">{item.quantity}x</span>
-                                      <div className="min-w-0">
-                                         <p className="text-[11px] sm:text-sm font-bold text-slate-900 truncate leading-tight">{item.name}</p>
-                                         {Array.isArray(item.options) && item.options.length > 0 && (
-                                            <p className="text-xs text-muted-foreground leading-tight truncate">
-                                              {item.options.map((o:any)=>o.name).join(', ')}
-                                            </p>
-                                          )}
-                                          {item.notes && (
-                                            <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight truncate italic">
-                                              * {item.notes}
-                                            </p>
-                                          )}
-                                      </div>
-                                   </div>
-                                   <span className="font-bold text-[11px] sm:text-sm shrink-0">฿{((item.price + (Array.isArray(item.options) ? item.options.reduce((s:any,o:any)=>s+o.price,0) : 0))*item.quantity).toLocaleString()}</span>
+                        <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-100">
+                          <span className="text-[9px] font-black text-slate-400">#{order.orderNumber}</span>
+                          <span className="text-[9px] font-bold text-slate-400">{new Date(order.createdAt).toLocaleTimeString()}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {order.items.map((item: any) => (
+                            <div key={item.id} className="flex justify-between gap-2">
+                              <div className="flex gap-1.5 min-w-0">
+                                <span className="font-black text-primary text-[10px] sm:text-xs shrink-0">{item.quantity}x</span>
+                                <div className="min-w-0">
+                                  <p className="text-[11px] sm:text-sm font-bold text-slate-900 truncate leading-tight">{item.name}</p>
+                                  {Array.isArray(item.options) && item.options.length > 0 && (
+                                    <p className="text-xs text-muted-foreground leading-tight truncate">
+                                      {item.options.map((o: any) => o.name).join(', ')}
+                                    </p>
+                                  )}
+                                  {item.notes && (
+                                    <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight truncate italic">
+                                      * {item.notes}
+                                    </p>
+                                  )}
                                 </div>
-                            ))}
-                         </div>
+                              </div>
+                              <span className="font-bold text-[11px] sm:text-sm shrink-0">฿{((item.price + (Array.isArray(item.options) ? item.options.reduce((s: any, o: any) => s + o.price, 0) : 0)) * item.quantity).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
-               </ScrollArea>
+                </div>
 
-               <div className="p-4 sm:p-6 bg-white border-t border-slate-100 shrink-0 space-y-2">
+                <div className="p-4 sm:p-6 bg-white border-t border-slate-100 shrink-0 space-y-2">
                   {(preAppliedDiscount > 0 || discountAmount > 0) && (
                     <div className="flex justify-between text-sm px-1">
                       <span className="text-slate-400">ราคาปกติ</span>
@@ -568,170 +910,169 @@ export default function Payment() {
                     <span className="text-[9px] font-black text-slate-400 uppercase">ยอดชำระ</span>
                     <span className="text-2xl sm:text-3xl font-black italic">฿{finalTotal.toLocaleString()}</span>
                   </div>
-               </div>
-            </div>
+                </div>
+              </div>
 
-            {/* Right Column: Payment Logic */}
-            <div className="flex-1 flex flex-col h-full bg-white overflow-hidden relative">
-               <ScrollArea className="flex-1">
+              {/* Right Column: Payment Logic */}
+              <div className="flex-1 flex flex-col h-full bg-white overflow-hidden relative">
+                <div className="flex-1 min-h-0 overflow-y-auto">
                   <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
-                     {/* Member & Promotion Panel */}
-                     <CustomerPromoPanel
-                       branchId={branchId!}
-                       grossTotal={selectedBill.totalAmount}
-                       onCustomerChange={setMemberInfo}
-                       onDiscountChange={(d, pid) => { setDiscountAmount(d); setActivePromoId(pid); }}
-                     />
-                     <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                        <button 
-                          onClick={() => setPaymentMode('CASH')}
-                          className={cn(
-                            "flex flex-col items-center justify-center p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all gap-1.5 sm:gap-2 group active:scale-95",
-                            paymentMode === 'CASH' 
-                              ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5" 
-                              : "border-slate-100 hover:border-slate-200"
-                          )}
-                        >
-                          <div className={cn("p-2 sm:p-3 rounded-lg sm:rounded-xl", paymentMode === 'CASH' ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
-                            <Banknote className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <CustomerPromoPanel
+                      branchId={branchId!}
+                      grossTotal={selectedBill.totalAmount}
+                      onCustomerChange={setMemberInfo}
+                      onDiscountChange={(d, pid) => { setDiscountAmount(d); setActivePromoId(pid); }}
+                    />
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                      <button
+                        onClick={() => setPaymentMode('CASH')}
+                        className={cn(
+                          "flex flex-col items-center justify-center p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all gap-1.5 sm:gap-2 group active:scale-95",
+                          paymentMode === 'CASH'
+                            ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5"
+                            : "border-slate-100 hover:border-slate-200"
+                        )}
+                      >
+                        <div className={cn("p-2 sm:p-3 rounded-lg sm:rounded-xl", paymentMode === 'CASH' ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
+                          <Banknote className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </div>
+                        <span className="font-black text-xs sm:text-sm">เงินสด</span>
+                      </button>
+                      <button
+                        onClick={() => setPaymentMode('TRANSFER')}
+                        className={cn(
+                          "flex flex-col items-center justify-center p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all gap-1.5 sm:gap-2 group active:scale-95",
+                          paymentMode === 'TRANSFER'
+                            ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5"
+                            : "border-slate-100 hover:border-slate-200"
+                        )}
+                      >
+                        <div className={cn("p-2 sm:p-3 rounded-lg sm:rounded-xl", paymentMode === 'TRANSFER' ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
+                          <QrCode className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </div>
+                        <span className="font-black text-xs sm:text-sm">เงินโอน / สแกน</span>
+                      </button>
+                    </div>
+
+                    {paymentMode === 'CASH' && (
+                      <div className="space-y-3 sm:space-y-4 animate-in slide-in-from-bottom-4">
+                        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100">
+                          <div className="space-y-0">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">ยอดชำระ</label>
+                            <p className="text-lg sm:text-xl font-black italic tabular-nums">฿{finalTotal.toLocaleString()}</p>
                           </div>
-                          <span className="font-black text-xs sm:text-sm">เงินสด</span>
-                        </button>
-                        <button 
-                          onClick={() => setPaymentMode('TRANSFER')}
-                          className={cn(
-                            "flex flex-col items-center justify-center p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all gap-1.5 sm:gap-2 group active:scale-95",
-                            paymentMode === 'TRANSFER' 
-                              ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5" 
-                              : "border-slate-100 hover:border-slate-200"
-                          )}
-                        >
-                          <div className={cn("p-2 sm:p-3 rounded-lg sm:rounded-xl", paymentMode === 'TRANSFER' ? "bg-primary text-white" : "bg-slate-50 text-slate-400")}>
-                            <QrCode className="w-5 h-5 sm:w-6 sm:h-6" />
+                          <div className="space-y-0 text-right">
+                            <label className="text-[9px] font-black text-green-500 uppercase tracking-widest leading-none">เงินทอน</label>
+                            <p className="text-lg sm:text-xl font-black text-green-600 italic tabular-nums">฿{change.toLocaleString()}</p>
                           </div>
-                          <span className="font-black text-xs sm:text-sm">เงินโอน / สแกน</span>
-                        </button>
-                     </div>
-
-                     {paymentMode === 'CASH' && (
-                        <div className="space-y-3 sm:space-y-4 animate-in slide-in-from-bottom-4">
-                           <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100">
-                              <div className="space-y-0">
-                                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">ยอดชำระ</label>
-                                 <p className="text-lg sm:text-xl font-black italic tabular-nums">฿{finalTotal.toLocaleString()}</p>
-                              </div>
-                              <div className="space-y-0 text-right">
-                                 <label className="text-[9px] font-black text-green-500 uppercase tracking-widest leading-none">เงินทอน</label>
-                                 <p className="text-lg sm:text-xl font-black text-green-600 italic tabular-nums">฿{change.toLocaleString()}</p>
-                              </div>
-                           </div>
-
-                           <div className="space-y-3">
-                             <div className="relative">
-                                <span className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 text-lg font-black text-slate-300">฿</span>
-                                <input 
-                                  type="number" 
-                                  autoFocus
-                                  className="w-full h-12 sm:h-14 pl-10 sm:pl-12 pr-4 sm:pr-6 text-xl sm:text-2xl font-black rounded-xl sm:rounded-2xl bg-white border-2 border-slate-100 focus:border-primary transition-all text-right tabular-nums shadow-sm"
-                                  value={receivedAmount}
-                                  onChange={(e) => setReceivedAmount(e.target.value)}
-                                  placeholder="0.00"
-                                />
-                             </div>
-
-                             <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 sm:gap-2">
-                                {['1000', '500', '100', '50', '20'].map(val => (
-                                   <Button 
-                                    key={`note-${val}`} 
-                                    variant="outline" 
-                                    className="h-9 sm:h-10 rounded-lg font-black text-[10px] sm:text-xs border-slate-100 hover:bg-slate-50 hover:text-primary hover:border-primary active:scale-95 transition-all"
-                                    onClick={() => handleQuickCash(Number(val))}
-                                   >
-                                      +{val}
-                                   </Button>
-                                ))}
-                                {['10', '5', '2', '1'].map(val => (
-                                   <Button 
-                                    key={`coin-${val}`} 
-                                    variant="outline" 
-                                    className="h-9 sm:h-10 rounded-full font-black text-[10px] sm:text-xs bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100 hover:text-primary active:scale-95 transition-all"
-                                    onClick={() => handleQuickCash(Number(val))}
-                                   >
-                                      +{val}
-                                   </Button>
-                                ))}
-                                <Button 
-                                  variant="outline" 
-                                  className="h-9 sm:h-10 rounded-lg font-black text-[10px] sm:text-xs bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 active:scale-95 transition-all col-span-2 sm:col-span-1"
-                                  onClick={() => setReceivedAmount(finalTotal.toString())}
-                                >
-                                  จ่ายพอดี
-                                </Button>
-                             </div>
-
-                             <div className="grid grid-cols-3 gap-1 sm:gap-1.5">
-                                {['1','2','3','4','5','6','7','8','9','0','00'].map(k => (
-                                  <Button 
-                                    key={k} 
-                                    variant="ghost" 
-                                    className="h-10 sm:h-12 text-lg sm:text-xl font-black rounded-lg sm:rounded-xl bg-slate-50 hover:bg-slate-100 active:scale-90"
-                                    onClick={() => appendDigit(k)}
-                                  >
-                                    {k}
-                                  </Button>
-                                ))}
-                                <Button 
-                                  variant="ghost" 
-                                  className="h-10 sm:h-12 rounded-lg sm:rounded-xl bg-red-50 text-red-500 hover:bg-red-100 active:scale-90"
-                                  onClick={deleteLastDigit}
-                                >
-                                  <Delete className="w-4 h-4 sm:w-5 sm:h-5" />
-                                </Button>
-                             </div>
-                           </div>
                         </div>
-                     )}
 
-                     {paymentMode === 'TRANSFER' && (
-                        <div className="flex flex-col items-center justify-center p-6 sm:p-8 bg-slate-50 rounded-2xl sm:rounded-3xl border-2 border-dashed border-slate-200 animate-in zoom-in-95">
-                           {branch?.qrCodeUrl ? (
-                              <div className="relative w-36 h-36 sm:w-48 sm:h-48 shadow-xl rounded-xl sm:rounded-2xl bg-white p-3 sm:p-4 mb-4 overflow-hidden">
-                                 <img 
-                                   src={branch.qrCodeUrl} 
-                                   className="absolute inset-2 w-[calc(100%-16px)] h-[calc(100%-16px)] object-contain" 
-                                   referrerPolicy="no-referrer" 
-                                 />
-                               </div>
-                           ) : (
-                              <div className="w-36 h-36 bg-white rounded-xl flex items-center justify-center mb-4">
-                                <QrCode className="w-10 h-10 text-slate-100" />
-                              </div>
-                           )}
-                           <p className="text-base sm:text-lg font-black text-slate-900 italic">฿{finalTotal.toLocaleString()}</p>
-                           <Badge variant="secondary" className="text-[8px] sm:text-[9px] text-slate-400 font-black uppercase tracking-widest mt-2 px-3 py-1 bg-white rounded-full border-none shadow-sm">PromptPay QR</Badge>
-                        </div>
-                     )}
+                        <div className="space-y-3">
+                          <div className="relative">
+                            <span className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 text-lg font-black text-slate-300">฿</span>
+                            <input
+                              type="number"
+                              autoFocus
+                              className="w-full h-12 sm:h-14 pl-10 sm:pl-12 pr-4 sm:pr-6 text-xl sm:text-2xl font-black rounded-xl sm:rounded-2xl bg-white border-2 border-slate-100 focus:border-primary transition-all text-right tabular-nums shadow-sm"
+                              value={receivedAmount}
+                              onChange={(e) => setReceivedAmount(e.target.value)}
+                              placeholder="0.00"
+                            />
+                          </div>
 
-                     {!paymentMode && (
-                        <div className="flex-1 min-h-[250px] sm:min-h-[350px] flex flex-col items-center justify-center space-y-4 sm:space-y-6 bg-slate-50/50 rounded-2xl sm:rounded-3xl border-2 border-dashed border-slate-200">
-                           <div className="relative group">
-                             <div className="absolute inset-0 bg-primary/5 rounded-full blur-2xl animate-pulse"></div>
-                             <div className="relative p-6 sm:p-8 bg-white rounded-[2rem] shadow-sm border border-slate-100 text-slate-200 transition-transform group-hover:scale-105">
-                               <CreditCard className="w-12 h-12 sm:w-16 sm:h-16" />
-                             </div>
-                           </div>
-                           <div className="text-center space-y-1 sm:space-y-2">
-                             <p className="font-black text-slate-400 text-sm sm:text-base">ยังไม่ได้เลือกวิธีชำระเงิน</p>
-                             <p className="font-medium text-slate-300 text-xs sm:text-sm">กรุณาคลิกเลือก "เงินสด" หรือ "เงินโอน" ด้านบน</p>
-                           </div>
+                          <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 sm:gap-2">
+                            {['1000', '500', '100', '50', '20'].map(val => (
+                              <Button
+                                key={`note-${val}`}
+                                variant="outline"
+                                className="h-9 sm:h-10 rounded-lg font-black text-[10px] sm:text-xs border-slate-100 hover:bg-slate-50 hover:text-primary hover:border-primary active:scale-95 transition-all"
+                                onClick={() => handleQuickCash(Number(val))}
+                              >
+                                +{val}
+                              </Button>
+                            ))}
+                            {['10', '5', '2', '1'].map(val => (
+                              <Button
+                                key={`coin-${val}`}
+                                variant="outline"
+                                className="h-9 sm:h-10 rounded-full font-black text-[10px] sm:text-xs bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100 hover:text-primary active:scale-95 transition-all"
+                                onClick={() => handleQuickCash(Number(val))}
+                              >
+                                +{val}
+                              </Button>
+                            ))}
+                            <Button
+                              variant="outline"
+                              className="h-9 sm:h-10 rounded-lg font-black text-[10px] sm:text-xs bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 active:scale-95 transition-all col-span-2 sm:col-span-1"
+                              onClick={() => setReceivedAmount(finalTotal.toString())}
+                            >
+                              จ่ายพอดี
+                            </Button>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-1 sm:gap-1.5">
+                            {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '00'].map(k => (
+                              <Button
+                                key={k}
+                                variant="ghost"
+                                className="h-10 sm:h-12 text-lg sm:text-xl font-black rounded-lg sm:rounded-xl bg-slate-50 hover:bg-slate-100 active:scale-90"
+                                onClick={() => appendDigit(k)}
+                              >
+                                {k}
+                              </Button>
+                            ))}
+                            <Button
+                              variant="ghost"
+                              className="h-10 sm:h-12 rounded-lg sm:rounded-xl bg-red-50 text-red-500 hover:bg-red-100 active:scale-90"
+                              onClick={deleteLastDigit}
+                            >
+                              <Delete className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </Button>
+                          </div>
                         </div>
-                     )}
+                      </div>
+                    )}
+
+                    {paymentMode === 'TRANSFER' && (
+                      <div className="flex flex-col items-center justify-center p-6 sm:p-8 bg-slate-50 rounded-2xl sm:rounded-3xl border-2 border-dashed border-slate-200 animate-in zoom-in-95">
+                        {branch?.qrCodeUrl ? (
+                          <div className="relative w-36 h-36 sm:w-48 sm:h-48 shadow-xl rounded-xl sm:rounded-2xl bg-white p-3 sm:p-4 mb-4 overflow-hidden">
+                            <img
+                              src={branch.qrCodeUrl}
+                              className="absolute inset-2 w-[calc(100%-16px)] h-[calc(100%-16px)] object-contain"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-36 h-36 bg-white rounded-xl flex items-center justify-center mb-4">
+                            <QrCode className="w-10 h-10 text-slate-100" />
+                          </div>
+                        )}
+                        <p className="text-base sm:text-lg font-black text-slate-900 italic">฿{finalTotal.toLocaleString()}</p>
+                        <Badge variant="secondary" className="text-[8px] sm:text-[9px] text-slate-400 font-black uppercase tracking-widest mt-2 px-3 py-1 bg-white rounded-full border-none shadow-sm">PromptPay QR</Badge>
+                      </div>
+                    )}
+
+                    {!paymentMode && (
+                      <div className="flex-1 min-h-[250px] sm:min-h-[350px] flex flex-col items-center justify-center space-y-4 sm:space-y-6 bg-slate-50/50 rounded-2xl sm:rounded-3xl border-2 border-dashed border-slate-200">
+                        <div className="relative group">
+                          <div className="absolute inset-0 bg-primary/5 rounded-full blur-2xl animate-pulse"></div>
+                          <div className="relative p-6 sm:p-8 bg-white rounded-[2rem] shadow-sm border border-slate-100 text-slate-200 transition-transform group-hover:scale-105">
+                            <CreditCard className="w-12 h-12 sm:w-16 sm:h-16" />
+                          </div>
+                        </div>
+                        <div className="text-center space-y-1 sm:space-y-2">
+                          <p className="font-black text-slate-400 text-sm sm:text-base">ยังไม่ได้เลือกวิธีชำระเงิน</p>
+                          <p className="font-medium text-slate-300 text-xs sm:text-sm">กรุณาคลิกเลือก "เงินสด" หรือ "เงินโอน" ด้านบน</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-               </ScrollArea>
+                </div>
 
-               <div className="p-4 sm:p-6 border-t border-slate-100 bg-white grid grid-cols-2 gap-3 sm:gap-4 shrink-0">
+                <div className="p-4 sm:p-6 border-t border-slate-100 bg-white grid grid-cols-2 gap-3 sm:gap-4 shrink-0">
                   <Button variant="ghost" className="h-11 sm:h-13 rounded-xl sm:rounded-2xl font-bold text-slate-400 text-xs sm:text-sm" onClick={() => setSelectedBill(null)}>ยกเลิก</Button>
-                  <Button 
+                  <Button
                     className="h-11 sm:h-13 rounded-xl sm:rounded-2xl text-base sm:text-lg font-black shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
                     disabled={isProcessing || !paymentMode || (paymentMode === 'CASH' && (!receivedAmount || parseFloat(receivedAmount) < finalTotal))}
                     onClick={handlePayment}
@@ -739,12 +1080,19 @@ export default function Payment() {
                     {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />}
                     <span>ยืนยันชำระเงิน</span>
                   </Button>
-               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </AnimatePresence>
+
+      {/* ══════════ History detail Sheet ══════════ */}
+      <BillDetailSheet
+        order={selectedHistoryOrder}
+        open={!!selectedHistoryOrder}
+        onClose={() => setSelectedHistoryOrder(null)}
+      />
     </div>
   );
 }

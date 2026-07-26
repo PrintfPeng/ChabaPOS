@@ -18,6 +18,9 @@ import {
   Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { format, isSameDay } from 'date-fns';
+import { th } from 'date-fns/locale';
+import { DatePickerWithRange } from '../../components/DatePickerWithRange';
 
 export interface SummaryData {
   todaySales: number;
@@ -42,18 +45,13 @@ export interface ActivityLogData {
   details?: string;
 }
 
-const getThaiDateString = () => {
-  const days = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
-  const months = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-  ];
-  const now = new Date();
-  const dayName = days[now.getDay()];
-  const date = now.getDate();
-  const monthName = months[now.getMonth()];
-  const year = now.getFullYear();
-  return `${dayName}ที่ ${date} ${monthName} ${year}`;
+const getThaiPeriodLabel = (from?: Date, to?: Date) => {
+  if (!from) return 'วันนี้';
+  const fromStr = format(from, 'd MMM yyyy', { locale: th });
+  if (!to) return fromStr;
+  if (isSameDay(from, to)) return fromStr;
+  const toStr = format(to, 'd MMM yyyy', { locale: th });
+  return `${fromStr} - ${toStr}`;
 };
 
 export default function Overview() {
@@ -61,43 +59,78 @@ export default function Overview() {
   const navigate = useNavigate();
   const { branch, isLoading: isBranchLoading } = useBranch(Number(branchId));
 
+  const [orderTypeFilter, setOrderTypeFilter] = useState<'ALL' | 'DINE_IN' | 'DELIVERY'>('ALL');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('ไม่สามารถโหลดข้อมูล Dashboard ได้');
+  const [retryCount, setRetryCount] = useState(0);
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: new Date(),
+    to: new Date(),
+  });
 
   useEffect(() => {
     if (!branchId) return;
 
     const fetchDashboardData = async () => {
       setIsLoading(true);
+      setHasError(false);
       try {
+        const startStr = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : '';
+        const endStr = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : '';
+        const dateQuery = startStr ? `&startDate=${startStr}&endDate=${endStr}` : '';
+        const channelQuery = orderTypeFilter !== 'ALL' ? `&orderType=${orderTypeFilter}` : '';
+
         const [summaryRes, revenueRes, logsRes] = await Promise.all([
-          api.get(`/dashboard/summary?branchId=${branchId}`),
-          api.get(`/dashboard/revenue?branchId=${branchId}&period=${period}`),
+          api.get(`/dashboard/summary?branchId=${branchId}${dateQuery}${channelQuery}`),
+          api.get(`/dashboard/revenue?branchId=${branchId}&period=${period}${dateQuery}${channelQuery}`),
           api.get(`/dashboard/logs?branchId=${branchId}`)
         ]);
 
         setSummary(summaryRes.data);
         setRevenueData(revenueRes.data);
         setActivityLogs(logsRes.data);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to fetch dashboard data:', error);
-        toast.error('ไม่สามารถโหลดข้อมูล Dashboard ได้');
+        const msg = error?.response?.status === 403
+          ? 'บัญชีที่เข้าสู่ระบบอยู่ไม่มีสิทธิ์เข้าถึงสาขานี้ กรุณาเข้าสู่ระบบด้วยบัญชีเจ้าของสาขา'
+          : 'ไม่สามารถโหลดข้อมูล Dashboard ได้';
+        setErrorMsg(msg);
+        toast.error(msg);
+        setHasError(true);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchDashboardData();
-  }, [branchId, period]);
+  }, [branchId, period, dateRange, orderTypeFilter, retryCount]);
 
-  if (isBranchLoading || isLoading || !summary) {
+  if (isBranchLoading || isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-40 space-y-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
         <p className="text-slate-500">กำลังโหลดข้อมูล Dashboard...</p>
+      </div>
+    );
+  }
+
+  if (hasError || !summary) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 space-y-4 px-6 text-center">
+        <p className="text-slate-500 max-w-md">{errorMsg}</p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setRetryCount(n => n + 1)}>
+            ลองใหม่
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/brands')}>
+            เลือกแบรนด์อื่น
+          </Button>
+        </div>
       </div>
     );
   }
@@ -113,7 +146,24 @@ export default function Overview() {
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">ภาพรวมสาขา {branch?.name}</h1>
           <p className="text-slate-500 text-sm mt-1">สรุปข้อมูลการดำเนินงาน ยอดขาย และความเคลื่อนไหวล่าสุด</p>
         </div>
-        <div className="shrink-0">
+        <div className="flex flex-wrap gap-2 items-center shrink-0">
+          <Tabs
+            value={orderTypeFilter}
+            onValueChange={(val) => setOrderTypeFilter(val as any)}
+            className="w-full sm:w-auto"
+          >
+            <TabsList className="bg-slate-100 p-1 rounded-xl h-11">
+              <TabsTrigger value="ALL" className="font-bold text-xs sm:text-sm px-4">ทั้งหมด</TabsTrigger>
+              <TabsTrigger value="DINE_IN" className="font-bold text-xs sm:text-sm px-4">หน้าร้าน</TabsTrigger>
+              <TabsTrigger value="DELIVERY" className="font-bold text-xs sm:text-sm px-4">Delivery</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <DatePickerWithRange 
+            value={dateRange} 
+            onChange={setDateRange} 
+            placeholder="กรองวันที่..." 
+            className="w-full sm:w-auto"
+          />
           <Button 
             onClick={() => navigate(`/brands/${brandId}/branches/${branchId}/reports`)}
             className="w-full sm:w-auto shadow-md shadow-red-500/10 bg-gradient-to-r from-primary to-red-500 text-white hover:opacity-90 transition-all duration-200 h-11 px-5 rounded-xl font-bold text-sm flex items-center justify-center gap-2"
@@ -134,9 +184,11 @@ export default function Overview() {
           <CardContent className="pt-6 relative z-10">
             <div className="flex justify-between items-start">
               <div className="space-y-2">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">ยอดขายประจำวัน</p>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {dateRange.to && !isSameDay(dateRange.from, dateRange.to) ? 'ยอดขายรวมในช่วงเวลา' : 'ยอดขายประจำวัน'}
+                </p>
                 <div className="text-sm sm:text-lg font-black text-primary bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20 inline-block shadow-sm">
-                  {getThaiDateString()}
+                  {getThaiPeriodLabel(dateRange.from, dateRange.to)}
                 </div>
                 <h3 className="text-4xl sm:text-5xl lg:text-6xl font-black text-primary mt-3 tracking-tight">฿{summary.todaySales.toLocaleString()}</h3>
               </div>

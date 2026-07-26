@@ -1,0 +1,81 @@
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { BluetoothPrinter, PrinterStatus } from '../lib/bluetoothPrinter';
+import { buildOrderReceipt, PrintReceipt } from '../lib/escpos';
+import { toast } from 'sonner';
+
+interface PrinterCtx {
+  status:       PrinterStatus;
+  deviceName:   string | null;
+  isSupported:  boolean;
+  connect:      () => Promise<void>;
+  disconnect:   () => void;
+  printReceipt: (receipt: PrintReceipt) => Promise<void>;
+}
+
+const Ctx = createContext<PrinterCtx | null>(null);
+
+export function PrinterProvider({ children }: { children: React.ReactNode }) {
+  const printerRef                      = useRef(new BluetoothPrinter());
+  const [status,     setStatus]         = useState<PrinterStatus>('disconnected');
+  const [deviceName, setDeviceName]     = useState<string | null>(null);
+  const isSupported                     = typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+
+  useEffect(() => {
+    printerRef.current.onStatusChange = (s, name) => {
+      setStatus(s);
+      setDeviceName(name);
+    };
+  }, []);
+
+  const connect = useCallback(async () => {
+    if (!isSupported) {
+      toast.error('เบราว์เซอร์นี้ไม่รองรับ Web Bluetooth — ใช้ Chrome หรือ Edge');
+      return;
+    }
+    try {
+      await printerRef.current.connect();
+      toast.success(`เชื่อมต่อ "${printerRef.current.deviceName}" สำเร็จ`);
+    } catch (e: any) {
+      // User cancelled picker — NotFoundError — don't show error toast
+      if (e?.name !== 'NotFoundError') {
+        toast.error(e?.message ?? 'เชื่อมต่อ Bluetooth ไม่สำเร็จ');
+      }
+      setStatus('disconnected');
+      setDeviceName(null);
+    }
+  }, [isSupported]);
+
+  const disconnect = useCallback(() => {
+    printerRef.current.disconnect();
+  }, []);
+
+  const printReceipt = useCallback(async (receipt: PrintReceipt) => {
+    if (!printerRef.current.isConnected) {
+      toast.warning('กรุณาเชื่อมต่อ printer ก่อน');
+      return;
+    }
+    try {
+      const data = buildOrderReceipt(receipt);
+      await printerRef.current.print(data);
+      toast.success('พิมพ์ใบเสร็จสำเร็จ');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'พิมพ์ไม่สำเร็จ กรุณาลองใหม่');
+      setStatus('disconnected');
+      setDeviceName(null);
+    }
+  }, []);
+
+  return (
+    <Ctx.Provider value={{ status, deviceName, isSupported, connect, disconnect, printReceipt }}>
+      {children}
+    </Ctx.Provider>
+  );
+}
+
+export function usePrinter(): PrinterCtx {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error('usePrinter must be inside <PrinterProvider>');
+  return ctx;
+}
+
+export type { PrintReceipt };

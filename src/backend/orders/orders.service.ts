@@ -16,36 +16,13 @@ export class OrdersService {
     });
     if (!branch) throw new NotFoundException('Branch not found');
 
-    // 2. Generate Order Number (e.g., 1-20240418-001)
+    // 2. Date string for order number prefix (computed outside tx — pure JS, no DB access)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const year = today.getFullYear();
+    const year  = today.getFullYear();
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const day = today.getDate().toString().padStart(2, '0');
+    const day   = today.getDate().toString().padStart(2, '0');
     const dateStr = `${year}${month}${day}`;
-    
-    const lastOrder = await this.prisma.order.findFirst({
-      where: {
-        orderNumber: {
-          startsWith: `${dto.branchId}-${dateStr}-`,
-        },
-      },
-      orderBy: {
-        orderNumber: 'desc',
-      },
-    });
-
-    let sequence = 1;
-    if (lastOrder) {
-      const parts = lastOrder.orderNumber.split('-');
-      const lastSeq = parseInt(parts[2], 10);
-      if (!isNaN(lastSeq)) {
-        sequence = lastSeq + 1;
-      }
-    }
-    
-    const orderNumber = `${dto.branchId}-${dateStr}-${sequence.toString().padStart(3, '0')}`;
 
     // 3. Process Items and Calculate Total
     let totalAmount = 0;
@@ -93,50 +70,108 @@ export class OrdersService {
       });
     }
 
-    // 4. Create Order in Transaction
-    const order = await this.prisma.order.create({
-      data: {
-        orderNumber,
-        totalAmount,
-        discountAmount: dto.discountAmount ?? 0,
-        status: dto.isPrepaid ? 'PAID' : 'PENDING',
-        paymentType: dto.isPrepaid ? dto.paymentType : null,
-        branchId: dto.branchId,
-        tableId: dto.tableId === 0 ? null : dto.tableId,
-        source: dto.source || 'CUSTOMER',
-        notes: dto.notes || null,
-        ...(dto.customerId  ? { customerId:  dto.customerId }  : {}),
-        ...(dto.promotionId ? { promotionId: dto.promotionId } : {}),
-        items: {
-          create: orderItemsData,
-        },
-      },
-      include: {
-        items: {
-          include: {
-            options: true,
+    // 4–6. Order creation, table update, and points handling are a single atomic transaction.
+    // A failure in any step rolls back everything — no orphan PAID orders.
+    return this.prisma.$transaction(async (tx) => {
+      // Re-derive order number inside the transaction to reduce (but not eliminate) the
+      // duplicate-sequence risk under concurrent requests.
+      const lastOrderInTx = await tx.order.findFirst({
+        where: { orderNumber: { startsWith: `${dto.branchId}-${dateStr}-` } },
+        orderBy: { orderNumber: 'desc' },
+      });
+      let txSequence = 1;
+      if (lastOrderInTx) {
+        const parts = lastOrderInTx.orderNumber.split('-');
+        const lastSeq = parseInt(parts[2], 10);
+        if (!isNaN(lastSeq)) txSequence = lastSeq + 1;
+      }
+      const txOrderNumber = `${dto.branchId}-${dateStr}-${txSequence.toString().padStart(3, '0')}`;
+
+      // 4. Create Order
+      const order = await tx.order.create({
+        data: {
+          orderNumber: txOrderNumber,
+          totalAmount,
+          discountAmount: dto.discountAmount ?? 0,
+          status: (dto.orderType === 'DELIVERY' || dto.isPrepaid) ? 'PAID' : 'PENDING',
+          paymentType: dto.orderType === 'DELIVERY' ? (dto.paymentType || 'TRANSFER') : (dto.isPrepaid ? dto.paymentType : null),
+          orderType: dto.orderType || 'DINE_IN',
+          deliveryProvider: dto.deliveryProvider || null,
+          branchId: dto.branchId,
+          tableId: dto.tableId === 0 ? null : dto.tableId,
+          source: dto.source || 'CUSTOMER',
+          notes: dto.notes || null,
+          ...(dto.customerId  ? { customerId:  dto.customerId }  : {}),
+          ...(dto.promotionId ? { promotionId: dto.promotionId } : {}),
+          items: {
+            create: orderItemsData,
           },
         },
-      },
-    });
-
-    // 5. Update Table Status if tableId is present and not 0
-    // If it's prepaid, we don't necessarily want to mark the table as OCCUPIED because the transaction is already closed.
-    // However, if they selected a table, someone is sitting there. 
-    // But standard "PAID" logic in this app clears the table status.
-    // Let's stick to the user request: "ชำระเงินสำเร็จ -> ส่งออเดอร์เข้าครัว และ บันทึกสถานะบิลเป็น ชำระเงินแล้ว (Paid) ทันที"
-    // In completePayment, table is set back to AVAILABLE.
-    // So for prepaid, we probably shouldn't even set it to OCCUPIED if it's a one-off transaction,
-    // OR we set it to OCCUPIED if they are staying. 
-    // But if we want it to be "Paid", usually it means the table is free to be cleared or was never really "occupied" in the sense of an open bill.
-    if (dto.tableId && dto.tableId !== 0 && !dto.isPrepaid) {
-      await this.prisma.table.update({
-        where: { id: dto.tableId },
-        data: { status: 'OCCUPIED' },
+        include: {
+          items: { include: { options: true } },
+        },
       });
-    }
 
-    return order;
+      // 5. Update Table Status
+      if (dto.tableId && dto.tableId !== 0 && !dto.isPrepaid && dto.orderType !== 'DELIVERY') {
+        await tx.table.update({
+          where: { id: dto.tableId },
+          data: { status: 'OCCUPIED' },
+        });
+      }
+
+      // 6. Award/deduct points for prepaid orders with a member (STAFF/counter-service flow).
+      // Runs in the same transaction — a points failure rolls back the order too.
+      if ((dto.isPrepaid || dto.orderType === 'DELIVERY') && dto.customerId) {
+        const branchForRate = await tx.branch.findUnique({
+          where: { id: dto.branchId },
+          select: { rewardPointRate: true },
+        });
+        const POINTS_RATE =
+          branchForRate?.rewardPointRate && branchForRate.rewardPointRate > 0
+            ? branchForRate.rewardPointRate
+            : 100;
+
+        const finalTotal = Math.max(0, totalAmount - (dto.discountAmount ?? 0));
+
+        if (dto.promotionId && (dto.discountAmount ?? 0) > 0) {
+          const promo = await tx.promotion.findUnique({ where: { id: dto.promotionId } });
+          if (promo?.type === 'POINTS_REDEMPTION' && promo.pointsNeeded > 0) {
+            const customer = await tx.customer.findUnique({ where: { id: dto.customerId } });
+            if (!customer || customer.points < promo.pointsNeeded) {
+              throw new Error(
+                `แต้มไม่พอ (มี ${customer?.points ?? 0} ต้องการ ${promo.pointsNeeded})`,
+              );
+            }
+            await tx.customer.update({
+              where: { id: dto.customerId },
+              data: { points: { decrement: promo.pointsNeeded } },
+            });
+            await tx.redemptionHistory.create({
+              data: {
+                customerId:     dto.customerId,
+                promotionId:    dto.promotionId,
+                pointsSpent:    promo.pointsNeeded,
+                discountAmount: dto.discountAmount ?? 0,
+                orderId:        order.id,
+              },
+            });
+          }
+        }
+
+        if (finalTotal > 0) {
+          const pointsToAward = Math.floor(finalTotal / POINTS_RATE);
+          if (pointsToAward > 0) {
+            await tx.customer.update({
+              where: { id: dto.customerId },
+              data: { points: { increment: pointsToAward } },
+            });
+          }
+        }
+      }
+
+      return order;
+    });
   }
 
   async findAllByBranch(branchId: number) {
@@ -313,9 +348,9 @@ export class OrdersService {
       const orderIds     = unpaid.map((o) => o.id);
       const firstOrderId = unpaid[0].id;
 
-      // 2. Mark all orders PAID
-      await tx.order.updateMany({
-        where: { id: { in: orderIds } },
+      // 2. Mark all orders PAID — status predicate ensures idempotency on concurrent calls
+      const { count: paidCount } = await tx.order.updateMany({
+        where: { id: { in: orderIds }, status: { notIn: ['PAID', 'CANCELLED'] } },
         data: {
           status:      'PAID',
           paymentType,
@@ -324,6 +359,8 @@ export class OrdersService {
           ...(discount > 0      ? { discountAmount: discount         } : {}),
         },
       });
+      // A concurrent request already processed this payment — nothing left to do
+      if (paidCount === 0) return;
 
       // 3. ถ้าเป็น POINTS_REDEMPTION → ตรวจแต้ม → หักแต้ม → บันทึกประวัติ
       if (opts?.promotionId && opts?.customerId && discount > 0) {

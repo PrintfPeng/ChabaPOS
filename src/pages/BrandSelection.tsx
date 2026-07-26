@@ -116,7 +116,7 @@ export default function BrandSelection() {
                       id="name" 
                       value={newBrandName} 
                       onChange={(e) => setNewBrandName(e.target.value)}
-                      placeholder="เช่น Chaba Thai"
+                      placeholder="เช่น ChabaPOS Cafe"
                     />
                   </div>
                   <div className="space-y-2">

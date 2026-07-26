@@ -3,13 +3,14 @@ import { KitchensService } from './kitchens.service';
 import { CreateKitchenDto } from './dto/create-kitchen.dto';
 import { UpdateKitchenDto } from './dto/update-kitchen.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { validateBody } from '../common/validate-body';
 
 @Controller('kitchens')
 export class KitchensController {
   constructor(@Inject(KitchensService) private readonly kitchensService: KitchensService) {}
 
   @Post()
-  create(@Request() req, @Body() body: CreateKitchenDto) {
+  create(@Request() req, @Body(validateBody(CreateKitchenDto)) body: CreateKitchenDto) {
     return this.kitchensService.create(req.user.userId, body);
   }
 
@@ -19,7 +20,7 @@ export class KitchensController {
   }
 
   @Patch(':id')
-  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() body: UpdateKitchenDto) {
+  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateKitchenDto)) body: UpdateKitchenDto) {
     return this.kitchensService.update(req.user.userId, id, body);
   }
 

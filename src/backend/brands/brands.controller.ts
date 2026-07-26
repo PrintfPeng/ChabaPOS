@@ -4,6 +4,7 @@ import { BranchesService } from '../branches/branches.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { validateBody } from '../common/validate-body';
 
 @Controller('brands')
 export class BrandsController {
@@ -13,7 +14,7 @@ export class BrandsController {
   ) {}
 
   @Post()
-  create(@Request() req, @Body() body: CreateBrandDto) {
+  create(@Request() req, @Body(validateBody(CreateBrandDto)) body: CreateBrandDto) {
     return this.brandsService.create(req.user.userId, body);
   }
 
@@ -33,7 +34,7 @@ export class BrandsController {
   }
 
   @Patch(':id')
-  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() body: UpdateBrandDto) {
+  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateBrandDto)) body: UpdateBrandDto) {
     return this.brandsService.update(req.user.userId, id, body);
   }
 

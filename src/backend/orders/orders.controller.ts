@@ -3,6 +3,7 @@ import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Public } from '../auth/public.decorator';
+import { validateBody } from '../common/validate-body';
 
 @Controller('orders')
 export class OrdersController {
@@ -17,7 +18,7 @@ export class OrdersController {
 
   @Public()
   @Post()
-  create(@Body() createOrderDto: CreateOrderDto) {
+  create(@Body(validateBody(CreateOrderDto)) createOrderDto: CreateOrderDto) {
     return this.ordersService.create(createOrderDto);
   }
 

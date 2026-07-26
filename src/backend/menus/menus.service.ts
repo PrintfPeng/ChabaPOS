@@ -1,7 +1,7 @@
 import { Injectable, Inject, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateCategoryDto, CreateMenuItemDto } from './dto/menu.dto';
-import { UpdateCategoryDto, UpdateMenuItemDto } from './dto/update-menu.dto';
+import { CreateCategoryDto, CreateMenuItemDto, CreateDeliveryPlatformDto } from './dto/menu.dto';
+import { UpdateCategoryDto, UpdateMenuItemDto, UpdateDeliveryPlatformDto } from './dto/update-menu.dto';
 
 @Injectable()
 export class MenusService {
@@ -59,12 +59,64 @@ export class MenusService {
     return this.prisma.category.delete({ where: { id } });
   }
 
+  // Delivery Platforms
+  async createDeliveryPlatform(userId: number, dto: CreateDeliveryPlatformDto) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: dto.branchId },
+      include: { brand: true },
+    });
+    if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+
+    const existingPlatform = await this.prisma.deliveryPlatform.findFirst({
+      where: { name: dto.name, branchId: dto.branchId },
+    });
+    if (existingPlatform) throw new BadRequestException('มีแพลตฟอร์มชื่อนี้ในสาขานี้แล้ว');
+
+    return this.prisma.deliveryPlatform.create({ data: dto });
+  }
+
+  async findAllDeliveryPlatforms(userId: number, branchId: number) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      include: { brand: true },
+    });
+    if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+
+    return this.prisma.deliveryPlatform.findMany({
+      where: { branchId },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  async updateDeliveryPlatform(userId: number, id: number, dto: UpdateDeliveryPlatformDto) {
+    const platform = await this.prisma.deliveryPlatform.findUnique({
+      where: { id },
+      include: { branch: { include: { brand: true } } },
+    });
+    if (!platform || platform.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์แก้ไขแพลตฟอร์มนี้');
+
+    return this.prisma.deliveryPlatform.update({
+      where: { id },
+      data: dto,
+    });
+  }
+
+  async removeDeliveryPlatform(userId: number, id: number) {
+    const platform = await this.prisma.deliveryPlatform.findUnique({
+      where: { id },
+      include: { branch: { include: { brand: true } } },
+    });
+    if (!platform || platform.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์ลบแพลตฟอร์มนี้');
+
+    return this.prisma.deliveryPlatform.delete({ where: { id } });
+  }
+
   // Menu Items
   async createMenuItem(userId: number, dto: CreateMenuItemDto) {
     if (!dto.categoryId || !dto.kitchenId) {
       throw new BadRequestException('กรุณาระบุหมวดหมู่และห้องครัวให้ครบถ้วน');
     }
-    const { optionGroupIds, ...data } = dto;
+    const { optionGroupIds, deliveryPrices, ...data } = dto;
     const branch = await this.prisma.branch.findUnique({
       where: { id: dto.branchId },
       include: { brand: true },
@@ -81,6 +133,12 @@ export class MenusService {
         ...data,
         optionGroups: optionGroupIds ? {
           connect: optionGroupIds.map(id => ({ id }))
+        } : undefined,
+        deliveryPrices: deliveryPrices && deliveryPrices.length > 0 ? {
+          create: deliveryPrices.map(dp => ({
+            deliveryPlatformId: dp.platformId,
+            price: dp.price
+          }))
         } : undefined
       },
       include: {
@@ -88,7 +146,8 @@ export class MenusService {
           include: {
             options: true
           }
-        }
+        },
+        deliveryPrices: true
       }
     });
   }
@@ -109,13 +168,14 @@ export class MenusService {
           include: {
             options: true
           }
-        }
+        },
+        deliveryPrices: true
       },
     });
   }
 
   async updateMenuItem(userId: number, id: number, dto: UpdateMenuItemDto) {
-    const { optionGroupIds, ...data } = dto;
+    const { optionGroupIds, deliveryPrices, ...data } = dto;
     const item = await this.prisma.menuItem.findUnique({
       where: { id },
       include: { branch: { include: { brand: true } } },
@@ -128,6 +188,13 @@ export class MenusService {
         ...data,
         optionGroups: optionGroupIds ? {
           set: optionGroupIds.map(id => ({ id }))
+        } : undefined,
+        deliveryPrices: deliveryPrices !== undefined ? {
+          deleteMany: {},
+          create: deliveryPrices.map(dp => ({
+            deliveryPlatformId: dp.platformId,
+            price: dp.price
+          }))
         } : undefined
       },
       include: {
@@ -135,9 +202,35 @@ export class MenusService {
           include: {
             options: true
           }
-        }
+        },
+        deliveryPrices: true
       }
     });
+  }
+
+  async bulkUpdateDeliveryStatus(userId: number, branchId: number, enabledIds: number[]) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      include: { brand: true },
+    });
+    if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+
+    const ops: any[] = [
+      this.prisma.menuItem.updateMany({
+        where: { branchId },
+        data: { isDeliveryAvailable: false },
+      }),
+    ];
+    if (enabledIds.length > 0) {
+      ops.push(
+        this.prisma.menuItem.updateMany({
+          where: { branchId, id: { in: enabledIds } },
+          data: { isDeliveryAvailable: true },
+        }),
+      );
+    }
+    await this.prisma.$transaction(ops);
+    return { success: true };
   }
 
   async removeMenuItem(userId: number, id: number) {
@@ -150,3 +243,4 @@ export class MenusService {
     return this.prisma.menuItem.delete({ where: { id } });
   }
 }
+

@@ -1,4 +1,5 @@
-import { IsString, IsInt, IsOptional, IsNumber, IsUrl, IsNotEmpty } from 'class-validator';
+import { IsString, IsInt, IsOptional, IsNumber, IsUrl, IsNotEmpty, IsArray, ValidateNested, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateCategoryDto {
   @IsString()
@@ -12,6 +13,22 @@ export class CreateCategoryDto {
   order?: number;
 }
 
+export class CreateDeliveryPlatformDto {
+  @IsString()
+  name: string;
+
+  @IsInt()
+  branchId: number;
+}
+
+export class MenuItemDeliveryPriceDto {
+  @IsInt()
+  platformId: number;
+
+  @IsNumber()
+  price: number;
+}
+
 export class CreateMenuItemDto {
   @IsString()
   name: string;
@@ -19,8 +36,9 @@ export class CreateMenuItemDto {
   @IsNumber()
   price: number;
 
+  // Plain string, not @IsUrl(): the UI legitimately sends '' to clear an image.
   @IsOptional()
-  @IsUrl()
+  @IsString()
   imageUrl?: string;
 
   @IsNotEmpty({ message: 'กรุณาระบุหมวดหมู่' })
@@ -37,4 +55,24 @@ export class CreateMenuItemDto {
   @IsOptional()
   @IsInt({ each: true })
   optionGroupIds?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MenuItemDeliveryPriceDto)
+  deliveryPrices?: MenuItemDeliveryPriceDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isDeliveryAvailable?: boolean;
 }
+
+export class BulkDeliveryStatusDto {
+  @IsInt()
+  branchId: number;
+
+  @IsArray()
+  @IsInt({ each: true })
+  enabledIds: number[];
+}
+

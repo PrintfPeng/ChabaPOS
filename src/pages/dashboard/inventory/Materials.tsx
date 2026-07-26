@@ -146,13 +146,20 @@ export default function Materials() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-500">หมวดหมู่</label>
-                  <Select value={formData.categoryId || undefined} onValueChange={(v) => setFormData({ ...formData, categoryId: v })}>
+                  <Select
+                    value={formData.categoryId !== '' ? formData.categoryId : undefined}
+                    onValueChange={(v) => setFormData({ ...formData, categoryId: v })}
+                  >
                     <SelectTrigger className="h-11 rounded-xl">
-                      <SelectValue placeholder="เลือกหมวดหมู่" />
+                      <SelectValue placeholder="เลือกหมวดหมู่">
+                        {formData.categoryId !== ''
+                          ? (categories.find(c => c.id.toString() === formData.categoryId)?.name ?? null)
+                          : null}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {categories.map(c => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                        <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

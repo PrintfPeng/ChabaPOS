@@ -8,6 +8,12 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum Role {
+  OWNER
+  CASHIER
+  SUPER_ADMIN
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -15,23 +21,43 @@ model User {
   firstName String
   lastName  String
   phone     String?
+  role      Role     @default(OWNER)
   brands       Brand[]
   activityLogs ActivityLog[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
+enum BrandStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+enum PaymentTransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Brand {
-  id        Int      @id @default(autoincrement())
-  name      String
-  imageUrl  String?
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  branches  Branch[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            Int               @id @default(autoincrement())
+  name          String
+  imageUrl      String?
+  userId        Int
+  user          User              @relation(fields: [userId], references: [id])
+  branches      Branch[]
+  status        BrandStatus       @default(ACTIVE)
+  planId        Int?
+  plan          SubscriptionPlan? @relation(fields: [planId], references: [id])
+  planExpiresAt DateTime?
+  transactions  PaymentTransaction[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   @@index([userId])
+  @@index([planId])
 }
 
 model Branch {
@@ -59,6 +85,7 @@ model Branch {
   expenses     Expense[]
   customers    Customer[]
   promotions   Promotion[]
+  deliveryPlatforms DeliveryPlatform[]
 
   @@index([brandId])
 }
@@ -87,10 +114,12 @@ model MenuItem {
   branch       Branch        @relation(fields: [branchId], references: [id])
   kitchenId    Int?
   kitchen      Kitchen?      @relation(fields: [kitchenId], references: [id])
-  optionGroups OptionGroup[]
-  orderItems   OrderItem[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  optionGroups        OptionGroup[]
+  orderItems          OrderItem[]
+  deliveryPrices      MenuDeliveryPrice[]
+  isDeliveryAvailable Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@index([categoryId])
   @@index([branchId])
@@ -198,6 +227,8 @@ model Order {
   orderNumber    String      @unique
   status         OrderStatus @default(PENDING)
   source         OrderSource @default(CUSTOMER)
+  orderType      String      @default("DINE_IN")
+  deliveryProvider String?
   totalAmount    Float
   discountAmount Float       @default(0)
   paymentType    PaymentType?
@@ -433,4 +464,86 @@ model RedemptionHistory {
   @@index([customerId])
   @@index([promotionId])
 }
+
+model DeliveryPlatform {
+  id             Int                 @id @default(autoincrement())
+  name           String
+  branchId       Int
+  branch         Branch              @relation(fields: [branchId], references: [id])
+  deliveryPrices MenuDeliveryPrice[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([branchId])
+}
+
+model MenuDeliveryPrice {
+  id                 Int              @id @default(autoincrement())
+  menuItemId         Int
+  menuItem           MenuItem         @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  deliveryPlatformId Int
+  deliveryPlatform   DeliveryPlatform @relation(fields: [deliveryPlatformId], references: [id], onDelete: Cascade)
+  price              Float
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([menuItemId, deliveryPlatformId])
+  @@index([menuItemId])
+  @@index([deliveryPlatformId])
+}
+
+// ============================================
+// PLATFORM SETTINGS (Super Admin singleton)
+// ============================================
+
+model PlatformSetting {
+  id            Int      @id @default(1)
+  bankName      String   @default("")
+  accountName   String   @default("")
+  accountNumber String   @default("")
+  qrCodeUrl     String?
+  updatedAt     DateTime @updatedAt
+}
+
+// ============================================
+// SUBSCRIPTION PLANS (Super Admin)
+// ============================================
+
+model SubscriptionPlan {
+  id          Int      @id @default(autoincrement())
+  name        String
+  price       Float
+  description String?
+  features    Json     @default("[]")
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  brands       Brand[]
+  transactions PaymentTransaction[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ============================================
+// PAYMENT TRANSACTIONS (Tenant Onboarding)
+// ============================================
+
+model PaymentTransaction {
+  id        Int                      @id @default(autoincrement())
+  brandId   Int
+  brand     Brand                    @relation(fields: [brandId], references: [id])
+  planId    Int
+  plan      SubscriptionPlan         @relation(fields: [planId], references: [id])
+  /// Price snapshot at time of purchase. Nullable only so pre-existing rows
+  /// can fall back to plan.price; every new row always stores it.
+  amount    Float?
+  slipUrl   String
+  note      String?
+  status    PaymentTransactionStatus @default(PENDING)
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  @@index([brandId])
+  @@index([planId])
+}
+
 

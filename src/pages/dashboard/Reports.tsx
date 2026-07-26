@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useBranch } from '../../hooks/useBranches';
@@ -10,6 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { toast } from 'sonner';
+import { format, isSameDay } from 'date-fns';
+import { th } from 'date-fns/locale';
+import { DatePickerWithRange } from '../../components/DatePickerWithRange';
+import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { cn } from '../../lib/utils';
 import { 
   ChevronLeft, 
   BarChart3, 
@@ -26,8 +31,6 @@ import {
   Loader2,
   Printer
 } from 'lucide-react';
-
-type PeriodType = 'today' | 'week' | 'month' | '6months' | 'year';
 
 interface ChartPoint {
   label: string;
@@ -54,29 +57,14 @@ interface PeriodData {
     sales: number;
     net: number;
   }[];
+  deliveryBreakdown?: {
+    provider: string;
+    sales: number;
+    orders: number;
+  }[];
 }
 
-const getThaiDateString = () => {
-  const days = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
-  const months = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-  ];
-  const now = new Date();
-  const dayName = days[now.getDay()];
-  const date = now.getDate();
-  const monthName = months[now.getMonth()];
-  const year = now.getFullYear();
-  return `${dayName}ที่ ${date} ${monthName} ${year}`;
-};
 
-const periodOptions: { key: PeriodType; label: string }[] = [
-  { key: 'today', label: 'วันนี้' },
-  { key: 'week', label: 'สัปดาห์นี้' },
-  { key: 'month', label: 'เดือนนี้' },
-  { key: '6months', label: '6 เดือน' },
-  { key: 'year', label: '1 ปี' },
-];
 
 // ─── PDF-only template — inline styles only, no CSS variables ───────────────
 function PdfReportTemplate({ data, periodLabel, branchName }: {
@@ -144,7 +132,7 @@ function PdfReportTemplate({ data, periodLabel, branchName }: {
       {/* Header */}
       <div style={s.headerWrap}>
         <div>
-          <div style={s.brandLabel}>CHABA POS SYSTEM</div>
+          <div style={s.brandLabel}>NEXOS SYSTEM</div>
           <div style={s.title}>รายงานการขาย</div>
           <div style={s.subtitle}>
             สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong>
@@ -234,7 +222,7 @@ function PdfReportTemplate({ data, periodLabel, branchName }: {
 
       {/* Footer */}
       <div style={s.footer}>
-        <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
         <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr} {timeStr}</span>
       </div>
     </div>
@@ -246,13 +234,27 @@ export default function Reports() {
   const navigate = useNavigate();
   const { branch, isLoading: isBranchLoading } = useBranch(Number(branchId));
 
-  const [activePeriod, setActivePeriod] = useState<PeriodType>('today');
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: new Date(),
+    to: new Date(),
+  });
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [orderTypeFilter, setOrderTypeFilter] = useState<'ALL' | 'DINE_IN' | 'DELIVERY'>('ALL');
   
   const [reportData, setReportData] = useState<PeriodData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Period label calculation
+  const periodLabel = useMemo(() => {
+    if (!dateRange.from) return 'ทั้งหมด';
+    const fromStr = format(dateRange.from, 'd MMM yyyy', { locale: th });
+    if (!dateRange.to) return fromStr;
+    if (isSameDay(dateRange.from, dateRange.to)) return fromStr;
+    const toStr = format(dateRange.to, 'd MMM yyyy', { locale: th });
+    return `${fromStr} - ${toStr}`;
+  }, [dateRange]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -260,7 +262,18 @@ export default function Reports() {
     const fetchReportData = async () => {
       setIsLoading(true);
       try {
-        const res = await api.get<PeriodData>(`/dashboard/reports/sales?branchId=${branchId}&filter=${activePeriod}`);
+        const startStr = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : '';
+        const endStr = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : '';
+        const channelQuery = orderTypeFilter !== 'ALL' ? `&orderType=${orderTypeFilter}` : '';
+        
+        let url = `/dashboard/reports/sales?branchId=${branchId}${channelQuery}`;
+        if (startStr) {
+          url += `&startDate=${startStr}&endDate=${endStr}&filter=today`;
+        } else {
+          url += `&filter=today`; // fallback
+        }
+
+        const res = await api.get<PeriodData>(url);
         setReportData(res.data);
       } catch (error) {
         console.error('Failed to fetch report data:', error);
@@ -271,7 +284,7 @@ export default function Reports() {
     };
 
     fetchReportData();
-  }, [branchId, activePeriod]);
+  }, [branchId, dateRange, orderTypeFilter]);
 
   const handleExport = (type: 'PDF' | 'Excel') => {
     if (type === 'Excel') {
@@ -292,13 +305,13 @@ export default function Reports() {
         
         const branchName = branch?.name || 'branch';
         const dateStr = new Date().toISOString().slice(0, 10);
-        link.setAttribute('download', `รายงานการขาย_${branchName}_${activePeriod}_${dateStr}.csv`);
+        link.setAttribute('download', `รายงานการขาย_${branchName}_${periodLabel.replace(/\s+/g, '_')}_${dateStr}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         
-        toast.success(`ส่งออกข้อมูล Excel สำหรับช่วงเวลา "${periodOptions.find(p => p.key === activePeriod)?.label}" สำเร็จ!`);
+        toast.success(`ส่งออกข้อมูล Excel สำหรับช่วงเวลา "${periodLabel}" สำเร็จ!`);
       } catch (error) {
         console.error('Failed to export Excel:', error);
         toast.error('เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel');
@@ -318,7 +331,6 @@ export default function Reports() {
     const root = createRoot(container);
 
     try {
-      const periodLabel = periodOptions.find(p => p.key === activePeriod)?.label ?? activePeriod;
       const branchName = branch?.name ?? 'สาขา';
 
       await new Promise<void>(resolve => {
@@ -358,7 +370,7 @@ export default function Reports() {
       }
 
       const dateStr = new Date().toISOString().slice(0, 10);
-      pdf.save(`รายงานการขาย_${branchName}_${activePeriod}_${dateStr}.pdf`);
+      pdf.save(`รายงานการขาย_${branchName}_${periodLabel.replace(/\s+/g, '_')}_${dateStr}.pdf`);
       toast.success('ดาวน์โหลดไฟล์ PDF เรียบร้อยแล้ว!', { id: toastId });
     } catch (error: any) {
       console.error('Failed to generate PDF:', error);
@@ -437,7 +449,7 @@ export default function Reports() {
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">รายงานการขายฉบับเต็ม</h1>
           <p className="text-slate-500 text-sm mt-1">
             วิเคราะห์ข้อมูลสถิติ ยอดขาย ออเดอร์ และแนวโน้มรายได้สาขา {branch?.name}
-            <span className="hidden print:inline font-bold text-primary ml-1">({periodOptions.find(o => o.key === activePeriod)?.label})</span>
+            <span className="hidden print:inline font-bold text-primary ml-1">({periodLabel})</span>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto print:hidden">
@@ -466,25 +478,29 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* 2. Tabs Selector for Period */}
+      {/* 2. DatePicker Selector for Period */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-3 rounded-2xl border border-red-100/60 shadow-sm print:hidden">
-        <div className="flex flex-wrap gap-1 w-full sm:w-auto">
-          {periodOptions.map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => {
-                setActivePeriod(opt.key);
-                setHoveredIndex(null);
-              }}
-              className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all duration-200 w-[18%] sm:w-auto min-w-[65px] ${
-                activePeriod === opt.key
-                  ? 'bg-primary text-white shadow-md shadow-primary/20 scale-102'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
+          <Tabs
+            value={orderTypeFilter}
+            onValueChange={(val) => setOrderTypeFilter(val as any)}
+            className="w-full sm:w-auto"
+          >
+            <TabsList className="bg-slate-100 p-1 rounded-xl h-11">
+              <TabsTrigger value="ALL" className="font-bold text-xs sm:text-sm px-4">ทั้งหมด</TabsTrigger>
+              <TabsTrigger value="DINE_IN" className="font-bold text-xs sm:text-sm px-4">หน้าร้าน</TabsTrigger>
+              <TabsTrigger value="DELIVERY" className="font-bold text-xs sm:text-sm px-4">Delivery</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <DatePickerWithRange 
+            value={dateRange}
+            onChange={(val) => {
+              setDateRange(val);
+              setHoveredIndex(null);
+            }}
+            placeholder="เลือกช่วงรายงาน..."
+            className="w-full sm:w-[280px]"
+          />
         </div>
 
         {/* Chart Type Toggle */}
@@ -514,18 +530,20 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Active Period Date Banner (Daily Report) */}
-      {activePeriod === 'today' && (
-        <div className="flex items-center gap-5 bg-red-50/45 border border-red-100/60 rounded-3xl p-5 px-6 shadow-[0_4px_20px_rgba(239,68,68,0.04)] animate-in fade-in slide-in-from-top-1 duration-300">
-          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white font-black shrink-0 shadow-lg shadow-red-500/15 border border-primary/10">
-            <Calendar className="w-7 h-7" />
-          </div>
-          <div>
-            <h4 className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider leading-none">รายงานการขายประจำวัน</h4>
-            <h3 className="text-2xl sm:text-4xl font-black text-slate-900 mt-2.5 leading-none tracking-tight">{getThaiDateString()}</h3>
-          </div>
+      {/* Active Period Date Banner */}
+      <div className="flex items-center gap-5 bg-red-50/45 border border-red-100/60 rounded-3xl p-5 px-6 shadow-[0_4px_20px_rgba(239,68,68,0.04)] animate-in fade-in slide-in-from-top-1 duration-300">
+        <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white font-black shrink-0 shadow-lg shadow-red-500/15 border border-primary/10">
+          <Calendar className="w-7 h-7" />
         </div>
-      )}
+        <div>
+          <h4 className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider leading-none">
+            {dateRange.to && !isSameDay(dateRange.from, dateRange.to) ? 'รายงานการขายในช่วงเวลา' : 'รายงานการขายประจำวัน'}
+          </h4>
+          <h3 className="text-2xl sm:text-4xl font-black text-slate-900 mt-2.5 leading-none tracking-tight">
+            {periodLabel}
+          </h3>
+        </div>
+      </div>
 
       {/* 3. KPI Metrics summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -623,198 +641,313 @@ export default function Reports() {
       </div>
 
       {/* 4. Chart Visualization Section */}
-      <Card className="shadow-sm border-slate-100 overflow-hidden bg-white">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-black text-slate-900 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-primary" />
-            แนวโน้มยอดขาย ({currentData.title})
-          </CardTitle>
-          <CardDescription>วิเคราะห์เปรียบเทียบข้อมูลยอดขายและยอดจานตามช่วงเวลาที่กำหนด</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <div className="relative w-full overflow-hidden bg-slate-50/40 border border-slate-100 rounded-2xl p-4 sm:p-6 select-none">
-            {/* SVG Chart Container */}
-            <svg 
-              viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
-              className="w-full h-auto overflow-visible"
-            >
-              {/* Gradients definitions */}
-              <defs>
-                <linearGradient id="areaColor" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.0" />
-                </linearGradient>
-                <linearGradient id="barColor" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" />
-                  <stop offset="100%" stopColor="hsl(var(--primary)/0.6)" />
-                </linearGradient>
-              </defs>
+      <div className={cn("grid grid-cols-1 gap-6", orderTypeFilter === 'DELIVERY' ? "lg:grid-cols-3" : "")}>
+        <div className={orderTypeFilter === 'DELIVERY' ? "lg:col-span-2" : ""}>
+          <Card className="shadow-sm border-slate-100 overflow-hidden bg-white h-full">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-primary" />
+                แนวโน้มยอดขาย ({currentData.title})
+              </CardTitle>
+              <CardDescription>วิเคราะห์เปรียบเทียบข้อมูลยอดขายและยอดจานตามช่วงเวลาที่กำหนด</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="relative w-full overflow-hidden bg-slate-50/40 border border-slate-100 rounded-2xl p-4 sm:p-6 select-none">
+                {/* SVG Chart Container */}
+                <svg 
+                  viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
+                  className="w-full h-auto overflow-visible"
+                >
+                  {/* Gradients definitions */}
+                  <defs>
+                    <linearGradient id="areaColor" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.0" />
+                    </linearGradient>
+                    <linearGradient id="barColor" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--primary))" />
+                      <stop offset="100%" stopColor="hsl(var(--primary)/0.6)" />
+                    </linearGradient>
+                  </defs>
 
-              {/* Grid Lines */}
-              {[0, 1, 2, 3].map((i) => {
-                const yPos = paddingTop + (chartHeight / 3) * i;
-                return (
-                  <g key={i}>
+                  {/* Grid Lines */}
+                  {[0, 1, 2, 3].map((i) => {
+                    const yPos = paddingTop + (chartHeight / 3) * i;
+                    return (
+                      <g key={i}>
+                        <line 
+                          x1={paddingLeft} 
+                          y1={yPos} 
+                          x2={svgWidth - paddingRight} 
+                          y2={yPos} 
+                          stroke="#e2e8f0" 
+                          strokeWidth="1" 
+                          strokeDasharray="4 4" 
+                        />
+                        {/* Y-axis values */}
+                        <text 
+                          x={paddingLeft - 10} 
+                          y={yPos + 4} 
+                          textAnchor="end" 
+                          className="text-[10px] sm:text-xs font-bold fill-slate-400"
+                        >
+                          ฿{Math.round(maxVal - (i * maxVal) / 3).toLocaleString()}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Chart Graphics */}
+                  {chartType === 'line' ? (
+                    <>
+                      {/* Area fill */}
+                      {areaPath && (
+                        <path 
+                          d={areaPath} 
+                          fill="url(#areaColor)" 
+                          className="transition-all duration-500 ease-in-out"
+                        />
+                      )}
+                      {/* Line stroke */}
+                      {linePath && (
+                        <path 
+                          d={linePath} 
+                          fill="none" 
+                          stroke="stroke-primary" 
+                          className="stroke-primary transition-all duration-500 ease-in-out" 
+                          strokeWidth="3.5" 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          style={{ stroke: 'hsl(var(--primary))' }}
+                        />
+                      )}
+                      {/* Circle Dots */}
+                      {points.map((p, i) => (
+                        <circle 
+                          key={i} 
+                          cx={p.x} 
+                          cy={p.y} 
+                          r={hoveredIndex === i ? '7' : '5'} 
+                          fill={hoveredIndex === i ? 'hsl(var(--primary))' : '#ffffff'} 
+                          stroke="stroke-primary" 
+                          style={{ stroke: 'hsl(var(--primary))' }}
+                          strokeWidth="3.5" 
+                          className="transition-all duration-150 cursor-pointer"
+                        />
+                      ))}
+                    </>
+                  ) : (
+                    // Bar Chart Mode
+                    points.map((p, i) => {
+                      const barWidth = Math.min(45, barDx * 0.55);
+                      const barHeight = paddingTop + chartHeight - p.y;
+                      return (
+                        <rect 
+                          key={i} 
+                          x={p.x - barWidth / 2} 
+                          y={p.y} 
+                          width={barWidth} 
+                          height={barHeight} 
+                          fill="url(#barColor)" 
+                          rx="6" 
+                          className="transition-all duration-300 ease-in-out cursor-pointer hover:opacity-85"
+                          opacity={hoveredIndex === null || hoveredIndex === i ? 1 : 0.4}
+                        />
+                      );
+                    })
+                  )}
+
+                  {/* Vertical Guide dashline on Hover */}
+                  {hoveredIndex !== null && points[hoveredIndex] && (
                     <line 
-                      x1={paddingLeft} 
-                      y1={yPos} 
-                      x2={svgWidth - paddingRight} 
-                      y2={yPos} 
-                      stroke="#e2e8f0" 
-                      strokeWidth="1" 
+                      x1={points[hoveredIndex].x} 
+                      y1={paddingTop} 
+                      x2={points[hoveredIndex].x} 
+                      y2={paddingTop + chartHeight} 
+                      stroke="hsl(var(--primary))" 
+                      strokeWidth="1.5" 
                       strokeDasharray="4 4" 
+                      opacity="0.4"
                     />
-                    {/* Y-axis values */}
+                  )}
+
+                  {/* X-axis labels */}
+                  {points.map((p, i) => (
                     <text 
-                      x={paddingLeft - 10} 
-                      y={yPos + 4} 
-                      textAnchor="end" 
+                      key={i} 
+                      x={p.x} 
+                      y={paddingTop + chartHeight + 22} 
+                      textAnchor="middle" 
                       className="text-[10px] sm:text-xs font-bold fill-slate-400"
                     >
-                      ฿{Math.round(maxVal - (i * maxVal) / 3).toLocaleString()}
+                      {p.label}
                     </text>
-                  </g>
-                );
-              })}
-
-              {/* Chart Graphics */}
-              {chartType === 'line' ? (
-                <>
-                  {/* Area fill */}
-                  {areaPath && (
-                    <path 
-                      d={areaPath} 
-                      fill="url(#areaColor)" 
-                      className="transition-all duration-500 ease-in-out"
-                    />
-                  )}
-                  {/* Line stroke */}
-                  {linePath && (
-                    <path 
-                      d={linePath} 
-                      fill="none" 
-                      stroke="stroke-primary" 
-                      className="stroke-primary transition-all duration-500 ease-in-out" 
-                      strokeWidth="3.5" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      style={{ stroke: 'hsl(var(--primary))' }}
-                    />
-                  )}
-                  {/* Circle Dots */}
-                  {points.map((p, i) => (
-                    <circle 
-                      key={i} 
-                      cx={p.x} 
-                      cy={p.y} 
-                      r={hoveredIndex === i ? '7' : '5'} 
-                      fill={hoveredIndex === i ? 'hsl(var(--primary))' : '#ffffff'} 
-                      stroke="stroke-primary" 
-                      style={{ stroke: 'hsl(var(--primary))' }}
-                      strokeWidth="3.5" 
-                      className="transition-all duration-150 cursor-pointer"
-                    />
                   ))}
-                </>
-              ) : (
-                // Bar Chart Mode
-                points.map((p, i) => {
-                  const barWidth = Math.min(45, barDx * 0.55);
-                  const barHeight = paddingTop + chartHeight - p.y;
-                  return (
-                    <rect 
-                      key={i} 
-                      x={p.x - barWidth / 2} 
-                      y={p.y} 
-                      width={barWidth} 
-                      height={barHeight} 
-                      fill="url(#barColor)" 
-                      rx="6" 
-                      className="transition-all duration-300 ease-in-out cursor-pointer hover:opacity-85"
-                      opacity={hoveredIndex === null || hoveredIndex === i ? 1 : 0.4}
-                    />
-                  );
-                })
-              )}
 
-              {/* Vertical Guide dashline on Hover */}
-              {hoveredIndex !== null && points[hoveredIndex] && (
-                <line 
-                  x1={points[hoveredIndex].x} 
-                  y1={paddingTop} 
-                  x2={points[hoveredIndex].x} 
-                  y2={paddingTop + chartHeight} 
-                  stroke="hsl(var(--primary))" 
-                  strokeWidth="1.5" 
-                  strokeDasharray="4 4" 
-                  opacity="0.4"
-                />
-              )}
+                  {/* Invisible interactive hover rects */}
+                  {points.map((p, i) => {
+                    const hoverWidth = chartType === 'line' ? dx : barDx;
+                    const hoverX = chartType === 'line' 
+                      ? p.x - (i === 0 ? 0 : dx / 2) 
+                      : p.x - barDx / 2;
+                    return (
+                      <rect 
+                        key={i} 
+                        x={hoverX} 
+                        y={paddingTop} 
+                        width={hoverWidth} 
+                        height={chartHeight} 
+                        fill="transparent" 
+                        className="cursor-pointer"
+                        onMouseEnter={() => setHoveredIndex(i)}
+                        onMouseLeave={() => setHoveredIndex(null)}
+                      />
+                    );
+                  })}
+                </svg>
 
-              {/* X-axis labels */}
-              {points.map((p, i) => (
-                <text 
-                  key={i} 
-                  x={p.x} 
-                  y={paddingTop + chartHeight + 22} 
-                  textAnchor="middle" 
-                  className="text-[10px] sm:text-xs font-bold fill-slate-400"
-                >
-                  {p.label}
-                </text>
-              ))}
-
-              {/* Invisible interactive hover rects */}
-              {points.map((p, i) => {
-                const hoverWidth = chartType === 'line' ? dx : barDx;
-                const hoverX = chartType === 'line' 
-                  ? p.x - (i === 0 ? 0 : dx / 2) 
-                  : p.x - barDx / 2;
-                return (
-                  <rect 
-                    key={i} 
-                    x={hoverX} 
-                    y={paddingTop} 
-                    width={hoverWidth} 
-                    height={chartHeight} 
-                    fill="transparent" 
-                    className="cursor-pointer"
-                    onMouseEnter={() => setHoveredIndex(i)}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  />
-                );
-              })}
-            </svg>
-
-            {/* Custom Tooltip */}
-            {hoveredIndex !== null && points[hoveredIndex] && (
-              <div 
-                className="absolute bg-slate-900 border border-slate-800 text-white text-xs p-3 rounded-2xl shadow-xl pointer-events-none z-30 transition-all duration-150 ease-out flex flex-col gap-1"
-                style={{
-                  left: `${((points[hoveredIndex].x) / svgWidth) * 100}%`,
-                  top: `${((points[hoveredIndex].y - 20) / svgHeight) * 100}%`,
-                  transform: 'translate(-50%, -100%)'
-                }}
-              >
-                <div className="font-bold text-slate-400 border-b border-slate-800 pb-1 flex justify-between gap-4">
-                  <span>{points[hoveredIndex].label}</span>
-                  <Badge className="bg-red-500/20 text-red-300 border-none px-1.5 py-0 h-4 text-[9px]">
-                    ยอดขาย
-                  </Badge>
-                </div>
-                <div className="font-black text-sm text-white mt-0.5">
-                  ฿{points[hoveredIndex].value.toLocaleString()}
-                </div>
-                <div className="text-slate-300 text-[10px]">
-                  ออเดอร์ทั้งหมด: <strong className="text-white">{points[hoveredIndex].orders}</strong> บิล
-                </div>
-                {/* Tooltip Arrow */}
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-slate-800" />
+                {/* Custom Tooltip */}
+                {hoveredIndex !== null && points[hoveredIndex] && (
+                  <div 
+                    className="absolute bg-slate-900 border border-slate-800 text-white text-xs p-3 rounded-2xl shadow-xl pointer-events-none z-30 transition-all duration-150 ease-out flex flex-col gap-1"
+                    style={{
+                      left: `${((points[hoveredIndex].x) / svgWidth) * 100}%`,
+                      top: `${((points[hoveredIndex].y - 20) / svgHeight) * 100}%`,
+                      transform: 'translate(-50%, -100%)'
+                    }}
+                  >
+                    <div className="font-bold text-slate-400 border-b border-slate-800 pb-1 flex justify-between gap-4">
+                      <span>{points[hoveredIndex].label}</span>
+                      <Badge className="bg-red-500/20 text-red-300 border-none px-1.5 py-0 h-4 text-[9px]">
+                        ยอดขาย
+                      </Badge>
+                    </div>
+                    <div className="font-black text-sm text-white mt-0.5">
+                      ฿{points[hoveredIndex].value.toLocaleString()}
+                    </div>
+                    <div className="text-slate-300 text-[10px]">
+                      ออเดอร์ทั้งหมด: <strong className="text-white">{points[hoveredIndex].orders}</strong> บิล
+                    </div>
+                    {/* Tooltip Arrow */}
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-slate-800" />
+                  </div>
+                )}
               </div>
-            )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {orderTypeFilter === 'DELIVERY' && (
+          <div className="lg:col-span-1 animate-in fade-in slide-in-from-right duration-300">
+            <Card className="shadow-sm border-slate-100 overflow-hidden bg-white h-full flex flex-col justify-between">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-primary" />
+                  ช่องทาง Delivery
+                </CardTitle>
+                <CardDescription>สัดส่วนยอดขายแยกตามผู้ให้บริการ</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col flex-1 justify-center gap-4">
+                {(() => {
+                  const deliveryBreakdownData = currentData.deliveryBreakdown || [];
+                  const totalDeliverySales = deliveryBreakdownData.reduce((sum, item) => sum + item.sales, 0);
+                  
+                  const platformMeta: Record<string, { label: string; color: string; bg: string }> = {
+                    GRAB: { label: 'GrabFood', color: '#00b14f', bg: 'bg-[#00b14f]/10 text-[#00b14f]' },
+                    SHOPEE: { label: 'ShopeeFood', color: '#ee4d2d', bg: 'bg-[#ee4d2d]/10 text-[#ee4d2d]' },
+                    LINEMAN: { label: 'LINEMAN', color: '#06c755', bg: 'bg-[#06c755]/10 text-[#06c755]' },
+                    UNKNOWN: { label: 'อื่นๆ / ไม่ระบุ', color: '#64748b', bg: 'bg-slate-100 text-slate-600' },
+                  };
+
+                  let cumulativePercent = 0;
+                  const radius = 50;
+                  const strokeWidth = 12;
+                  const circumference = 2 * Math.PI * radius;
+
+                  return (
+                    <>
+                      {totalDeliverySales > 0 ? (
+                        <>
+                          {/* Donut Chart */}
+                          <div className="flex justify-center py-2 shrink-0">
+                            <div className="relative w-40 h-40 flex items-center justify-center">
+                              <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
+                                <circle cx="70" cy="70" r={radius} fill="transparent" stroke="#f1f5f9" strokeWidth={strokeWidth} />
+                                {deliveryBreakdownData.map((item, idx) => {
+                                  const percent = item.sales / totalDeliverySales;
+                                  const strokeLength = percent * circumference;
+                                  const strokeOffset = circumference - (cumulativePercent * circumference);
+                                  cumulativePercent += percent;
+
+                                  const meta = platformMeta[item.provider] || platformMeta.UNKNOWN;
+
+                                  return (
+                                    <circle
+                                      key={idx}
+                                      cx="70"
+                                      cy="70"
+                                      r={radius}
+                                      fill="transparent"
+                                      stroke={meta.color}
+                                      strokeWidth={strokeWidth}
+                                      strokeDasharray={`${strokeLength} ${circumference}`}
+                                      strokeDashoffset={strokeOffset}
+                                      strokeLinecap="round"
+                                      className="transition-all duration-1000 ease-out"
+                                    />
+                                  );
+                                })}
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">ยอดขายรวม</span>
+                                <span className="text-base font-black text-slate-800 mt-1">฿{totalDeliverySales.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Platform stats list */}
+                          <div className="space-y-3.5 flex-1 overflow-y-auto no-scrollbar">
+                            {deliveryBreakdownData.map((item, idx) => {
+                              const percent = totalDeliverySales > 0 ? (item.sales / totalDeliverySales) * 100 : 0;
+                              const meta = platformMeta[item.provider] || platformMeta.UNKNOWN;
+                              return (
+                                <div key={idx} className="space-y-1">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={cn("px-2 py-0.5 rounded-lg text-[9px] font-black tracking-wide", meta.bg)}>
+                                        {meta.label}
+                                      </span>
+                                      <span className="text-slate-400 font-semibold">{item.orders} บิล</span>
+                                    </div>
+                                    <span className="font-extrabold text-slate-800 text-xs">
+                                      ฿{item.sales.toLocaleString()} ({percent.toFixed(1)}%)
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full rounded-full transition-all duration-500" 
+                                      style={{ width: `${percent}%`, backgroundColor: meta.color }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="h-60 flex flex-col items-center justify-center text-slate-400 text-center p-6 gap-2">
+                          <ShoppingBag className="w-8 h-8 text-slate-300 animate-pulse" />
+                          <span className="text-sm font-bold text-slate-400">ไม่มีข้อมูลออเดอร์ Delivery สำหรับช่วงเวลานี้</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* 5. Sales Summary Table */}
       <Card className="shadow-sm border-slate-100 overflow-hidden bg-white">

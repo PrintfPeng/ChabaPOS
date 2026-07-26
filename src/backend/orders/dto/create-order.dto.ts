@@ -65,4 +65,12 @@ export class CreateOrderDto {
   @IsNumber()
   @IsOptional()
   discountAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  orderType?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryProvider?: string;
 }

@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, UseGua
 import { MaterialCategoriesService } from './material-categories.service';
 import { CreateMaterialCategoryDto, UpdateMaterialCategoryDto } from './dto/material-category.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { validateBody } from '../common/validate-body';
 
 @UseGuards(JwtAuthGuard)
 @Controller('material-categories')
@@ -9,7 +10,7 @@ export class MaterialCategoriesController {
   constructor(@Inject(MaterialCategoriesService) private readonly materialCategoriesService: MaterialCategoriesService) {}
 
   @Post()
-  create(@Request() req, @Body() createMaterialCategoryDto: CreateMaterialCategoryDto) {
+  create(@Request() req, @Body(validateBody(CreateMaterialCategoryDto)) createMaterialCategoryDto: CreateMaterialCategoryDto) {
     return this.materialCategoriesService.create(req.user.userId, createMaterialCategoryDto);
   }
 
@@ -19,7 +20,7 @@ export class MaterialCategoriesController {
   }
 
   @Patch(':id')
-  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() updateMaterialCategoryDto: UpdateMaterialCategoryDto) {
+  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateMaterialCategoryDto)) updateMaterialCategoryDto: UpdateMaterialCategoryDto) {
     return this.materialCategoriesService.update(req.user.userId, id, updateMaterialCategoryDto);
   }
 

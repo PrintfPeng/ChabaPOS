@@ -90,11 +90,7 @@ export default function PromotionList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">จัดการโปรโมชั่น</h2>
-          <p className="text-sm text-slate-500 mt-0.5">สร้างและจัดการส่วนลด / เงื่อนไขการใช้แต้ม</p>
-        </div>
+      <div className="flex justify-end items-center">
         <Button onClick={openCreate} className="rounded-xl font-bold gap-2">
           <Plus className="w-4 h-4" />
           สร้างโปรโมชั่น

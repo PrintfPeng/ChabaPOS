@@ -1,17 +1,20 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import api from '../lib/api';
 
+type UserRole = 'OWNER' | 'CASHIER' | 'SUPER_ADMIN';
+
 interface User {
   id: number;
   email: string;
   firstName: string;
   lastName: string;
+  role: UserRole;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (identifier: string, pass: string) => Promise<void>;
+  login: (identifier: string, pass: string) => Promise<User>;
   register: (data: any) => Promise<void>;
   logout: () => void;
 }
@@ -19,7 +22,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  login: async () => {},
+  login: async () => { throw new Error('AuthProvider not mounted'); },
   register: async () => {},
   logout: () => {},
 });
@@ -43,12 +46,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     const res = await api.post('/auth/login', { email, password });
-    const { access_token, user } = res.data;
+    const { access_token, user } = res.data as { access_token: string; user: User };
     localStorage.setItem('token', access_token);
     localStorage.setItem('user', JSON.stringify(user));
     setUser(user);
+    return user;
   };
 
   const register = async (data: any) => {

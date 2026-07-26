@@ -40,10 +40,11 @@ interface PurchaseOrderItem {
 interface PurchaseOrder {
   id: number;
   supplierId: number;
-  supplier: { id: number; name: string; phone?: string };
+  supplier: { id: number; name: string; phone?: string } | null;
   branchId: number;
   status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
   totalAmount: number;
+  orderDate: string;
   createdAt: string;
   items: PurchaseOrderItem[];
 }
@@ -98,7 +99,7 @@ function PdfReceiptTemplate({
     <div style={s.root}>
       <div style={s.hdr}>
         <div>
-          <div style={s.brand}>CHABA POS SYSTEM</div>
+          <div style={s.brand}>NEXOS SYSTEM</div>
           <div style={s.title}>ใบรับเข้าสินค้า & บันทึกรายจ่าย</div>
           <div style={s.sub}>สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong></div>
         </div>
@@ -169,7 +170,7 @@ function PdfReceiptTemplate({
       </div>
 
       <div style={s.footer}>
-        <span>สร้างโดยระบบ CHABA POS • เอกสารบันทึกรับเข้าสินค้า</span>
+        <span>สร้างโดยระบบ NEXOS • เอกสารบันทึกรับเข้าสินค้า</span>
         <span>{dateStr} {timeStr}</span>
       </div>
     </div>
@@ -231,7 +232,7 @@ export default function Expenses() {
   const { branch }   = useBranch(Number(branchId));
 
   const [pendingOrders, setPendingOrders] = useState<PurchaseOrder[]>([]);
-  const [selectedPoId,  setSelectedPoId]  = useState<string>('');
+  const [selectedPoId,  setSelectedPoId]  = useState<number | ''>('');
   const [isLoading,     setIsLoading]     = useState(true);
   const [isSubmitting,  setIsSubmitting]  = useState(false);
   const [receiptItems,  setReceiptItems]  = useState<Record<number, ReceiptItemState>>({});
@@ -260,7 +261,7 @@ export default function Expenses() {
   // ── Find Selected PO ───────────────────────────────────────────────────────
   const selectedPo = useMemo(() => {
     if (!selectedPoId) return null;
-    return pendingOrders.find(o => o.id === Number(selectedPoId)) || null;
+    return pendingOrders.find(o => o.id === selectedPoId) || null;
   }, [selectedPoId, pendingOrders]);
 
   // ── Initialize inputs when PO is selected ──────────────────────────────────
@@ -431,18 +432,29 @@ export default function Expenses() {
             <div className="max-w-md space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">เลือกบิลสั่งซื้อที่ค้างดำเนินการ</label>
               <Select
-                value={selectedPoId}
-                onValueChange={setSelectedPoId}
+                value={selectedPoId !== '' ? String(selectedPoId) : ''}
+                onValueChange={(val) => setSelectedPoId(val !== '' ? Number(val) : '')}
               >
                 <SelectTrigger className="h-11 rounded-xl bg-white border-slate-200 text-sm">
-                  <SelectValue placeholder={pendingOrders.length ? "เลือกใบสั่งซื้อ..." : "ไม่มีใบสั่งซื้อค้างรับของ"} />
+                  <SelectValue placeholder={pendingOrders.length ? 'เลือกใบสั่งซื้อ...' : 'ไม่มีใบสั่งซื้อค้างรับของ'}>
+                    {selectedPoId !== '' && selectedPo
+                      ? `PO-${String(selectedPo.id).padStart(5, '0')} · ${selectedPo.supplier?.name ?? 'ไม่ระบุผู้จัดหา'}`
+                      : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {pendingOrders.map(o => (
-                    <SelectItem key={o.id} value={String(o.id)}>
-                      PO-{String(o.id).padStart(5, '0')} ({o.supplier?.name} · {new Date(o.createdAt).toLocaleDateString('th-TH')})
-                    </SelectItem>
-                  ))}
+                  {pendingOrders.map(o => {
+                    const poLabel = `PO-${String(o.id).padStart(5, '0')}`;
+                    const supplierName = o.supplier?.name ?? 'ไม่ระบุผู้จัดหา';
+                    const dateLabel = new Date(o.orderDate ?? o.createdAt).toLocaleDateString('th-TH', {
+                      day: '2-digit', month: 'short', year: '2-digit',
+                    });
+                    return (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {poLabel} · {supplierName} · {dateLabel}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

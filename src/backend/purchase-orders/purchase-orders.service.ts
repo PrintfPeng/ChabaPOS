@@ -141,19 +141,13 @@ export class PurchaseOrdersService {
       throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
     }
 
-    if (order.status !== 'PENDING') {
-      throw new BadRequestException('ใบสั่งซื้อนี้ได้รับการดำเนินการแล้ว หรือถูกยกเลิกแล้ว');
-    }
-
     return this.prisma.$transaction(async (tx) => {
-      // 1. Update purchase order status and total amount
-      await tx.purchaseOrder.update({
-        where: { id },
-        data: {
-          status: 'COMPLETED',
-          totalAmount: dto.totalAmount,
-        },
+      // 1. Atomic status guard — update ONLY if still PENDING to prevent double-processing
+      const { count } = await tx.purchaseOrder.updateMany({
+        where: { id, status: 'PENDING' },
+        data: { status: 'COMPLETED', totalAmount: dto.totalAmount },
       });
+      if (count === 0) throw new BadRequestException('ใบสั่งซื้อนี้ได้รับการดำเนินการแล้ว หรือถูกยกเลิกแล้ว');
 
       // 2. Loop through each received item
       for (const item of dto.items) {

@@ -76,11 +76,7 @@ export default function KitchenManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">จัดการห้องครัว</h1>
-          <p className="text-slate-500">จัดการห้องครัวสำหรับสาขานี้</p>
-        </div>
+      <div className="flex justify-end items-center">
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
           if (!open) {

@@ -23,9 +23,9 @@ import {
   CalendarDays, CalendarRange, CalendarClock, List,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { DatePickerWithRange } from '../../../components/DatePickerWithRange';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ViewMode = 'daily' | 'weekly' | 'monthly' | 'all';
 
 interface POItem {
   id: number;
@@ -107,7 +107,7 @@ function PdfSingleTemplate({
       {/* Header */}
       <div style={s.hdr}>
         <div>
-          <div style={s.brand}>CHABA POS SYSTEM</div>
+          <div style={s.brand}>NEXOS SYSTEM</div>
           <div style={s.title}>ใบสั่งซื้อวัตถุดิบ</div>
           <div style={s.sub}>สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong></div>
         </div>
@@ -208,7 +208,7 @@ function PdfSingleTemplate({
 
       {/* Footer */}
       <div style={s.footer}>
-        <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
         <span>{dateStr} {timeStr}</span>
       </div>
     </div>
@@ -246,7 +246,7 @@ function PdfAllTemplate({
       {/* Header */}
       <div style={s.hdr}>
         <div>
-          <div style={s.brand}>CHABA POS SYSTEM</div>
+          <div style={s.brand}>NEXOS SYSTEM</div>
           <div style={s.title}>รายงานการสั่งซื้อวัตถุดิบ</div>
           <div style={s.sub}>
             สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong>
@@ -328,7 +328,7 @@ function PdfAllTemplate({
 
       {/* Footer */}
       <div style={s.footer}>
-        <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
         <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr} {timeStr}</span>
       </div>
     </div>
@@ -393,11 +393,25 @@ export default function InventoryDashboard() {
 
   const [allOrders,      setAllOrders]      = useState<PurchaseOrder[]>([]);
   const [isLoading,      setIsLoading]      = useState(true);
-  const [viewMode,       setViewMode]       = useState<ViewMode>('daily');
-  const [selectedDate,   setSelectedDate]   = useState<Date>(new Date());
+  const [dateRange,      setDateRange]      = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: new Date(),
+    to: new Date(),
+  });
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [searchQuery,    setSearchQuery]    = useState('');
   const [printOrder,     setPrintOrder]     = useState<PurchaseOrder | null>(null);
+
+  // Filters for the Ordered Materials section
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState('all');
+  const [materialSupplierFilter, setMaterialSupplierFilter] = useState('all');
+  const [materialSearchQuery,    setMaterialSearchQuery]    = useState('');
+
+  // Reset material table filters when date range changes
+  useEffect(() => {
+    setMaterialCategoryFilter('all');
+    setMaterialSupplierFilter('all');
+    setMaterialSearchQuery('');
+  }, [dateRange]);
 
   // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchOrders = async () => {
@@ -415,20 +429,33 @@ export default function InventoryDashboard() {
 
   useEffect(() => { fetchOrders(); }, [branchId]);
 
-  // ── Filtering ────────────────────────────────────────────────────────────
-  const filteredOrders = useMemo(() => {
+  // ── Orders filtered ONLY by Date Range ───────────────────────────────────
+  const ordersInPeriod = useMemo(() => {
     let list = [...allOrders];
 
-    // กรองตามช่วงเวลา
-    if (viewMode !== 'all') {
-      list = list.filter(o => {
-        const d = new Date(o.createdAt);
-        if (viewMode === 'daily')   return isSameDay(d, selectedDate);
-        if (viewMode === 'weekly')  return isSameWeek(d, selectedDate, { weekStartsOn: 1 });
-        if (viewMode === 'monthly') return isSameMonth(d, selectedDate) && isSameYear(d, selectedDate);
-        return true;
-      });
+    if (dateRange.from) {
+      const start = new Date(dateRange.from.getFullYear(), dateRange.from.getMonth(), dateRange.from.getDate());
+      
+      if (dateRange.to) {
+        const end = new Date(dateRange.to.getFullYear(), dateRange.to.getMonth(), dateRange.to.getDate());
+        list = list.filter(o => {
+          const d = new Date(o.createdAt);
+          const comp = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          return comp >= start && comp <= end;
+        });
+      } else {
+        list = list.filter(o => {
+          const d = new Date(o.createdAt);
+          return isSameDay(d, start);
+        });
+      }
     }
+    return list;
+  }, [allOrders, dateRange]);
+
+  // ── Filtering ────────────────────────────────────────────────────────────
+  const filteredOrders = useMemo(() => {
+    let list = [...ordersInPeriod];
 
     if (supplierFilter !== 'all')
       list = list.filter(o => String(o.supplier?.id) === supplierFilter);
@@ -442,7 +469,68 @@ export default function InventoryDashboard() {
     }
 
     return list;
-  }, [allOrders, viewMode, selectedDate, supplierFilter, searchQuery]);
+  }, [ordersInPeriod, supplierFilter, searchQuery]);
+
+  // ── Flattened Ordered Materials ──────────────────────────────────────────
+  const flatItems = useMemo(() => {
+    const list: any[] = [];
+    ordersInPeriod.forEach(o => {
+      if (!o.items) return;
+      o.items.forEach(i => {
+        list.push({
+          id: `${o.id}-${i.id}`,
+          name: i.rawMaterial?.name ?? '-',
+          category: i.rawMaterial?.category?.name ?? 'ไม่มีหมวดหมู่',
+          categoryId: i.rawMaterial?.category?.id ?? 0,
+          supplier: o.supplier?.name ?? '-',
+          supplierId: o.supplier?.id ?? 0,
+          quantity: i.quantity,
+          unit: i.rawMaterial?.unit ?? '',
+          price: i.price ?? 0,
+          totalPrice: i.quantity * (i.price ?? 0),
+          status: o.status,
+        });
+      });
+    });
+    return list;
+  }, [ordersInPeriod]);
+
+  // ── Filtered Flattened Ordered Materials ─────────────────────────────────
+  const filteredFlatItems = useMemo(() => {
+    let list = [...flatItems];
+
+    if (materialCategoryFilter !== 'all') {
+      list = list.filter(item => String(item.categoryId) === materialCategoryFilter);
+    }
+
+    if (materialSupplierFilter !== 'all') {
+      list = list.filter(item => String(item.supplierId) === materialSupplierFilter);
+    }
+
+    if (materialSearchQuery.trim()) {
+      const q = materialSearchQuery.toLowerCase();
+      list = list.filter(item => item.name.toLowerCase().includes(q));
+    }
+
+    return list;
+  }, [flatItems, materialCategoryFilter, materialSupplierFilter, materialSearchQuery]);
+
+  // ── Unique Filter Options from Flat List ─────────────────────────────────
+  const uniqueCategories = useMemo(() => {
+    const m = new Map<number, string>();
+    flatItems.forEach(item => {
+      if (item.categoryId) m.set(item.categoryId, item.category);
+    });
+    return Array.from(m.entries()).map(([id, name]) => ({ id, name }));
+  }, [flatItems]);
+
+  const uniqueSuppliersInPeriod = useMemo(() => {
+    const m = new Map<number, string>();
+    flatItems.forEach(item => {
+      if (item.supplierId) m.set(item.supplierId, item.supplier);
+    });
+    return Array.from(m.entries()).map(([id, name]) => ({ id, name }));
+  }, [flatItems]);
 
   // ── Stats ────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
@@ -458,13 +546,17 @@ export default function InventoryDashboard() {
     return Array.from(m.entries()).map(([id, name]) => ({ id, name }));
   }, [allOrders]);
 
-  const periodLabel = viewMode === 'all'
-    ? 'ทั้งหมด'
-    : viewMode === 'daily'
-    ? format(selectedDate, 'd MMM yyyy', { locale: th })
-    : viewMode === 'weekly'
-    ? `สัปดาห์ที่ ${format(selectedDate, 'w')} · ${format(selectedDate, 'MMM yyyy', { locale: th })}`
-    : format(selectedDate, 'MMMM yyyy', { locale: th });
+  const periodLabel = useMemo(() => {
+    if (!dateRange.from) return 'ทั้งหมด';
+    
+    const fromStr = format(dateRange.from, 'd MMM yyyy', { locale: th });
+    if (!dateRange.to) return fromStr;
+    
+    if (isSameDay(dateRange.from, dateRange.to)) return fromStr;
+    
+    const toStr = format(dateRange.to, 'd MMM yyyy', { locale: th });
+    return `${fromStr} - ${toStr}`;
+  }, [dateRange]);
   const branchName  = branch?.name ?? `สาขา #${branchId}`;
   const dateStr     = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -588,49 +680,13 @@ export default function InventoryDashboard() {
         {/* Filter bar */}
         <div className="flex flex-col sm:flex-row gap-3">
 
-          {/* ── View mode toggle ── */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl shrink-0">
-            {([
-              { mode: 'daily'   as ViewMode, label: 'รายวัน',    icon: <CalendarDays  className="w-3.5 h-3.5" /> },
-              { mode: 'weekly'  as ViewMode, label: 'รายสัปดาห์', icon: <CalendarClock className="w-3.5 h-3.5" /> },
-              { mode: 'monthly' as ViewMode, label: 'รายเดือน',  icon: <CalendarRange className="w-3.5 h-3.5" /> },
-              { mode: 'all'     as ViewMode, label: 'ทั้งหมด',   icon: <List          className="w-3.5 h-3.5" /> },
-            ] as const).map(({ mode, label, icon }) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                  viewMode === mode ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {icon}
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* ── Date picker — ซ่อนเมื่อ viewMode = 'all' ── */}
-          {viewMode !== 'all' && (
-            <div className="relative shrink-0" style={{ isolation: 'isolate' }}>
-              {/* styled label (pointer-events-none ให้คลิกทะลุไปถึง input) */}
-              <div className="flex items-center gap-2 h-9 px-4 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors whitespace-nowrap min-w-[160px] pointer-events-none select-none">
-                <CalendarDays className="w-4 h-4 shrink-0" />
-                <span>{periodLabel}</span>
-              </div>
-              {/* native input ลอยทับ — รับ event จริง */}
-              <input
-                type={viewMode === 'monthly' ? 'month' : 'date'}
-                value={viewMode === 'monthly'
-                  ? format(selectedDate, 'yyyy-MM')
-                  : format(selectedDate, 'yyyy-MM-dd')}
-                onChange={e => {
-                  if (!e.target.value) return;
-                  setSelectedDate(new Date(e.target.value + (viewMode === 'monthly' ? '-01' : '')));
-                }}
-                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 1, width: '100%', height: '100%' }}
-              />
-            </div>
-          )}
+          {/* ── New Comprehensive Date Picker ── */}
+          <DatePickerWithRange 
+            value={dateRange} 
+            onChange={setDateRange} 
+            placeholder="เลือกวันที่..."
+            className="shrink-0"
+          />
 
           <div className="flex gap-2 flex-1 min-w-0">
             <Select value={supplierFilter} onValueChange={setSupplierFilter}>
@@ -689,10 +745,7 @@ export default function InventoryDashboard() {
           <CardHeader className="py-3 px-5 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-                {viewMode === 'daily'   && <CalendarDays  className="w-4 h-4 text-primary" />}
-                {viewMode === 'weekly'  && <CalendarClock className="w-4 h-4 text-primary" />}
-                {viewMode === 'monthly' && <CalendarRange className="w-4 h-4 text-primary" />}
-                {viewMode === 'all'     && <List          className="w-4 h-4 text-primary" />}
+                <CalendarDays className="w-4 h-4 text-primary" />
                 รายการสั่งซื้อ — {periodLabel}
                 {searchQuery && <span className="text-sm font-normal text-slate-400 ml-1">· ค้นหา "{searchQuery}"</span>}
               </CardTitle>
@@ -705,17 +758,11 @@ export default function InventoryDashboard() {
             {!filteredOrders.length ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                 <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-                  {viewMode === 'daily'   && <CalendarDays  className="w-8 h-8 text-slate-300" />}
-                  {viewMode === 'weekly'  && <CalendarClock className="w-8 h-8 text-slate-300" />}
-                  {viewMode === 'monthly' && <CalendarRange className="w-8 h-8 text-slate-300" />}
-                  {viewMode === 'all'     && <List          className="w-8 h-8 text-slate-300" />}
+                  <CalendarDays className="w-8 h-8 text-slate-300" />
                 </div>
                 <p className="font-bold text-slate-600 text-base">ไม่มีรายการสั่งซื้อ</p>
                 <p className="text-sm text-slate-400 mt-1">
-                  {viewMode === 'daily'   && `ไม่พบบิลในวันที่ ${periodLabel}`}
-                  {viewMode === 'weekly'  && `ไม่พบบิลใน${periodLabel}`}
-                  {viewMode === 'monthly' && `ไม่พบบิลในเดือน ${periodLabel}`}
-                  {viewMode === 'all'     && 'ยังไม่มีรายการสั่งซื้อในระบบ'}
+                  {dateRange.from ? `ไม่พบบิลในช่วงเวลา ${periodLabel}` : 'ยังไม่มีรายการสั่งซื้อในระบบ'}
                 </p>
               </div>
             ) : (
@@ -795,6 +842,122 @@ export default function InventoryDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* ─── Ordered Materials Card ─── */}
+        <Card className="border-slate-100 shadow-sm overflow-hidden">
+          <CardHeader className="py-3 px-5 border-b border-slate-100 bg-white">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-primary" />
+                รายการสั่งวัตถุดิบ — {periodLabel}
+              </CardTitle>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search inside this section */}
+                <div className="relative w-44">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input 
+                    type="text" 
+                    placeholder="ค้นหาวัตถุดิบ..."
+                    value={materialSearchQuery} 
+                    onChange={e => setMaterialSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 h-8 border border-slate-200 rounded-lg text-xs
+                               bg-white focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-slate-400" 
+                  />
+                </div>
+
+                {/* Filter by Category */}
+                <Select value={materialCategoryFilter} onValueChange={setMaterialCategoryFilter}>
+                  <SelectTrigger className="rounded-lg h-8 w-36 bg-white border-slate-200 text-xs shrink-0">
+                    <SelectValue placeholder="หมวดหมู่ทั้งหมด">
+                      {materialCategoryFilter === 'all'
+                        ? 'หมวดหมู่ทั้งหมด'
+                        : (uniqueCategories.find(c => String(c.id) === materialCategoryFilter)?.name || materialCategoryFilter)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">หมวดหมู่ทั้งหมด</SelectItem>
+                    {uniqueCategories.map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filter by Supplier */}
+                <Select value={materialSupplierFilter} onValueChange={setMaterialSupplierFilter}>
+                  <SelectTrigger className="rounded-lg h-8 w-36 bg-white border-slate-200 text-xs shrink-0">
+                    <SelectValue placeholder="ร้านค้าทั้งหมด">
+                      {materialSupplierFilter === 'all'
+                        ? 'ร้านค้าทั้งหมด'
+                        : (uniqueSuppliersInPeriod.find(s => String(s.id) === materialSupplierFilter)?.name || materialSupplierFilter)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">ร้านค้าทั้งหมด</SelectItem>
+                    {uniqueSuppliersInPeriod.map(s => (
+                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full shrink-0">
+                  {filteredFlatItems.length} รายการ
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {!filteredFlatItems.length ? (
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                  <ClipboardList className="w-8 h-8 text-slate-300" />
+                </div>
+                <p className="font-bold text-slate-600 text-base">ไม่พบรายการสั่งวัตถุดิบ</p>
+                <p className="text-sm text-slate-400 mt-1">ทดลองเปลี่ยนช่วงเวลาหรือเงื่อนไขการกรอง</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50 border-b border-slate-100 hover:bg-slate-50">
+                      <TableHead className="pl-5 font-bold text-slate-600 h-9 text-xs">ชื่อวัตถุดิบ</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-9 text-xs w-[180px]">หมวดหมู่</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-9 text-xs w-[200px]">ร้านค้า</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-9 text-xs text-right w-[140px]">จำนวนที่สั่ง</TableHead>
+                      <TableHead className="font-bold text-slate-600 h-9 text-xs text-right w-[140px] pr-5">ยอดรวม</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredFlatItems.map(item => (
+                      <TableRow key={item.id} className="border-b border-slate-100/60 hover:bg-slate-50/40 text-xs">
+                        <TableCell className="pl-5 py-2.5 font-semibold text-slate-800">
+                          {item.name}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-slate-500">
+                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">
+                            {item.category}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-2.5 text-slate-700 font-medium">
+                          {item.supplier}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-right font-bold text-slate-800">
+                          {item.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} <span className="text-[10px] font-normal text-slate-500 ml-0.5">{item.unit}</span>
+                        </TableCell>
+                        <TableCell className="py-2.5 text-right font-bold text-slate-900 pr-5">
+                          {item.totalPrice > 0
+                            ? `฿${Number(item.totalPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : <span className="text-slate-400 font-normal">ไม่ระบุ</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* ═══════════════════════ PRINT: SINGLE ORDER ════════════════════════ */}
@@ -810,7 +973,7 @@ export default function InventoryDashboard() {
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 14, marginBottom: 18 }}>
                 <div>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CHABA POS SYSTEM</div>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>NEXOS SYSTEM</div>
                   <div style={{ fontSize: 20, fontWeight: 900 }}>ใบสั่งซื้อวัตถุดิบ</div>
                   <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
                     สาขา: <strong>{branchName}</strong>
@@ -920,7 +1083,7 @@ export default function InventoryDashboard() {
 
               {/* Footer */}
               <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8' }}>
-                <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+                <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
                 <span>{dateStr}</span>
               </div>
             </div>
@@ -934,7 +1097,7 @@ export default function InventoryDashboard() {
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 14, marginBottom: 18 }}>
             <div>
-              <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CHABA POS SYSTEM</div>
+              <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>NEXOS SYSTEM</div>
               <div style={{ fontSize: 20, fontWeight: 900 }}>รายงานการสั่งซื้อวัตถุดิบ</div>
               <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
                 สาขา: <strong>{branchName}</strong> &nbsp;·&nbsp; ช่วงเวลา: <strong style={{ color: '#dc2626' }}>{periodLabel}</strong>
@@ -1012,7 +1175,7 @@ export default function InventoryDashboard() {
 
           {/* Footer */}
           <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 7, color: '#94a3b8' }}>
-            <span>สร้างโดยระบบ CHABA POS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+            <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
             <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr}</span>
           </div>
         </div>

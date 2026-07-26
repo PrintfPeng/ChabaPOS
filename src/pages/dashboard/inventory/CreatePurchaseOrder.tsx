@@ -239,14 +239,14 @@ export default function CreatePurchaseOrder() {
         <div className="p-4 border-b border-slate-100 bg-slate-50 shrink-0 space-y-2">
           <label className="text-xs font-bold uppercase tracking-widest text-slate-500">ร้านค้า (Supplier)</label>
           <Select
-            value={selectedSupplier || undefined}
+            value={selectedSupplier !== '' ? selectedSupplier : undefined}
             onValueChange={setSelectedSupplier}
           >
             <SelectTrigger className="h-11 rounded-xl bg-white border-slate-200">
               <SelectValue placeholder="เลือกร้านค้า...">
-                {selectedSupplier
-                  ? (suppliers.find(s => String(s.id) === selectedSupplier)?.name || selectedSupplier)
-                  : undefined}
+                {selectedSupplier !== ''
+                  ? (suppliers.find(s => s.id.toString() === selectedSupplier)?.name ?? null)
+                  : null}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>

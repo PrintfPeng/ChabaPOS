@@ -4,13 +4,14 @@ import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Public } from '../auth/public.decorator';
+import { validateBody } from '../common/validate-body';
 
 @Controller('branches')
 export class BranchesController {
   constructor(@Inject(BranchesService) private readonly branchesService: BranchesService) {}
 
   @Post()
-  create(@Request() req, @Body() body: CreateBranchDto) {
+  create(@Request() req, @Body(validateBody(CreateBranchDto)) body: CreateBranchDto) {
     return this.branchesService.create(req.user.userId, body);
   }
 
@@ -20,7 +21,7 @@ export class BranchesController {
   }
 
   @Patch(':id')
-  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() body: UpdateBranchDto) {
+  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateBranchDto)) body: UpdateBranchDto) {
     return this.branchesService.update(req.user.userId, id, body);
   }
 

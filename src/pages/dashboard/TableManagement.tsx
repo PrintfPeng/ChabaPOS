@@ -275,13 +275,17 @@ export default function TableManagement() {
                 </div>
                 <div>
                   <Label>โซน</Label>
-                  <Select 
-                    value={newTable.zoneId ? String(newTable.zoneId) : undefined} 
-                    onValueChange={(val) => setNewTable({...newTable, zoneId: String(val)})}
+                  <Select
+                    value={newTable.zoneId !== '' ? newTable.zoneId : undefined}
+                    onValueChange={(val) => setNewTable({...newTable, zoneId: val})}
                     items={Array.isArray(zones) ? zones.map(z => ({ value: String(z.id), label: z.name })) : []}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="เลือกโซน" />
+                      <SelectValue placeholder="เลือกโซน">
+                        {newTable.zoneId !== ''
+                          ? (Array.isArray(zones) ? zones.find(z => z.id.toString() === newTable.zoneId)?.name ?? null : null)
+                          : null}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {Array.isArray(zones) && zones.map(zone => (

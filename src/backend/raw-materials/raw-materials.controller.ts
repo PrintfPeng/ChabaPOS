@@ -15,6 +15,7 @@ import {
 import { RawMaterialsService } from './raw-materials.service';
 import { CreateRawMaterialDto, UpdateRawMaterialDto, UpdateStockDto } from './dto/raw-material.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { validateBody } from '../common/validate-body';
 
 @UseGuards(JwtAuthGuard)
 @Controller('raw-materials')
@@ -22,7 +23,7 @@ export class RawMaterialsController {
   constructor(@Inject(RawMaterialsService) private readonly rawMaterialsService: RawMaterialsService) {}
 
   @Post()
-  create(@Request() req, @Body() dto: CreateRawMaterialDto) {
+  create(@Request() req, @Body(validateBody(CreateRawMaterialDto)) dto: CreateRawMaterialDto) {
     return this.rawMaterialsService.create(req.user.userId, dto);
   }
 
@@ -35,7 +36,7 @@ export class RawMaterialsController {
   updateStock(
     @Request() req,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateStockDto,
+    @Body(validateBody(UpdateStockDto)) dto: UpdateStockDto,
   ) {
     return this.rawMaterialsService.updateStock(req.user.userId, id, dto);
   }
@@ -44,7 +45,7 @@ export class RawMaterialsController {
   update(
     @Request() req,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateRawMaterialDto,
+    @Body(validateBody(UpdateRawMaterialDto)) dto: UpdateRawMaterialDto,
   ) {
     return this.rawMaterialsService.update(req.user.userId, id, dto);
   }

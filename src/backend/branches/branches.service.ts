@@ -7,73 +7,51 @@ import { UpdateBranchDto } from './dto/update-branch.dto';
 export class BranchesService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async create(userId: number, dto: CreateBranchDto) {
-    // Validate brand ownership
+  private async assertBrandOwner(userId: number, brandId: number) {
     const brand = await this.prisma.brand.findUnique({
-      where: { id: dto.brandId },
+      where: { id: brandId },
+      select: { userId: true },
     });
-
     if (!brand) throw new NotFoundException('Brand not found');
     if (brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงแบรนด์นี้');
+  }
 
-    return this.prisma.branch.create({
-      data: dto,
+  private async assertBranchOwner(userId: number, branchId: number) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { brandId: true, brand: { select: { userId: true } } },
     });
+    if (!branch) throw new NotFoundException('Branch not found');
+    if (branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+  }
+
+  async create(userId: number, dto: CreateBranchDto) {
+    await this.assertBrandOwner(userId, dto.brandId);
+    return this.prisma.branch.create({ data: dto });
   }
 
   async findByBrand(userId: number, brandId: number) {
-    // Validate brand ownership
-    const brand = await this.prisma.brand.findUnique({
-      where: { id: brandId },
-    });
-
-    if (!brand) throw new NotFoundException('Brand not found');
-    if (brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงแบรนด์นี้');
-
-    return this.prisma.branch.findMany({
-      where: { brandId },
-    });
+    await this.assertBrandOwner(userId, brandId);
+    return this.prisma.branch.findMany({ where: { brandId } });
   }
 
   async findOne(userId: number, id: number) {
+    await this.assertBranchOwner(userId, id);
     const branch = await this.prisma.branch.findUnique({
       where: { id },
-      include: { brand: true },
+      include: { brand: { select: { id: true, name: true, userId: true } } },
     });
-
-    if (!branch) throw new NotFoundException('Branch not found');
-    if (branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
-
     return branch;
   }
 
   async update(userId: number, id: number, dto: UpdateBranchDto) {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id },
-      include: { brand: true },
-    });
-
-    if (!branch) throw new NotFoundException('Branch not found');
-    if (branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
-
-    return this.prisma.branch.update({
-      where: { id },
-      data: dto,
-    });
+    await this.assertBranchOwner(userId, id);
+    return this.prisma.branch.update({ where: { id }, data: dto });
   }
 
   async remove(userId: number, id: number) {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id },
-      include: { brand: true },
-    });
-
-    if (!branch) throw new NotFoundException('Branch not found');
-    if (branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
-
-    return this.prisma.branch.delete({
-      where: { id },
-    });
+    await this.assertBranchOwner(userId, id);
+    return this.prisma.branch.delete({ where: { id } });
   }
 
   async getMenu(id: number) {
@@ -89,6 +67,7 @@ export class BranchesService {
                     options: true,
                   },
                 },
+                deliveryPrices: true,
               },
               orderBy: { id: 'asc' },
             },
@@ -108,18 +87,14 @@ export class BranchesService {
   }
 
   async verifyPin(userId: number, id: number, pin: string) {
+    await this.assertBranchOwner(userId, id);
     const branch = await this.prisma.branch.findUnique({
       where: { id },
-      include: { brand: true },
+      select: { pin: true },
     });
-
-    if (!branch) throw new NotFoundException('Branch not found');
-    if (branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
-    
-    if (!branch.pin || branch.pin !== pin) {
+    if (!branch?.pin || branch.pin !== pin) {
       throw new UnauthorizedException('รหัส PIN ไม่ถูกต้อง');
     }
-    
     return { success: true };
   }
 }

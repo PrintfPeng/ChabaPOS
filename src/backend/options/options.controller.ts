@@ -3,13 +3,14 @@ import { OptionsService } from './options.service';
 import { CreateOptionGroupDto, CreateOptionDto } from './dto/option.dto';
 import { UpdateOptionGroupDto, UpdateOptionDto } from './dto/update-option.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { validateBody } from '../common/validate-body';
 
 @Controller('options')
 export class OptionsController {
   constructor(@Inject(OptionsService) private readonly optionsService: OptionsService) {}
 
   @Post('groups')
-  createGroup(@Request() req, @Body() body: CreateOptionGroupDto) {
+  createGroup(@Request() req, @Body(validateBody(CreateOptionGroupDto)) body: CreateOptionGroupDto) {
     return this.optionsService.createGroup(req.user.userId, body);
   }
 
@@ -19,7 +20,7 @@ export class OptionsController {
   }
 
   @Patch('groups/:id')
-  updateGroup(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() body: UpdateOptionGroupDto) {
+  updateGroup(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateOptionGroupDto)) body: UpdateOptionGroupDto) {
     return this.optionsService.updateGroup(req.user.userId, id, body);
   }
 
@@ -29,12 +30,12 @@ export class OptionsController {
   }
 
   @Post()
-  createOption(@Request() req, @Body() body: CreateOptionDto) {
+  createOption(@Request() req, @Body(validateBody(CreateOptionDto)) body: CreateOptionDto) {
     return this.optionsService.createOption(req.user.userId, body);
   }
 
   @Patch(':id')
-  updateOption(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() body: UpdateOptionDto) {
+  updateOption(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateOptionDto)) body: UpdateOptionDto) {
     return this.optionsService.updateOption(req.user.userId, id, body);
   }
 

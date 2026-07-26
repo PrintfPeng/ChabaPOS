@@ -3,13 +3,14 @@ import { ZonesService } from './zones.service';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { UpdateZoneDto } from './dto/update-zone.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { validateBody } from '../common/validate-body';
 
 @Controller('zones')
 export class ZonesController {
   constructor(@Inject(ZonesService) private readonly zonesService: ZonesService) {}
 
   @Post()
-  create(@Request() req, @Body() body: CreateZoneDto) {
+  create(@Request() req, @Body(validateBody(CreateZoneDto)) body: CreateZoneDto) {
     return this.zonesService.create(req.user.userId, body);
   }
 
@@ -19,7 +20,7 @@ export class ZonesController {
   }
 
   @Patch(':id')
-  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() body: UpdateZoneDto) {
+  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateZoneDto)) body: UpdateZoneDto) {
     return this.zonesService.update(req.user.userId, id, body);
   }
 

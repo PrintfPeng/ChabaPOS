@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, UseGua
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderStatusDto, ReceivePurchaseOrderDto } from './dto/purchase-order.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { validateBody } from '../common/validate-body';
 
 @UseGuards(JwtAuthGuard)
 @Controller('purchase-orders')
@@ -9,7 +10,7 @@ export class PurchaseOrdersController {
   constructor(@Inject(PurchaseOrdersService) private readonly purchaseOrdersService: PurchaseOrdersService) {}
 
   @Post()
-  create(@Request() req, @Body() createPurchaseOrderDto: CreatePurchaseOrderDto) {
+  create(@Request() req, @Body(validateBody(CreatePurchaseOrderDto)) createPurchaseOrderDto: CreatePurchaseOrderDto) {
     return this.purchaseOrdersService.create(req.user.userId, createPurchaseOrderDto);
   }
 
@@ -24,12 +25,12 @@ export class PurchaseOrdersController {
   }
 
   @Post(':id/receive')
-  receive(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() receivePurchaseOrderDto: ReceivePurchaseOrderDto) {
+  receive(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(ReceivePurchaseOrderDto)) receivePurchaseOrderDto: ReceivePurchaseOrderDto) {
     return this.purchaseOrdersService.receive(req.user.userId, id, receivePurchaseOrderDto);
   }
 
   @Patch(':id/status')
-  updateStatus(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() updatePurchaseOrderStatusDto: UpdatePurchaseOrderStatusDto) {
+  updateStatus(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdatePurchaseOrderStatusDto)) updatePurchaseOrderStatusDto: UpdatePurchaseOrderStatusDto) {
     return this.purchaseOrdersService.updateStatus(req.user.userId, id, updatePurchaseOrderStatusDto);
   }
 

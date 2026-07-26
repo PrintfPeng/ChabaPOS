@@ -4,13 +4,14 @@ import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Public } from '../auth/public.decorator';
+import { validateBody } from '../common/validate-body';
 
 @Controller('tables')
 export class TablesController {
   constructor(@Inject(TablesService) private readonly tablesService: TablesService) {}
 
   @Post()
-  create(@Request() req, @Body() body: CreateTableDto) {
+  create(@Request() req, @Body(validateBody(CreateTableDto)) body: CreateTableDto) {
     return this.tablesService.create(req.user.userId, body);
   }
 
@@ -25,7 +26,7 @@ export class TablesController {
   }
 
   @Patch(':id')
-  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body() body: UpdateTableDto) {
+  update(@Request() req, @Param('id', ParseIntPipe) id: number, @Body(validateBody(UpdateTableDto)) body: UpdateTableDto) {
     return this.tablesService.update(req.user.userId, id, body);
   }
 

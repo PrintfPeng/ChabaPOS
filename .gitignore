@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local one-off script with a hardcoded database credential — must never be published.
+db-push.js
+db-push-result.log
+
+# Local SQLite scratch database (the project runs on Postgres/Supabase)
+*.db

@@ -7,25 +7,28 @@ import { UpdateBrandDto } from './dto/update-brand.dto';
 export class BrandsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
+  private safeSelect = {
+    id: true, name: true, imageUrl: true, userId: true, createdAt: true, updatedAt: true,
+  } as const;
+
   async create(userId: number, dto: CreateBrandDto) {
     return this.prisma.brand.create({
-      data: {
-        ...dto,
-        userId,
-      },
+      data: { ...dto, userId },
+      select: this.safeSelect,
     });
   }
 
   async findAll(userId: number) {
     return this.prisma.brand.findMany({
       where: { userId },
-      include: { _count: { select: { branches: true } } },
+      select: { ...this.safeSelect, _count: { select: { branches: true } } },
     });
   }
 
   async findOne(userId: number, id: number) {
     const brand = await this.prisma.brand.findUnique({
       where: { id },
+      select: this.safeSelect,
     });
 
     if (!brand) throw new NotFoundException('Brand not found');
@@ -39,6 +42,7 @@ export class BrandsService {
     return this.prisma.brand.update({
       where: { id },
       data: dto,
+      select: this.safeSelect,
     });
   }
 
@@ -46,6 +50,7 @@ export class BrandsService {
     await this.findOne(userId, id);
     return this.prisma.brand.delete({
       where: { id },
+      select: { id: true },
     });
   }
 }

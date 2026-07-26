@@ -1,8 +1,9 @@
 import {
   Controller, Get, Post, Patch, Delete, Body,
-  Param, ParseIntPipe, Query, Inject,
+  Param, ParseIntPipe, Query, Inject, Request,
 } from '@nestjs/common';
 import { PromotionsService } from './promotions.service';
+import { validateBody } from '../common/validate-body';
 import {
   CreatePromotionDto, UpdatePromotionDto, ValidatePromotionDto,
 } from './dto/promotion.dto';
@@ -14,42 +15,44 @@ export class PromotionsController {
   /** รายการโปรโมชั่นทั้งหมด (admin ใช้) */
   @Get()
   findAll(
+    @Request() req,
     @Query('branchId', ParseIntPipe) branchId: number,
     @Query('activeOnly') activeOnly?: string,
   ) {
-    return this.promotionsService.findAll(branchId, activeOnly === 'true');
+    return this.promotionsService.findAll(req.user.userId, branchId, activeOnly === 'true');
   }
 
   /** ตรวจสอบเงื่อนไขโปรโมชั่น — cashier เรียกก่อนยืนยันชำระ */
   @Post('validate')
-  validate(@Body() dto: ValidatePromotionDto) {
-    return this.promotionsService.validate(dto);
+  validate(@Request() req, @Body(validateBody(ValidatePromotionDto)) dto: ValidatePromotionDto) {
+    return this.promotionsService.validate(req.user.userId, dto);
   }
 
   /** สร้างโปรโมชั่นใหม่ */
   @Post()
-  create(@Body() dto: CreatePromotionDto) {
-    return this.promotionsService.create(dto);
+  create(@Request() req, @Body(validateBody(CreatePromotionDto)) dto: CreatePromotionDto) {
+    return this.promotionsService.create(req.user.userId, dto);
   }
 
   /** แก้ไขโปรโมชั่น */
   @Patch(':id')
   update(
+    @Request() req,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdatePromotionDto,
+    @Body(validateBody(UpdatePromotionDto)) dto: UpdatePromotionDto,
   ) {
-    return this.promotionsService.update(id, dto);
+    return this.promotionsService.update(req.user.userId, id, dto);
   }
 
   /** เปิด/ปิดโปรโมชั่น */
   @Patch(':id/toggle')
-  toggle(@Param('id', ParseIntPipe) id: number) {
-    return this.promotionsService.toggle(id);
+  toggle(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.promotionsService.toggle(req.user.userId, id);
   }
 
   /** ลบโปรโมชั่น */
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.promotionsService.remove(id);
+  remove(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.promotionsService.remove(req.user.userId, id);
   }
 }
