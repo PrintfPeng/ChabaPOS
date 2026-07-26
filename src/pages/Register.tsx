@@ -124,6 +124,8 @@ function InfoRow({
 
 export default function Register() {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansFailed, setPlansFailed] = useState(false);
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState('');
@@ -144,10 +146,14 @@ export default function Register() {
   const selectedPlanId = watch('planId');
 
   useEffect(() => {
-    api.get('/plans').then(r => {
-      const active = (r.data as Plan[]).filter(p => p.isActive !== false);
-      setPlans(active.sort((a, b) => a.sortOrder - b.sortOrder));
-    }).catch(() => {});
+    // `/plans/active` is the public endpoint. `/plans` requires a session, which
+    // nobody on the sign-up page has yet — it always answered 401 here, and the
+    // swallowed error left the picker spinning forever.
+    api.get<Plan[]>('/plans/active')
+      .then(r => setPlans([...r.data].sort((a, b) => a.sortOrder - b.sortOrder)))
+      .catch(() => setPlansFailed(true))
+      .finally(() => setPlansLoading(false));
+
     api.get('/settings').then(r => setSettings(r.data)).catch(() => {});
   }, []);
 
@@ -294,10 +300,24 @@ export default function Register() {
             {(errors.planId as any)?.message && (
               <p className="text-sm text-red-500 -mt-2">{(errors.planId as any).message}</p>
             )}
-            {plans.length === 0 ? (
+            {plansLoading ? (
               <div className="flex items-center justify-center py-10 text-slate-400 gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="text-sm">กำลังโหลดแพ็กเกจ...</span>
+              </div>
+            ) : plansFailed ? (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <Package className="w-10 h-10 text-slate-300" />
+                <p className="text-sm text-slate-500">โหลดข้อมูลแพ็กเกจไม่สำเร็จ</p>
+                <Button type="button" variant="outline" onClick={() => window.location.reload()}>
+                  ลองอีกครั้ง
+                </Button>
+              </div>
+            ) : plans.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-center">
+                <Package className="w-10 h-10 text-slate-300" />
+                <p className="text-sm text-slate-500">ยังไม่มีแพ็กเกจเปิดให้สมัครในขณะนี้</p>
+                <p className="text-xs text-slate-400">กรุณาติดต่อทีมงาน</p>
               </div>
             ) : (
               <div className="space-y-3">
