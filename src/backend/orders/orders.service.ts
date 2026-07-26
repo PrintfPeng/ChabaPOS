@@ -1,57 +1,60 @@
-import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable, Inject, NotFoundException, ForbiddenException, Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TableAccessService } from '../common/table-access.service';
+import { PromotionsService } from '../promotions/promotions.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateOrderAtTableDto } from './dto/create-order-at-table.dto';
 
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TableAccessService) private readonly tableAccess: TableAccessService,
+    @Inject(PromotionsService) private readonly promotions: PromotionsService,
+  ) {
     this.logger.log('OrdersService initialized');
   }
 
-  async create(dto: CreateOrderDto) {
-    // 1. Validate Branch
-    const branch = await this.prisma.branch.findUnique({
-      where: { id: dto.branchId },
-    });
-    if (!branch) throw new NotFoundException('Branch not found');
-
-    // 2. Date string for order number prefix (computed outside tx — pure JS, no DB access)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const year  = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const day   = today.getDate().toString().padStart(2, '0');
-    const dateStr = `${year}${month}${day}`;
-
-    // 3. Process Items and Calculate Total
+  /**
+   * Prices the requested items from the menu — never from anything the client
+   * sends, and only from menus and options that belong to this branch. Without
+   * the branch filter an order could be built from another shop's menu and its
+   * prices, then booked against this one.
+   */
+  private async priceItems(branchId: number, items: CreateOrderDto['items']) {
     let totalAmount = 0;
-    const orderItemsData = [];
+    const orderItemsData: any[] = [];
 
-    for (const itemDto of dto.items) {
-      const menuItem = await this.prisma.menuItem.findUnique({
-        where: { id: itemDto.menuItemId },
+    for (const itemDto of items) {
+      const menuItem = await this.prisma.menuItem.findFirst({
+        where: { id: itemDto.menuItemId, branchId },
         include: { kitchen: true },
       });
 
-      if (!menuItem) throw new NotFoundException(`Menu item ${itemDto.menuItemId} not found`);
+      if (!menuItem) {
+        throw new NotFoundException(`Menu item ${itemDto.menuItemId} not found in this branch`);
+      }
 
       let itemPrice = menuItem.price;
       const optionsData = [];
 
       if (itemDto.options) {
         for (const optDto of itemDto.options) {
-          const option = await this.prisma.option.findUnique({
-            where: { id: optDto.optionId },
+          const option = await this.prisma.option.findFirst({
+            where: { id: optDto.optionId, optionGroup: { branchId } },
           });
-          if (option) {
-            itemPrice += option.price;
-            optionsData.push({
-              optionId: option.id,
-              name: option.name,
-              price: option.price,
-            });
+          if (!option) {
+            throw new NotFoundException(`Option ${optDto.optionId} not found in this branch`);
           }
+          itemPrice += option.price;
+          optionsData.push({
+            optionId: option.id,
+            name: option.name,
+            price: option.price,
+          });
         }
       }
 
@@ -69,6 +72,92 @@ export class OrdersService {
         },
       });
     }
+
+    return { totalAmount, orderItemsData };
+  }
+
+  private async assertBranchOwner(userId: number, branchId: number) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { brand: { select: { userId: true } } },
+    });
+    if (!branch || branch.brand.userId !== userId) {
+      throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+    }
+  }
+
+  /** Staff-created order (counter, delivery, in-house ordering). */
+  async createAsStaff(userId: number, dto: CreateOrderDto) {
+    await this.assertBranchOwner(userId, dto.branchId);
+    return this.create(dto);
+  }
+
+  /**
+   * Order placed by a customer from the QR page.
+   *
+   * Everything that decides money or ownership is derived on the server:
+   * branch and table come from the scanned QR code, the member is resolved from
+   * a phone number within that branch, and the discount is recalculated from the
+   * promotion rules. The browser cannot name a customer id, a branch, or a
+   * discount of its own choosing.
+   */
+  async createAtTable(dto: CreateOrderAtTableDto) {
+    const { branchId, tableId } = await this.tableAccess.resolve(dto.qrCode);
+
+    let customerId: number | undefined;
+    if (dto.customerPhone) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { phone_branchId: { phone: dto.customerPhone, branchId } },
+        select: { id: true },
+      });
+      // An unknown phone simply earns nothing — sign-up happens at the counter.
+      customerId = customer?.id;
+    }
+
+    const pricing = await this.priceItems(branchId, dto.items);
+
+    let discountAmount = 0;
+    if (dto.promotionId) {
+      const priced = await this.promotions.checkAndPrice(
+        branchId, dto.promotionId, pricing.totalAmount, customerId,
+      );
+      discountAmount = priced.discountAmount;
+    }
+
+    return this.create(
+      {
+        branchId,
+        tableId,
+        source: 'QR',
+        items: dto.items,
+        notes: dto.notes,
+        ...(customerId ? { customerId } : {}),
+        ...(dto.promotionId ? { promotionId: dto.promotionId, discountAmount } : {}),
+      },
+      pricing,
+    );
+  }
+
+  async create(
+    dto: CreateOrderDto,
+    pricing?: { totalAmount: number; orderItemsData: any[] },
+  ) {
+    // 1. Validate Branch
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: dto.branchId },
+    });
+    if (!branch) throw new NotFoundException('Branch not found');
+
+    // 2. Date string for order number prefix (computed outside tx — pure JS, no DB access)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const year  = today.getFullYear();
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    const day   = today.getDate().toString().padStart(2, '0');
+    const dateStr = `${year}${month}${day}`;
+
+    // 3. Process Items and Calculate Total (reused when the caller already priced them)
+    const { totalAmount, orderItemsData } = pricing ?? await this.priceItems(dto.branchId, dto.items);
 
     // 4–6. Order creation, table update, and points handling are a single atomic transaction.
     // A failure in any step rolls back everything — no orphan PAID orders.
@@ -328,9 +417,14 @@ export class OrdersService {
           tableId: tableId === 0 ? null : tableId,
           status: { notIn: ['PAID', 'CANCELLED'] },
         },
-        select: { id: true, totalAmount: true, branchId: true },
+        select: { id: true, totalAmount: true, branchId: true, customerId: true },
       });
       if (!unpaid.length) return;
+
+      // The cashier's lookup wins, but fall back to the member the customer
+      // already identified themselves as when ordering from the QR page —
+      // otherwise those points would silently never be awarded.
+      const customerId = opts?.customerId ?? unpaid.find(o => o.customerId)?.customerId ?? undefined;
 
       // ดึง rewardPointRate ของสาขา (fallback 100)
       const branchId = unpaid[0].branchId;
@@ -354,7 +448,7 @@ export class OrdersService {
         data: {
           status:      'PAID',
           paymentType,
-          ...(opts?.customerId  ? { customerId:     opts.customerId  } : {}),
+          ...(customerId        ? { customerId }                       : {}),
           ...(opts?.promotionId ? { promotionId:    opts.promotionId } : {}),
           ...(discount > 0      ? { discountAmount: discount         } : {}),
         },
@@ -363,14 +457,14 @@ export class OrdersService {
       if (paidCount === 0) return;
 
       // 3. ถ้าเป็น POINTS_REDEMPTION → ตรวจแต้ม → หักแต้ม → บันทึกประวัติ
-      if (opts?.promotionId && opts?.customerId && discount > 0) {
+      if (opts?.promotionId && customerId && discount > 0) {
         const promotion = await tx.promotion.findUnique({
           where: { id: opts.promotionId },
         });
 
         if (promotion?.type === 'POINTS_REDEMPTION' && promotion.pointsNeeded > 0) {
           const customer = await tx.customer.findUnique({
-            where: { id: opts.customerId },
+            where: { id: customerId },
           });
 
           // Guard: ป้องกันแต้มติดลบ
@@ -382,14 +476,14 @@ export class OrdersService {
 
           // หักแต้ม
           await tx.customer.update({
-            where: { id: opts.customerId },
+            where: { id: customerId },
             data: { points: { decrement: promotion.pointsNeeded } },
           });
 
           // บันทึก RedemptionHistory
           await tx.redemptionHistory.create({
             data: {
-              customerId:    opts.customerId,
+              customerId,
               promotionId:   opts.promotionId,
               pointsSpent:   promotion.pointsNeeded,
               discountAmount: discount,
@@ -400,11 +494,11 @@ export class OrdersService {
       }
 
       // 4. สะสมแต้มจากยอดชำระจริง (หลังหักส่วนลดแล้ว)
-      if (opts?.customerId && finalTotal > 0) {
+      if (customerId && finalTotal > 0) {
         const pointsToAward = Math.floor(finalTotal / POINTS_RATE);
         if (pointsToAward > 0) {
           await tx.customer.update({
-            where: { id: opts.customerId },
+            where: { id: customerId },
             data: { points: { increment: pointsToAward } },
           });
         }

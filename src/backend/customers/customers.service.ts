@@ -3,11 +3,32 @@ import {
   ForbiddenException, Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TableAccessService } from '../common/table-access.service';
 import { CreateCustomerDto, UpdateCustomerDto } from './dto/customer.dto';
 
 @Injectable()
 export class CustomersService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TableAccessService) private readonly tableAccess: TableAccessService,
+  ) {}
+
+  /**
+   * Member lookup for a customer sitting at a table.
+   *
+   * Scoped by the table's QR code, so it cannot be used to sweep phone numbers
+   * from outside the shop, and the branch comes from the table rather than the
+   * request. Returns only what the ordering screen needs — no redemption
+   * history, no order history. `null` means "not a member here"; sign-up is
+   * staff-only, so the UI directs them to the counter.
+   */
+  async lookupAtTable(qrCode: string, phone: string) {
+    const { branchId } = await this.tableAccess.resolve(qrCode);
+    return this.prisma.customer.findUnique({
+      where: { phone_branchId: { phone, branchId } },
+      select: { id: true, name: true, phone: true, points: true },
+    });
+  }
 
   private async assertBranchOwner(userId: number, branchId: number) {
     const branch = await this.prisma.branch.findUnique({

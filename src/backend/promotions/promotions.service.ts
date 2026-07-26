@@ -2,13 +2,26 @@ import {
   Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TableAccessService } from '../common/table-access.service';
 import {
   CreatePromotionDto, UpdatePromotionDto, ValidatePromotionDto,
 } from './dto/promotion.dto';
 
 @Injectable()
 export class PromotionsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TableAccessService) private readonly tableAccess: TableAccessService,
+  ) {}
+
+  /** Active promotions for the branch whose table QR was scanned. */
+  async findActiveAtTable(qrCode: string) {
+    const { branchId } = await this.tableAccess.resolve(qrCode);
+    return this.prisma.promotion.findMany({
+      where: { branchId, isActive: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
   private async assertBranchOwner(userId: number, branchId: number) {
     const branch = await this.prisma.branch.findUnique({
@@ -88,8 +101,28 @@ export class PromotionsService {
    */
   async validate(userId: number, dto: ValidatePromotionDto) {
     await this.assertBranchOwner(userId, dto.branchId);
+    return this.checkAndPrice(dto.branchId, dto.promotionId, dto.totalAmount, dto.customerId);
+  }
+
+  /** Same check, reached from the QR page — scoped by the table's QR code. */
+  async validateAtTable(qrCode: string, promotionId: number, totalAmount: number, customerId?: number) {
+    const { branchId } = await this.tableAccess.resolve(qrCode);
+    return this.checkAndPrice(branchId, promotionId, totalAmount, customerId);
+  }
+
+  /**
+   * The rules themselves, with no assumption about who is asking. Callers are
+   * responsible for establishing that branchId is legitimate first — either by
+   * ownership (staff) or by resolving a table QR code (customer).
+   */
+  async checkAndPrice(
+    branchId: number,
+    promotionId: number,
+    totalAmount: number,
+    customerId?: number,
+  ) {
     const promo = await this.prisma.promotion.findFirst({
-      where: { id: dto.promotionId, branchId: dto.branchId, isActive: true },
+      where: { id: promotionId, branchId, isActive: true },
     });
     if (!promo) throw new NotFoundException('โปรโมชั่นนี้ไม่พบหรือถูกปิดใช้งานแล้ว');
 
@@ -98,17 +131,20 @@ export class PromotionsService {
       throw new BadRequestException('โปรโมชั่นนี้ยังไม่เริ่มต้น');
     if (promo.endDate && now > promo.endDate)
       throw new BadRequestException('โปรโมชั่นนี้หมดอายุแล้ว');
-    if (dto.totalAmount < promo.minSpend)
+    if (totalAmount < promo.minSpend)
       throw new BadRequestException(
         `ยอดชำระขั้นต่ำ ฿${promo.minSpend.toLocaleString()} เพื่อใช้โปรโมชั่นนี้`,
       );
-    if (promo.memberOnly && !dto.customerId)
+    if (promo.memberOnly && !customerId)
       throw new BadRequestException('โปรโมชั่นนี้สำหรับสมาชิกเท่านั้น กรุณาค้นหาสมาชิกก่อน');
 
     if (promo.type === 'POINTS_REDEMPTION') {
-      if (!dto.customerId)
+      if (!customerId)
         throw new BadRequestException('กรุณาค้นหาสมาชิกก่อนแลกแต้ม');
-      const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
+      // Pinned to this branch so a customer id from elsewhere cannot be spent here.
+      const customer = await this.prisma.customer.findFirst({
+        where: { id: customerId, branchId },
+      });
       if (!customer)
         throw new NotFoundException('ไม่พบข้อมูลสมาชิก');
       if (customer.points < promo.pointsNeeded)
@@ -119,16 +155,16 @@ export class PromotionsService {
 
     let discountAmount = 0;
     if (promo.type === 'PERCENT')
-      discountAmount = (dto.totalAmount * promo.value) / 100;
+      discountAmount = (totalAmount * promo.value) / 100;
     else
       discountAmount = promo.value;
 
-    discountAmount = Math.min(discountAmount, dto.totalAmount);
+    discountAmount = Math.min(discountAmount, totalAmount);
 
     return {
       valid:          true,
       discountAmount: Math.round(discountAmount * 100) / 100,
-      finalAmount:    Math.round((dto.totalAmount - discountAmount) * 100) / 100,
+      finalAmount:    Math.round((totalAmount - discountAmount) * 100) / 100,
       promotion:      promo,
     };
   }

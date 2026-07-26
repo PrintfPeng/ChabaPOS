@@ -115,3 +115,23 @@ export class ValidatePromotionDto {
   @IsOptional()
   customerId?: number;
 }
+
+/**
+ * Same check from the QR ordering page. There is no branchId — it is derived
+ * from the scanned table, so a customer cannot aim a promotion at another shop.
+ */
+export class ValidateAtTableDto {
+  @IsString()
+  qrCode: string;
+
+  @IsNumber()
+  promotionId: number;
+
+  @IsNumber()
+  @Min(0)
+  totalAmount: number;
+
+  @IsNumber()
+  @IsOptional()
+  customerId?: number;
+}

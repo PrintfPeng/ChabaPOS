@@ -1,16 +1,34 @@
 import {
   Controller, Get, Post, Patch, Delete, Body,
-  Param, ParseIntPipe, Query, Inject, Request,
+  Param, ParseIntPipe, Query, Inject, Request, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { PromotionsService } from './promotions.service';
 import { validateBody } from '../common/validate-body';
 import {
-  CreatePromotionDto, UpdatePromotionDto, ValidatePromotionDto,
+  CreatePromotionDto, UpdatePromotionDto, ValidatePromotionDto, ValidateAtTableDto,
 } from './dto/promotion.dto';
+import { Public } from '../auth/public.decorator';
 
 @Controller('promotions')
 export class PromotionsController {
   constructor(@Inject(PromotionsService) private readonly promotionsService: PromotionsService) {}
+
+  /** โปรโมชั่นที่ใช้ได้ สำหรับหน้าสั่งอาหาร QR — สาขามาจาก QR ของโต๊ะ */
+  @Public()
+  @Get('at-table')
+  findAtTable(@Query('qrCode') qrCode: string) {
+    return this.promotionsService.findActiveAtTable(qrCode);
+  }
+
+  /** ตรวจเงื่อนไขโปรโมชั่นจากหน้า QR */
+  @Public()
+  @Post('validate-at-table')
+  @HttpCode(HttpStatus.OK) // a price check, not a creation
+  validateAtTable(@Body(validateBody(ValidateAtTableDto)) dto: ValidateAtTableDto) {
+    return this.promotionsService.validateAtTable(
+      dto.qrCode, dto.promotionId, dto.totalAmount, dto.customerId,
+    );
+  }
 
   /** รายการโปรโมชั่นทั้งหมด (admin ใช้) */
   @Get()

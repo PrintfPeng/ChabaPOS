@@ -74,7 +74,7 @@ interface CartContextType {
    * Passing the same promo that is already applied will toggle it off.
    * Returns discount amount on success, null on error / toggle-off.
    */
-  applyPromotion:     (branchId: number, promo: PromoInfo) => Promise<number | null>;
+  applyPromotion:     (qrCode: string, promo: PromoInfo) => Promise<number | null>;
   clearPromotion:     () => void;
   resetMemberAndPromo: () => void;
 }
@@ -138,7 +138,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   /* ── Promotion ──────────────────────────────── */
   const applyPromotion = useCallback(
-    async (branchId: number, promo: PromoInfo): Promise<number | null> => {
+    async (qrCode: string, promo: PromoInfo): Promise<number | null> => {
       // Toggle off when same promo is clicked again
       if (appliedPromotion?.id === promo.id) {
         setAppliedPromotion(null);
@@ -146,9 +146,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
       try {
-        const res = await api.post('/promotions/validate', {
+        // Branch is derived from the scanned table, not sent from here.
+        const res = await api.post('/promotions/validate-at-table', {
+          qrCode,
           promotionId: promo.id,
-          branchId,
           totalAmount: subtotal,
           customerId:  customer?.id,
         });

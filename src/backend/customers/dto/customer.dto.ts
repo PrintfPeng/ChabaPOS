@@ -25,3 +25,19 @@ export class UpdateCustomerDto {
   @IsOptional()
   name?: string;
 }
+
+/**
+ * Member lookup from the QR ordering page. The caller proves it is at a table by
+ * sending that table's QR code; the branch is derived from it, never supplied.
+ */
+export class LookupAtTableDto {
+  @IsString()
+  @MinLength(1)
+  qrCode: string;
+
+  @IsString()
+  @MinLength(9)
+  @MaxLength(10)
+  @Matches(/^[0-9]+$/, { message: 'phone must contain digits only' })
+  phone: string;
+}

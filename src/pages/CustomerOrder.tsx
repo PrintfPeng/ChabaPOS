@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import {
   ShoppingCart, Plus, Minus, X, Loader2, UtensilsCrossed,
   Tag, CheckCircle2, ChevronLeft, ChevronRight,
-  Phone, UserPlus, Star, Sparkles,
+  Phone, Star, Sparkles,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────
@@ -168,7 +168,7 @@ function FoodCard({ item, cartCount, onClick }: {
 // MemberCartSection — inline in Cart Sheet
 // Handles: phone lookup → customer card → quick register → promo list → discount summary
 // ─────────────────────────────────────────────
-function MemberCartSection({ branchId, subtotal }: { branchId: string; subtotal: number }) {
+function MemberCartSection({ qrCode, subtotal }: { qrCode: string; subtotal: number }) {
   const {
     customer, setCustomer,
     appliedPromotion, applyPromotion, clearPromotion,
@@ -180,17 +180,14 @@ function MemberCartSection({ branchId, subtotal }: { branchId: string; subtotal:
   const [notFound,     setNotFound]     = useState(false);
   const [promos,       setPromos]       = useState<PromoInfo[]>([]);
   const [isValidating, setIsValidating] = useState(false);
-  const [showQuickReg, setShowQuickReg] = useState(false);
-  const [quickName,    setQuickName]    = useState('');
-  const [isReg,        setIsReg]        = useState(false);
   const [isExpanded,   setIsExpanded]   = useState(!!customer);
 
-  /* Fetch active promos once */
+  /* Fetch active promos once — scoped by the table's QR code */
   useEffect(() => {
-    api.get(`/promotions?branchId=${branchId}&activeOnly=true`)
+    api.get(`/promotions/at-table?qrCode=${encodeURIComponent(qrCode)}`)
       .then(r => setPromos(r.data))
       .catch(() => {});
-  }, [branchId]);
+  }, [qrCode]);
 
   /* Sync phone when customer is restored from context */
   useEffect(() => {
@@ -201,13 +198,13 @@ function MemberCartSection({ branchId, subtotal }: { branchId: string; subtotal:
     p => subtotal >= p.minSpend && (!p.memberOnly || customer),
   );
 
-  /* ── Search ── */
+  /* ── Search — proves presence at the table with the QR code ── */
   const searchCustomer = async () => {
     if (phone.length < 9) return toast.error('กรอกเบอร์โทร 9-10 หลัก');
     setIsSearching(true); setNotFound(false);
     setCustomer(null); clearPromotion();
     try {
-      const res = await api.get(`/customers/lookup?phone=${phone}&branchId=${branchId}`);
+      const res = await api.post('/customers/at-table', { qrCode, phone });
       if (res.data) {
         setCustomer(res.data);
         toast.success(`พบสมาชิก "${res.data.name}" — ${res.data.points} แต้ม`);
@@ -221,29 +218,11 @@ function MemberCartSection({ branchId, subtotal }: { branchId: string; subtotal:
     }
   };
 
-  /* ── Quick register ── */
-  const handleRegister = async () => {
-    if (!quickName.trim()) return toast.error('กรุณากรอกชื่อ');
-    setIsReg(true);
-    try {
-      const res = await api.post('/customers', {
-        phone, name: quickName.trim(), branchId: Number(branchId),
-      });
-      setCustomer(res.data);
-      setNotFound(false); setShowQuickReg(false);
-      toast.success(`สมัครสมาชิก "${res.data.name}" สำเร็จ 🎉`);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'สมัครสมาชิกไม่สำเร็จ');
-    } finally {
-      setIsReg(false);
-    }
-  };
-
   /* ── Apply promo ── */
   const handleApplyPromo = async (promo: PromoInfo) => {
     setIsValidating(true);
     try {
-      const disc = await applyPromotion(Number(branchId), promo);
+      const disc = await applyPromotion(qrCode, promo);
       if (disc !== null && appliedPromotion?.id !== promo.id) {
         toast.success(`ใช้ "${promo.name}" — ลด ฿${disc.toLocaleString()}`);
       }
@@ -260,7 +239,6 @@ function MemberCartSection({ branchId, subtotal }: { branchId: string; subtotal:
     clearPromotion();
     setPhone('');
     setNotFound(false);
-    setShowQuickReg(false);
   };
 
   return (
@@ -343,41 +321,13 @@ function MemberCartSection({ branchId, subtotal }: { branchId: string; subtotal:
             </div>
           )}
 
-          {/* ── Not found + quick register ── */}
+          {/* ── Not found — sign-up is handled by staff at the counter ── */}
           {notFound && !customer && (
-            <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-              <p className="text-xs text-slate-500 font-semibold text-center">ไม่พบสมาชิกหมายเลข {phone}</p>
-              {!showQuickReg ? (
-                <button
-                  onClick={() => setShowQuickReg(true)}
-                  className="mt-2 text-xs text-primary font-bold flex items-center gap-1.5 mx-auto"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  สมัครสมาชิกด่วน (รับแต้มทันที)
-                </button>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  <Input
-                    placeholder="ชื่อ-นามสกุล"
-                    value={quickName}
-                    onChange={e => setQuickName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleRegister()}
-                    className="h-9 rounded-xl text-sm"
-                    autoFocus
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleRegister}
-                    disabled={isReg}
-                    className="w-full h-9 rounded-xl font-bold text-sm"
-                  >
-                    {isReg
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                      : <UserPlus className="w-3.5 h-3.5 mr-1.5" />}
-                    ยืนยันสมัครสมาชิก
-                  </Button>
-                </div>
-              )}
+            <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center">
+              <p className="text-xs text-slate-500 font-semibold">ไม่พบสมาชิกหมายเลข {phone}</p>
+              <p className="mt-1.5 text-[11px] text-slate-400 leading-relaxed">
+                สมัครสมาชิกได้ที่เคาน์เตอร์ แจ้งพนักงานเพื่อรับสิทธิ์สะสมแต้ม
+              </p>
             </div>
           )}
 
@@ -554,14 +504,12 @@ export default function CustomerOrder() {
     if (!cart.length) return;
     setIsSubmitting(true);
     try {
-      const tableRes = await api.get(`/tables/by-qrcode/${tableId}`);
-      await api.post('/orders', {
-        branchId:      Number(branchId),
-        tableId:       tableRes.data.id,
-        source:        'QR',
-        ...(customer       ? { customerId:     customer.id }        : {}),
-        ...(appliedPromotion ? { promotionId:  appliedPromotion.id } : {}),
-        ...(discountAmount  ? { discountAmount }                     : {}),
+      // Branch, table, member and discount are all resolved server-side from the
+      // QR code — nothing here can redirect the order or the points elsewhere.
+      await api.post('/orders/at-table', {
+        qrCode: tableId!,
+        ...(customer         ? { customerPhone: customer.phone }    : {}),
+        ...(appliedPromotion ? { promotionId:   appliedPromotion.id } : {}),
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
           quantity:   item.quantity,
@@ -893,7 +841,7 @@ export default function CustomerOrder() {
             </div>
 
             {/* ── Member & Promo Section ── */}
-            <MemberCartSection branchId={branchId!} subtotal={subtotal} />
+            <MemberCartSection qrCode={tableId!} subtotal={subtotal} />
 
           </div>
 
