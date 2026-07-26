@@ -804,25 +804,27 @@ export default function DeliveryService() {
       {/* ── Mobile: Bottom sheet trigger ── */}
       <div className="lg:hidden fixed bottom-6 left-4 right-4 z-40">
         <Sheet>
-          <SheetTrigger asChild>
-            <Button className="w-full h-14 sm:h-16 rounded-2xl shadow-2xl flex justify-between items-center px-4 sm:px-6 bg-primary text-white hover:bg-primary/90">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="bg-white/20 p-1.5 sm:p-2 rounded-xl relative">
-                  <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
-                  {cart.length > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-white text-primary text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-primary">
-                      {cart.reduce((s, i) => s + i.quantity, 0)}
-                    </span>
-                  )}
-                </div>
-                <span className="font-black text-sm sm:text-lg truncate max-w-[120px] sm:max-w-none">
-                  รายการ ({cart.length})
-                </span>
+          <SheetTrigger
+            render={
+              <Button className="w-full h-14 sm:h-16 rounded-2xl shadow-2xl flex justify-between items-center px-4 sm:px-6 bg-primary text-white hover:bg-primary/90" />
+            }
+          >
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="bg-white/20 p-1.5 sm:p-2 rounded-xl relative">
+                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
+                {cart.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-white text-primary text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-primary">
+                    {cart.reduce((s, i) => s + i.quantity, 0)}
+                  </span>
+                )}
               </div>
-              <span className="font-black text-base sm:text-xl shrink-0 ml-2">
-                ฿{finalTotal.toLocaleString()}
+              <span className="font-black text-sm sm:text-lg truncate max-w-[120px] sm:max-w-none">
+                รายการ ({cart.length})
               </span>
-            </Button>
+            </div>
+            <span className="font-black text-base sm:text-xl shrink-0 ml-2">
+              ฿{finalTotal.toLocaleString()}
+            </span>
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[85vh] sm:h-[90vh] rounded-t-[32px] sm:rounded-t-[40px] p-0 overflow-hidden border-none shadow-2xl">
             <CartSummaryContent

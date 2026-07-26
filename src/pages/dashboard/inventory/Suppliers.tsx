@@ -159,10 +159,8 @@ export default function Suppliers() {
         </div>
 
         <Dialog open={isOpen} onOpenChange={v => { if (!v) closeDialog(); else setIsOpen(true); }}>
-          <DialogTrigger asChild>
-            <Button className="rounded-xl font-bold gap-2 h-10">
-              <Plus className="w-4 h-4" />เพิ่มร้านค้า
-            </Button>
+          <DialogTrigger render={<Button className="rounded-xl font-bold gap-2 h-10" />}>
+            <Plus className="w-4 h-4" />เพิ่มร้านค้า
           </DialogTrigger>
 
           <DialogContent className="rounded-2xl sm:max-w-md">

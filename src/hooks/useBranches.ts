@@ -7,6 +7,8 @@ export interface Branch {
   imageUrl?: string;
   qrCodeUrl?: string;
   brandId: number;
+  /** Staff PIN for the branch. Write-only from the UI; `null` clears it. */
+  pin?: string | null;
   rewardPointRate?: number;
   brand?: {
     id: number;

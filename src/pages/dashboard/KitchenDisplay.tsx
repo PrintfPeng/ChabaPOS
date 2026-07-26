@@ -383,7 +383,7 @@ export default function KitchenDisplay() {
 
   const seenIds     = useRef<Set<number>>(new Set());
   const isFirstLoad = useRef(true);
-  const pollRef     = useRef<ReturnType<typeof setInterval>>();
+  const pollRef     = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   const now              = useLiveClock();
   const { isFs, toggle: toggleFullscreen } = useFullscreen();

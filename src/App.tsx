@@ -22,6 +22,7 @@ import SystemSettings from './pages/superadmin/SystemSettings';
 import Register from './pages/Register';
 import Pricing from './pages/Pricing';
 import Checkout from './pages/Checkout';
+import Landing from './pages/Landing';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -105,7 +106,7 @@ export default function App() {
               </PrivateRoute>
             }
           />
-          <Route path="/" element={<Navigate to="/brands" />} />
+          <Route path="/" element={<Landing />} />
         </Routes>
       </Router>
         </PrinterProvider>

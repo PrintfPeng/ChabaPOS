@@ -268,7 +268,10 @@ export default function TenantManagement() {
 
         <FilterPills
           value={statusFilter}
-          onChange={setStatusFilter}
+          // Wrapped rather than passing the setter directly: a bare
+          // Dispatch<SetStateAction<T>> also accepts an updater function, which
+          // does not match FilterPills' plain (v: T) => void.
+          onChange={v => setStatusFilter(v)}
           options={[
             { key: 'ALL',       label: 'ทั้งหมด' },
             { key: 'ACTIVE',    label: 'Active'  },
@@ -279,7 +282,7 @@ export default function TenantManagement() {
 
         <FilterPills
           value={planFilter}
-          onChange={setPlanFilter}
+          onChange={v => setPlanFilter(v)}
           options={planFilterOptions}
         />
       </div>

@@ -31,7 +31,7 @@ interface POItem {
   id: number;
   quantity: number;
   price: number;
-  rawMaterial?: { name: string; unit: string; category?: { name: string } };
+  rawMaterial?: { name: string; unit: string; category?: { id: number; name: string } };
 }
 
 interface PurchaseOrder {

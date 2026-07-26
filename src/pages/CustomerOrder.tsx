@@ -41,7 +41,7 @@ const PROMO_GRADIENTS = [
 // ─────────────────────────────────────────────
 function PromoBanner({ promotions }: { promotions: PromoInfo[] }) {
   const [idx, setIdx] = useState(0);
-  const timer = useRef<ReturnType<typeof setInterval>>();
+  const timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   useEffect(() => {
     if (promotions.length <= 1) return;
@@ -721,8 +721,8 @@ export default function CustomerOrder() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-12 text-white">
                   <DialogHeader>
-                    <DialogTitle asChild>
-                      <h3 className="font-black text-xl leading-tight">{selectedItem.name}</h3>
+                    <DialogTitle render={<h3 className="font-black text-xl leading-tight" />}>
+                      {selectedItem.name}
                     </DialogTitle>
                   </DialogHeader>
                   <span className="text-lg font-black text-yellow-300">฿{selectedItem.price.toLocaleString()}</span>

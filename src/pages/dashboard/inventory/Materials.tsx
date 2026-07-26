@@ -127,8 +127,8 @@ export default function Materials() {
           setIsOpen(v);
           if (!v) { setEditingId(null); setFormData({ name: '', unit: '', categoryId: '' }); }
         }}>
-          <DialogTrigger asChild>
-            <Button className="rounded-xl font-bold"><Plus className="w-4 h-4 mr-2" />เพิ่มวัตถุดิบ</Button>
+          <DialogTrigger render={<Button className="rounded-xl font-bold" />}>
+            <Plus className="w-4 h-4 mr-2" />เพิ่มวัตถุดิบ
           </DialogTrigger>
           <DialogContent className="rounded-2xl sm:max-w-[425px]">
             <DialogHeader>

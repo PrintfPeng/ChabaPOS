@@ -80,7 +80,10 @@ export function useMenus(branchId?: number) {
   });
 
   const createMenuItemMutation = useMutation({
-    mutationFn: async (newItem: Omit<MenuItem, 'id'> & { optionGroupIds?: number[]; deliveryPrices?: { platformId: number; price: number }[] }) => {
+    // `deliveryPrices` is omitted from MenuItem before intersecting: the stored
+    // shape (with row ids) and the payload shape are different, and intersecting
+    // them would demand both at once.
+    mutationFn: async (newItem: Omit<MenuItem, 'id' | 'deliveryPrices'> & { optionGroupIds?: number[]; deliveryPrices?: { platformId: number; price: number }[] }) => {
       const res = await api.post('/menus/items', newItem);
       return res.data;
     },
