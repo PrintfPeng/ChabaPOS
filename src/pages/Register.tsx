@@ -178,7 +178,10 @@ export default function Register() {
     setSubmitting(true);
     try {
       const slipUrl = await uploadImageToSupabase(slipFile, 'slips');
-      await api.post('/auth/register-tenant', { ...data, slipUrl });
+      // confirmPassword exists only so zod can check the two fields match — it is
+      // not part of the API contract, and the server rejects unknown properties.
+      const { confirmPassword: _confirm, ...payload } = data;
+      await api.post('/auth/register-tenant', { ...payload, slipUrl });
       setSubmitted(true);
     } catch (err: any) {
       const msg = err?.response?.data?.message;
