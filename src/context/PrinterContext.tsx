@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { BluetoothPrinter, PrinterStatus } from '../lib/bluetoothPrinter';
-import { buildOrderReceipt, PrintReceipt } from '../lib/escpos';
+import { buildOrderReceipt, buildTableQRSlip, PrintReceipt } from '../lib/escpos';
 import { toast } from 'sonner';
 
 interface PrinterCtx {
@@ -10,6 +10,8 @@ interface PrinterCtx {
   connect:      () => Promise<void>;
   disconnect:   () => void;
   printReceipt: (receipt: PrintReceipt) => Promise<void>;
+  /** Print a table QR Code slip. Pass silent=true to suppress per-table toasts (bulk printing). */
+  printTableQR: (qrDataUrl: string, tableName: string, branchName: string, silent?: boolean) => Promise<void>;
 }
 
 const Ctx = createContext<PrinterCtx | null>(null);
@@ -65,8 +67,30 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const printTableQR = useCallback(async (
+    qrDataUrl: string,
+    tableName: string,
+    branchName: string,
+    silent = false,
+  ) => {
+    if (!printerRef.current.isConnected) {
+      if (!silent) toast.warning('กรุณาเชื่อมต่อ printer ก่อน');
+      throw new Error('Printer not connected');
+    }
+    try {
+      const data = await buildTableQRSlip(qrDataUrl, tableName, branchName);
+      await printerRef.current.print(data);
+      if (!silent) toast.success(`พิมพ์ QR Code โต๊ะ ${tableName} สำเร็จ`);
+    } catch (e: any) {
+      if (!silent) toast.error(e?.message ?? 'พิมพ์ QR Code ไม่สำเร็จ');
+      setStatus('disconnected');
+      setDeviceName(null);
+      throw e;
+    }
+  }, []);
+
   return (
-    <Ctx.Provider value={{ status, deviceName, isSupported, connect, disconnect, printReceipt }}>
+    <Ctx.Provider value={{ status, deviceName, isSupported, connect, disconnect, printReceipt, printTableQR }}>
       {children}
     </Ctx.Provider>
   );

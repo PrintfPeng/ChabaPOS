@@ -3,15 +3,15 @@ import { useParams } from 'react-router-dom';
 import { useTables } from '../../hooks/useTables';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Plus, Trash2, LayoutGrid, Map, Loader2, QrCode, Edit2, Printer, Utensils } from 'lucide-react';
+import { Plus, Trash2, LayoutGrid, Map, Loader2, Edit2, Printer, Utensils } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
 import api from '../../lib/api';
-import PrintableQRCode from '../../components/PrintableQRCode';
 import { PinVerificationDialog } from '../../components/PinVerificationDialog';
+import { usePrinter } from '../../context/PrinterContext';
 import { useNavigate } from 'react-router-dom';
 
 export default function TableManagement() {
@@ -28,13 +28,13 @@ export default function TableManagement() {
 
   const [isZoneDialogOpen, setIsZoneDialogOpen] = useState(false);
   const [isTableDialogOpen, setIsTableDialogOpen] = useState(false);
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [branchName, setBranchName] = useState('');
-  const [selectedTableForQr, setSelectedTableForQr] = useState<any>(null);
-  const [printAllData, setPrintAllData] = useState<{table: any, qrCodeUrl: string}[] | null>(null);
 
   const [isPinDialogOpen, setIsPinDialogOpen] = useState(false);
   const [pendingDeleteAction, setPendingDeleteAction] = useState<(() => void) | null>(null);
+
+  const { status: printerStatus, isSupported: btSupported, connect: connectPrinter, printTableQR } = usePrinter();
+  const isConnected = printerStatus === 'connected' || printerStatus === 'printing';
 
   useEffect(() => {
     const fetchBranch = async () => {
@@ -164,24 +164,34 @@ export default function TableManagement() {
     });
   };
 
+  const ensurePrinterConnected = async (): Promise<boolean> => {
+    if (!btSupported) {
+      toast.error('Web Bluetooth ไม่รองรับ — กรุณาใช้ Chrome หรือ Edge บน Windows');
+      return false;
+    }
+    if (!isConnected) {
+      await connectPrinter();
+      // connectPrinter() handles its own success/error toasts.
+      // printerRef inside PrinterContext is already updated synchronously,
+      // so printTableQR will see the correct connection state.
+    }
+    return true;
+  };
+
   const handlePrintQRCode = async (e: React.MouseEvent, table: any) => {
     e.stopPropagation();
-    const toastId = toast.loading('กำลังเตรียมพิมพ์ QR Code...');
+    if (!(await ensurePrinterConnected())) return;
+
+    let qrDataUrl: string;
     try {
-      const url = await getQRCode(table.id);
-      setQrCodeUrl(url);
-      setSelectedTableForQr(table);
-      setPrintAllData(null);
-      setTimeout(() => {
-        toast.dismiss(toastId);
-        document.body.classList.add('cpos-print-qr-single');
-        window.print();
-        setTimeout(() => document.body.classList.remove('cpos-print-qr-single'), 600);
-      }, 300);
-    } catch (error) {
-      toast.dismiss(toastId);
+      qrDataUrl = await getQRCode(table.id);
+    } catch {
       toast.error('ไม่สามารถสร้าง QR Code ได้');
+      return;
     }
+
+    // printTableQR shows its own success/error toasts
+    await printTableQR(qrDataUrl, table.name, branchName);
   };
 
   const handlePrintAllQRCodes = async () => {
@@ -189,25 +199,27 @@ export default function TableManagement() {
     const allTables = zones.flatMap(z => z.tables || []);
     if (allTables.length === 0) return toast.error('ไม่มีโต๊ะให้พิมพ์');
 
-    const toastId = toast.loading('กำลังเตรียมพิมพ์ QR Code ทั้งหมด...');
-    try {
-      setSelectedTableForQr(null);
-      setQrCodeUrl(null);
-      const qrData = await Promise.all(allTables.map(async (table) => {
-        const url = await getQRCode(table.id);
-        return { table, qrCodeUrl: url };
-      }));
-      setPrintAllData(qrData);
-      setTimeout(() => {
-        toast.dismiss(toastId);
-        document.body.classList.add('cpos-print-qr-all');
-        window.print();
-        setTimeout(() => document.body.classList.remove('cpos-print-qr-all'), 600);
-      }, 500);
-    } catch (error) {
-      toast.dismiss(toastId);
-      toast.error('ไม่สามารถเตรียมข้อมูลสำหรับพิมพ์ได้');
+    if (!(await ensurePrinterConnected())) return;
+
+    const toastId = toast.loading(`กำลังพิมพ์ QR Code ทั้งหมด (${allTables.length} โต๊ะ)...`);
+    let successCount = 0;
+
+    for (const table of allTables) {
+      try {
+        const qrDataUrl = await getQRCode(table.id);
+        await printTableQR(qrDataUrl, table.name, branchName, true); // silent — suppress per-table toasts
+        successCount++;
+        // Brief pause so cheap BLE printers can finish processing before next slip
+        if (successCount < allTables.length) {
+          await new Promise(r => setTimeout(r, 800));
+        }
+      } catch {
+        toast.error(`พิมพ์โต๊ะ ${table.name} ไม่สำเร็จ — ข้ามไป`);
+      }
     }
+
+    toast.dismiss(toastId);
+    toast.success(`พิมพ์ QR Code สำเร็จ ${successCount}/${allTables.length} โต๊ะ`);
   };
 
   if (isLoading) {
@@ -387,53 +399,6 @@ export default function TableManagement() {
             <p className="text-slate-500">สร้างโซนเพื่อเริ่มต้นวางโต๊ะ</p>
           </div>
         )}
-      </div>
-
-      {/* ── Print CSS ── */}
-      <style>{`
-        @media print {
-          body.cpos-print-qr-single * { visibility: hidden !important; }
-          body.cpos-print-qr-single #cpos-print-qr-single {
-            visibility: visible !important;
-            display: block !important;
-            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
-          }
-          body.cpos-print-qr-single #cpos-print-qr-single * { visibility: visible !important; }
-
-          body.cpos-print-qr-all * { visibility: hidden !important; }
-          body.cpos-print-qr-all #cpos-print-qr-all {
-            visibility: visible !important;
-            display: block !important;
-            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
-          }
-          body.cpos-print-qr-all #cpos-print-qr-all * { visibility: visible !important; }
-
-          @page { size: auto; margin: 1cm; }
-        }
-      `}</style>
-
-      {/* Single QR print container */}
-      <div id="cpos-print-qr-single" style={{ display: 'none' }}>
-        {qrCodeUrl && selectedTableForQr && (
-          <PrintableQRCode
-            qrCodeUrl={qrCodeUrl}
-            tableName={selectedTableForQr.name}
-            branchName={branchName}
-          />
-        )}
-      </div>
-
-      {/* All QR print container */}
-      <div id="cpos-print-qr-all" style={{ display: 'none' }}>
-        {printAllData && printAllData.map((data, idx) => (
-          <div key={idx} style={{ pageBreakAfter: idx < printAllData.length - 1 ? 'always' : 'auto' }}>
-            <PrintableQRCode
-              qrCodeUrl={data.qrCodeUrl}
-              tableName={data.table.name}
-              branchName={branchName}
-            />
-          </div>
-        ))}
       </div>
 
       <PinVerificationDialog
