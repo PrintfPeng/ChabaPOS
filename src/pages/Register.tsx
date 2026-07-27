@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   User, Package, Banknote, CheckCircle2, Upload, X,
   Loader2, Check, Eye, EyeOff, Copy,
@@ -123,6 +123,7 @@ function InfoRow({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Register() {
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [plansFailed, setPlansFailed] = useState(false);
@@ -132,7 +133,6 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -144,6 +144,8 @@ export default function Register() {
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
   const selectedPlanId = watch('planId');
+  const selectedPlan = plans.find(p => p.id === selectedPlanId);
+  const isPaidPlan = selectedPlan ? selectedPlan.price > 0 : false;
 
   useEffect(() => {
     // `/plans/active` is the public endpoint. `/plans` requires a session, which
@@ -171,18 +173,32 @@ export default function Register() {
   };
 
   const onSubmit = async (data: FormValues) => {
-    if (!slipFile) {
+    if (isPaidPlan && !slipFile) {
       toast.error('กรุณาแนบสลิปการโอนเงินก่อนส่งคำขอ');
       return;
     }
     setSubmitting(true);
     try {
-      const slipUrl = await uploadImageToSupabase(slipFile, 'slips');
+      let slipUrl: string | undefined;
+      if (slipFile) {
+        slipUrl = await uploadImageToSupabase(slipFile, 'slips');
+      }
       // confirmPassword exists only so zod can check the two fields match — it is
       // not part of the API contract, and the server rejects unknown properties.
       const { confirmPassword: _confirm, ...payload } = data;
-      await api.post('/auth/register-tenant', { ...payload, slipUrl });
-      setSubmitted(true);
+      const res = await api.post('/auth/register-tenant', {
+        ...payload,
+        ...(slipUrl ? { slipUrl } : {}),
+      });
+      localStorage.setItem('token', res.data.access_token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      toast.success(
+        isPaidPlan
+          ? 'สมัครสมาชิกสำเร็จ! บัญชีของคุณพร้อมใช้งานในแพ็กเกจเริ่มต้น และระบบกำลังตรวจสอบสลิปการโอนเงินเพื่ออัปเกรดแพ็กเกจของคุณ'
+          : 'สมัครสมาชิกสำเร็จ! บัญชีของคุณพร้อมใช้งานแล้ว',
+        { duration: 6000 },
+      );
+      navigate('/brands');
     } catch (err: any) {
       const msg = err?.response?.data?.message;
       toast.error(Array.isArray(msg) ? msg[0] : (msg || 'เกิดข้อผิดพลาด กรุณาลองใหม่'));
@@ -190,31 +206,6 @@ export default function Register() {
       setSubmitting(false);
     }
   };
-
-  // ── Success screen ────────────────────────────────────────────────────────────
-
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200 p-10 text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
-            <CheckCircle2 className="w-10 h-10 text-green-500" />
-          </div>
-          <h2 className="text-2xl font-black text-slate-900 mb-3">สมัครสำเร็จ!</h2>
-          <p className="text-slate-500 leading-relaxed mb-8">
-            ทีมงานจะตรวจสอบสลิปโอนเงินและ<strong>อนุมัติภายใน 24 ชั่วโมง</strong>
-            <br />เราจะแจ้งทางอีเมลเมื่อบัญชีพร้อมใช้งาน
-          </p>
-          <Link
-            to="/auth"
-            className="inline-flex items-center justify-center bg-primary text-white font-semibold px-6 py-3 rounded-xl hover:bg-primary/90 transition-colors w-full"
-          >
-            กลับหน้าเข้าสู่ระบบ
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   // ── Registration form ─────────────────────────────────────────────────────────
 
@@ -373,8 +364,8 @@ export default function Register() {
             )}
           </SectionCard>
 
-          {/* ── Section 3: Payment ───────────────────────────────────── */}
-          <SectionCard icon={<Banknote className="w-4 h-4" />} title="ชำระเงิน">
+          {/* ── Section 3: Payment — shown only for paid plans ──────── */}
+          {isPaidPlan && <SectionCard icon={<Banknote className="w-4 h-4" />} title="ชำระเงิน">
             {settings?.bankName ? (
               <>
                 <p className="text-sm text-slate-500">โอนเงินค่าบริการมายังบัญชีด้านล่าง แล้วแนบสลิป</p>
@@ -440,19 +431,24 @@ export default function Register() {
                 onChange={handleFileChange}
               />
             </div>
-          </SectionCard>
+          </SectionCard>}
 
           {/* Submit */}
           <Button type="submit" className="w-full h-14 text-base font-semibold" disabled={submitting}>
             {submitting ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />กำลังส่งคำขอ...</>
-            ) : (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />กำลังดำเนินการ...</>
+            ) : isPaidPlan ? (
               'ส่งคำขอสมัครสมาชิก'
+            ) : (
+              'สมัครใช้งานฟรี'
             )}
           </Button>
 
           <p className="text-center text-xs text-slate-400 pb-4">
-            เมื่อส่งคำขอ ทีมงานจะตรวจสอบสลิปและ<strong>อนุมัติภายใน 24 ชั่วโมง</strong>
+            {isPaidPlan
+              ? <>เมื่อส่งคำขอ ทีมงานจะตรวจสอบสลิปและ<strong>อัปเกรดแพ็กเกจภายใน 24 ชั่วโมง</strong></>
+              : 'เริ่มใช้งานได้ทันที — ไม่มีค่าใช้จ่าย อัปเกรดได้ทุกเมื่อ'
+            }
           </p>
         </form>
       </div>

@@ -197,7 +197,7 @@ export class SuperAdminService {
       }),
     ]);
 
-    return { message: 'อนุมัติสำเร็จ บัญชีลูกค้าเปิดใช้งานแล้ว' };
+    return { message: 'อนุมัติสำเร็จ อัปเกรดแพ็กเกจเรียบร้อย' };
   }
 
   async rejectTransaction(id: number, note?: string) {

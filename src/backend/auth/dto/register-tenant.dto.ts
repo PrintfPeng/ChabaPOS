@@ -31,7 +31,7 @@ export class RegisterTenantDto {
   @Type(() => Number)
   planId: number;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'กรุณาแนบสลิปการโอนเงิน' })
-  slipUrl: string;
+  slipUrl?: string;
 }

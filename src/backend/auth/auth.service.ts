@@ -96,7 +96,13 @@ export class AuthService {
     }
   }
 
-  /** Full tenant onboarding: creates User + Brand(PENDING) + PaymentTransaction in one transaction. */
+  /**
+   * Freemium onboarding:
+   * - Brand is created as ACTIVE with the Free plan so the user can log in immediately.
+   * - A PaymentTransaction (PENDING) is created only when the user selected a paid plan
+   *   and uploaded a slip — the admin then approves it to upgrade the brand's plan.
+   * - Returns a JWT so the frontend can auto-login without a separate round-trip.
+   */
   async registerTenant(dto: RegisterTenantDto) {
     if (!this.prisma.isConfigured()) {
       throw new UnauthorizedException('ระบบฐานข้อมูลยังไม่ได้ถูกตั้งค่า');
@@ -110,9 +116,14 @@ export class AuthService {
       throw new ConflictException('อีเมลนี้ถูกใช้งานแล้ว');
     }
 
+    const freePlan = await this.prisma.subscriptionPlan.findFirst({ where: { name: 'Free' } });
+    if (!freePlan) {
+      this.logger.warn('[AuthService] Free plan not found — brand created without a default plan');
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    await this.prisma.$transaction(async (tx) => {
+    const createdUser = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           email: trimmedEmail,
@@ -127,34 +138,28 @@ export class AuthService {
         data: {
           name: dto.shopName,
           userId: user.id,
-          status: 'PENDING',
-          planId: dto.planId,
+          status: 'ACTIVE',
+          planId: freePlan?.id ?? null,
         },
       });
 
-      await tx.paymentTransaction.create({
-        data: {
-          brandId: brand.id,
-          planId: dto.planId,
-          slipUrl: dto.slipUrl,
-          status: 'PENDING',
-        },
-      });
+      // Only queue a payment transaction when the user wants to upgrade to a paid plan
+      const isPremiumUpgrade = freePlan ? dto.planId !== freePlan.id : true;
+      if (isPremiumUpgrade && dto.slipUrl) {
+        await tx.paymentTransaction.create({
+          data: {
+            brandId: brand.id,
+            planId: dto.planId,
+            slipUrl: dto.slipUrl,
+            status: 'PENDING',
+          },
+        });
+      }
 
-      // TODO: Notify admin via webhook (e.g., LINE Notify)
-      // const lineToken = process.env.LINE_NOTIFY_TOKEN;
-      // if (lineToken) {
-      //   await fetch('https://notify-api.line.me/api/notify', {
-      //     method: 'POST',
-      //     headers: { Authorization: `Bearer ${lineToken}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      //     body: new URLSearchParams({
-      //       message: `\n📦 ลูกค้าใหม่สมัคร!\nร้าน: ${dto.shopName}\nอีเมล: ${trimmedEmail}`,
-      //     }),
-      //   }).catch(() => {});
-      // }
+      return user;
     });
 
     this.logger.log(`[AuthService] Tenant registered successfully: ${trimmedEmail}`);
-    return { message: 'สมัครสำเร็จ กรุณารอทีมงานตรวจสอบสลิปภายใน 24 ชั่วโมง' };
+    return this.login(createdUser);
   }
 }

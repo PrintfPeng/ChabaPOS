@@ -74,7 +74,7 @@ export default function BillingManagement() {
       setTransactions(prev =>
         prev.map(t => t.id === id ? { ...t, status: 'APPROVED' } : t)
       );
-      toast.success('อนุมัติสำเร็จ บัญชีลูกค้าเปิดใช้งานแล้ว');
+      toast.success('อนุมัติสำเร็จ อัปเกรดแพ็กเกจเรียบร้อย ✓');
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'อนุมัติไม่สำเร็จ');
     } finally {
@@ -112,7 +112,7 @@ export default function BillingManagement() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-xl font-black text-slate-900">Subscription & Billing</h1>
-          <p className="text-sm text-slate-400 mt-1">ตรวจสอบสลิปโอนเงินและอนุมัติการเปิดใช้งานบัญชี</p>
+          <p className="text-sm text-slate-400 mt-1">ตรวจสอบสลิปโอนเงินและอนุมัติการอัปเกรดแพ็กเกจ</p>
         </div>
         <button
           onClick={fetchData}
@@ -188,7 +188,7 @@ export default function BillingManagement() {
                     </p>
                     <div className="flex items-center gap-4 mt-3 flex-wrap">
                       <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm">
-                        <span className="text-slate-400 mr-1">แพ็กเกจ:</span>
+                        <span className="text-slate-400 mr-1">อัปเกรดเป็น:</span>
                         <span className="font-semibold text-slate-800">{txn.plan.name}</span>
                         {txn.plan.price > 0 && (
                           <span className="text-slate-400 ml-1">฿{txn.plan.price.toLocaleString()}/เดือน</span>
