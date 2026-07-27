@@ -24,7 +24,7 @@ interface PlanSummary {
 interface ApiTenant {
   id: number;
   name: string;
-  status: 'ACTIVE' | 'SUSPENDED' | 'TRIAL';
+  status: 'ACTIVE' | 'SUSPENDED' | 'TRIAL' | 'PENDING';
   planId: number | null;
   plan: PlanSummary | null;
   planExpiresAt: string | null;
@@ -61,10 +61,11 @@ const STATUS_STYLE = {
   ACTIVE:    'bg-emerald-50 text-emerald-700 border-emerald-200',
   SUSPENDED: 'bg-red-50     text-red-600     border-red-200',
   TRIAL:     'bg-sky-50     text-sky-600     border-sky-200',
+  PENDING:   'bg-amber-50   text-amber-700   border-amber-200',
 } as const;
 
 const STATUS_LABEL = {
-  ACTIVE: 'Active', SUSPENDED: 'ระงับ', TRIAL: 'ทดลองใช้',
+  ACTIVE: 'Active', SUSPENDED: 'ระงับ', TRIAL: 'ทดลองใช้', PENDING: 'รอตรวจสอบ',
 } as const;
 
 function planColor(plans: FullPlan[], planId: number | null) {
@@ -343,7 +344,7 @@ export default function TenantManagement() {
                           'text-[10px] font-black px-2.5 py-1 rounded-full border',
                           planColor(plans, t.planId),
                         )}>
-                          {t.plan?.name ?? 'ไม่มีแพ็กเกจ'}
+                          {t.plan?.name ?? '—'}
                         </span>
                         <button
                           onClick={() => openChangePlan(t)}
@@ -455,32 +456,6 @@ export default function TenantManagement() {
 
             {/* Plan selector */}
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {/* No Plan option */}
-              <label className={cn(
-                'flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all',
-                selectedPlanId === null
-                  ? 'border-violet-500 bg-violet-50'
-                  : 'border-slate-100 bg-white hover:border-slate-200',
-              )}>
-                <input
-                  type="radio"
-                  className="sr-only"
-                  checked={selectedPlanId === null}
-                  onChange={() => setSelectedPlanId(null)}
-                />
-                <div className={cn(
-                  'w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center',
-                  selectedPlanId === null ? 'border-violet-500' : 'border-slate-300',
-                )}>
-                  {selectedPlanId === null && <div className="w-2 h-2 rounded-full bg-violet-500" />}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-slate-700">ไม่มีแพ็กเกจ</p>
-                  <p className="text-xs text-slate-400">ลบแพ็กเกจออกจากร้านค้านี้</p>
-                </div>
-                <span className="text-xs font-black text-slate-400">FREE</span>
-              </label>
-
               {plans.map((plan, i) => {
                 const isSelected = selectedPlanId === plan.id;
                 const isCurrent  = changePlanTarget.planId === plan.id;
@@ -578,7 +553,7 @@ export default function TenantManagement() {
                     'text-[10px] font-black px-2 py-0.5 rounded-full border',
                     planColor(plans, loginTarget.planId),
                   )}>
-                    {loginTarget.plan?.name ?? 'ไม่มีแพ็กเกจ'}
+                    {loginTarget.plan?.name ?? '—'}
                   </span>
                   <span className={cn(
                     'text-[10px] font-black px-2 py-0.5 rounded-full border',
@@ -624,7 +599,7 @@ export default function TenantManagement() {
                 {[
                   { label: 'เจ้าของ',  value: ownerName(viewTarget) },
                   { label: 'สาขา',     value: `${viewTarget._count.branches} สาขา` },
-                  { label: 'แพ็กเกจ',  value: viewTarget.plan?.name ?? 'ไม่มีแพ็กเกจ' },
+                  { label: 'แพ็กเกจ',  value: viewTarget.plan?.name ?? '—' },
                   { label: 'ราคา/เดือน', value: viewTarget.plan ? `฿${viewTarget.plan.price.toLocaleString()}` : '—' },
                 ].map(item => (
                   <div key={item.label} className="bg-slate-50 p-3 rounded-xl">

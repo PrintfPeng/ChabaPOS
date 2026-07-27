@@ -11,9 +11,10 @@ interface ImageUploadProps {
   onFileSelect?: (file: File | null) => void;
   label?: string;
   className?: string;
+  square?: boolean;
 }
 
-export function ImageUpload({ value, onChange, onFileSelect, label = 'รูปภาพ', className = '' }: ImageUploadProps) {
+export function ImageUpload({ value, onChange, onFileSelect, label = 'รูปภาพ', className = '', square = false }: ImageUploadProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(value || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +53,7 @@ export function ImageUpload({ value, onChange, onFileSelect, label = 'รูป�
       <Label>{label}</Label>
       <div className="flex flex-col items-center gap-4 p-4 border-2 border-dashed border-slate-200 rounded-lg bg-slate-50 transition-colors hover:border-primary/50">
         {previewUrl ? (
-          <div className="relative w-full aspect-video rounded-md overflow-hidden bg-white shadow-sm">
+          <div className={`relative rounded-md overflow-hidden bg-white shadow-sm ${square ? 'w-48 h-48 mx-auto' : 'w-full aspect-video'}`}>
             <img 
               src={previewUrl} 
               alt="Preview" 

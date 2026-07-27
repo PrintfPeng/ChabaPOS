@@ -169,11 +169,12 @@ export default function BranchSettings() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <ImageUpload 
-                  value={qrCodeUrl} 
+                <ImageUpload
+                  value={qrCodeUrl}
                   onChange={(url) => setQrCodeUrl(url)}
                   onFileSelect={(file) => setSelectedFile(file)}
                   label="รูปภาพ QR Code พร้อมเพย์"
+                  square
                 />
               </div>
 

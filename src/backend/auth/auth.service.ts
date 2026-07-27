@@ -128,6 +128,7 @@ export class AuthService {
           name: dto.shopName,
           userId: user.id,
           status: 'PENDING',
+          planId: dto.planId,
         },
       });
 
