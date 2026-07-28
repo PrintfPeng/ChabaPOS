@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../../lib/api';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import {
@@ -14,9 +14,6 @@ import { toast } from 'sonner';
 
 interface Material { id: number; name: string; unit: string; stock: number; categoryId: number; category?: { id: number; name: string } }
 interface Category { id: number; name: string }
-
-const API = 'http://localhost:3000/api';
-const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 export default function MaterialStock() {
   const { branchId } = useParams();
@@ -36,8 +33,8 @@ export default function MaterialStock() {
     setIsLoading(true);
     try {
       const [matRes, catRes] = await Promise.all([
-        axios.get(`${API}/raw-materials?branchId=${branchId}`, { headers: authHeader() }),
-        axios.get(`${API}/material-categories?branchId=${branchId}`, { headers: authHeader() }),
+        api.get(`/raw-materials?branchId=${branchId}`),
+        api.get(`/material-categories?branchId=${branchId}`),
       ]);
       setMaterials(matRes.data);
       setCategories(catRes.data);
@@ -68,10 +65,9 @@ export default function MaterialStock() {
     if (actualCount === '' || isNaN(Number(actualCount))) return toast.error('กรุณากรอกยอดที่นับได้จริง');
     setIsAdjusting(true);
     try {
-      await axios.patch(
-        `${API}/raw-materials/${adjustingMaterial!.id}/stock`,
+      await api.patch(
+        `/raw-materials/${adjustingMaterial!.id}/stock`,
         { stock: Number(actualCount) },
-        { headers: authHeader() },
       );
       toast.success(`ปรับสต๊อก "${adjustingMaterial!.name}" เป็น ${actualCount} ${adjustingMaterial!.unit} สำเร็จ`);
       setIsAdjustOpen(false);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../../lib/api';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Card, CardContent } from '../../../components/ui/card';
@@ -26,10 +26,7 @@ export default function Categories() {
 
   const fetchCategories = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`http://localhost:3000/api/material-categories?branchId=${branchId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(`/material-categories?branchId=${branchId}`);
       setCategories(res.data);
     } catch (error) {
       toast.error('ไม่สามารถดึงข้อมูลได้');
@@ -41,16 +38,11 @@ export default function Categories() {
   const handleSubmit = async () => {
     if (!name) return toast.error('กรุณากรอกชื่อหมวดหมู่');
     try {
-      const token = localStorage.getItem('token');
       if (editingId) {
-        await axios.patch(`http://localhost:3000/api/material-categories/${editingId}`, { name }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        await api.patch(`/material-categories/${editingId}`, { name });
         toast.success('แก้ไขข้อมูลสำเร็จ');
       } else {
-        await axios.post('http://localhost:3000/api/material-categories', { name, branchId: Number(branchId) }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        await api.post('/material-categories', { name, branchId: Number(branchId) });
         toast.success('เพิ่มหมวดหมู่สำเร็จ');
       }
       setIsOpen(false);
@@ -68,10 +60,7 @@ export default function Categories() {
   const handleDelete = async (id: number) => {
     confirmDelete(async () => {
       try {
-        const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:3000/api/material-categories/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        await api.delete(`/material-categories/${id}`);
         toast.success('ลบข้อมูลสำเร็จ');
         fetchCategories();
       } catch (error: any) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../../lib/api';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
@@ -29,10 +29,9 @@ export default function Materials() {
 
   const fetchData = async () => {
     try {
-      const token = localStorage.getItem('token');
       const [matRes, catRes] = await Promise.all([
-        axios.get(`http://localhost:3000/api/raw-materials?branchId=${branchId}`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`http://localhost:3000/api/material-categories?branchId=${branchId}`, { headers: { Authorization: `Bearer ${token}` } }),
+        api.get(`/raw-materials?branchId=${branchId}`),
+        api.get(`/material-categories?branchId=${branchId}`),
       ]);
       setMaterials(matRes.data);
       setCategories(catRes.data);
@@ -56,13 +55,12 @@ export default function Materials() {
   const handleSubmit = async () => {
     if (!formData.name || !formData.unit || !formData.categoryId) return toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
     try {
-      const token = localStorage.getItem('token');
       const payload = { ...formData, categoryId: Number(formData.categoryId) };
       if (editingId) {
-        await axios.patch(`http://localhost:3000/api/raw-materials/${editingId}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+        await api.patch(`/raw-materials/${editingId}`, payload);
         toast.success('แก้ไขข้อมูลสำเร็จ');
       } else {
-        await axios.post('http://localhost:3000/api/raw-materials', { ...payload, branchId: Number(branchId) }, { headers: { Authorization: `Bearer ${token}` } });
+        await api.post('/raw-materials', { ...payload, branchId: Number(branchId) });
         toast.success('เพิ่มวัตถุดิบสำเร็จ');
       }
       setIsOpen(false);
@@ -75,8 +73,7 @@ export default function Materials() {
   const handleDelete = (id: number) => {
     setPendingDeleteAction(() => async () => {
       try {
-        const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:3000/api/raw-materials/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+        await api.delete(`/raw-materials/${id}`);
         toast.success('ลบข้อมูลสำเร็จ');
         fetchData();
       } catch (error: any) {
