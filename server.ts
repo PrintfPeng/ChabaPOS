@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import "reflect-metadata";
-import { NestFactory } from "@nestjs/core";
+import { NestFactory, HttpAdapterHost } from "@nestjs/core";
 import { ValidationPipe, Logger } from "@nestjs/common";
 import { AppModule } from "./src/backend/app.module";
+import { GlobalExceptionFilter } from "./src/backend/common/filters/global-exception.filter";
+import { PrismaService } from "./src/backend/prisma/prisma.service";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import express from "express";
@@ -18,7 +20,12 @@ async function startServer() {
   }
 
   const app = await NestFactory.create(AppModule);
-  // GlobalExceptionFilter is registered via APP_FILTER in AppModule (supports DI + PrismaService injection)
+
+  // Register global exception filter — same manual pattern as the former PrismaClientExceptionFilter.
+  // app.get() is safe here because all providers are initialised after NestFactory.create().
+  const adapterHost    = app.get(HttpAdapterHost);
+  const prismaService  = app.get(PrismaService);
+  app.useGlobalFilters(new GlobalExceptionFilter(adapterHost, prismaService));
 
   const isProd = process.env.NODE_ENV === 'production';
 
