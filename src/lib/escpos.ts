@@ -1,11 +1,40 @@
-// ESC/POS receipt builder — text mode (80mm, 48 chars/line) + canvas QR slip
-// Text receipts use direct ESC/POS text commands encoded as UTF-8.
-// QR slips keep canvas raster since QR images must be rendered graphically.
+// ESC/POS receipt builder — canvas raster, Thai-safe
+// 80mm paper: 203 DPI → printable ≈ 72mm = 576 dots
+//
+// WHY canvas raster?
+// Bluetooth thermal printers use TIS-620 / Windows-874 byte encoding.
+// Sending UTF-8 Thai bytes produces garbled "alien" text.
+// Canvas converts Thai glyphs to a 1-bit monochrome bitmap which the printer
+// receives as raw pixel data (GS v 0). No character encoding involved at all.
 
 import QRCode from 'qrcode';
 
-const COLS = 48;
-const enc  = new TextEncoder(); // UTF-8
+const PW   = 576;   // printable width in dots  (80mm @ 203 DPI)
+const M    = 14;    // left / right margin in px
+const COLS = 48;    // reference column count for text-mode helper exports
+
+const THAI = '"Sarabun","Noto Sans Thai","TH Sarabun New",sans-serif';
+
+// ── Font definitions ──────────────────────────────────────────────────────────
+const F_SHOP = `bold 44px ${THAI}`;  // shop name  (double-height effect)
+const F_BOLD = `bold 24px ${THAI}`;  // item names, labels, totals
+const F_NOR  = `24px ${THAI}`;       // body text
+const F_SM   = `20px ${THAI}`;       // options, notes, small print
+const F_MONO = `20px "Courier New","Lucida Console",monospace`; // order#, timestamps
+
+// Line heights (px to advance cy after each line)
+const LH_SHOP = 58;
+const LH_NOR  = 34;
+const LH_SM   = 28;
+
+// ── Three-column item layout  (px positions) ──────────────────────────────────
+//   [qty 52px][    name up to NAME_MAX_W px    ][price 145px]
+//   ← M=14  ──────────────────────────────────────────── M=14 →
+const QTY_W_PX   = 52;                          // "99x " at F_BOLD ≈ 48px
+const PRICE_W_PX = 145;                         // "฿99,999.00" at F_BOLD ≈ 138px
+const NAME_X     = M + QTY_W_PX;               // 66px from left edge
+const PRICE_X    = PW - M;                     // right-align anchor
+const NAME_MAX_W = PW - M - QTY_W_PX - PRICE_W_PX - M;  // ≈ 351px (~24 Thai chars)
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface PrintItem {
@@ -33,240 +62,247 @@ export interface PrintReceipt {
   staffName?:      string;
 }
 
-// ── ESC/POS command bytes ─────────────────────────────────────────────────────
-const INIT    = new Uint8Array([0x1B, 0x40]);             // ESC @   — init
-const AL      = new Uint8Array([0x1B, 0x61, 0x00]);       // ESC a 0 — left
-const AC      = new Uint8Array([0x1B, 0x61, 0x01]);       // ESC a 1 — center
-const BON     = new Uint8Array([0x1B, 0x45, 0x01]);       // ESC E 1 — bold on
-const BOFF    = new Uint8Array([0x1B, 0x45, 0x00]);       // ESC E 0 — bold off
-// ESC ! n: bit3=bold, bit4=double-height, bit5=double-width
-const SZ_DHDW = new Uint8Array([0x1B, 0x21, 0x38]);       // bold + DH + DW (shop name)
-const SZ_DH   = new Uint8Array([0x1B, 0x21, 0x18]);       // bold + DH only  (section label)
-const SZ_NOR  = new Uint8Array([0x1B, 0x21, 0x00]);       // normal size
-const FEED    = new Uint8Array([0x1B, 0x64, 0x03]);       // ESC d 3 — feed 3 lines
-const CUT     = new Uint8Array([0x1D, 0x56, 0x42, 0x00]); // GS V B 0 — partial cut
-const NL      = new Uint8Array([0x0A]);                   // line feed
-
-// Dividers (include trailing \n so they stand alone on their line)
-const DIV  = '-'.repeat(COLS) + '\n'; // ------------------------------------------------
-const DDIV = '='.repeat(COLS) + '\n'; // ================================================
-
-// ── Byte-concat helper (no array-spread, avoids argument-count limit) ─────────
-function join(parts: Uint8Array[]): Uint8Array {
-  let total = 0;
-  for (const p of parts) total += p.length;
-  const out = new Uint8Array(total);
-  let  i    = 0;
-  for (const p of parts) { out.set(p, i); i += p.length; }
-  return out;
-}
-
-function tx(s: string):  Uint8Array { return enc.encode(s); }
-function ln(s: string):  Uint8Array { return enc.encode(s + '\n'); }
-
-// ── Column / string helpers ────────────────────────────────────────────────────
-
-/**
- * Printer column width of a string.
- * Counts each Unicode code point as 1 column — matches how TIS-620 / UTF-8
- * thermal printers advance the cursor (1 char = 1 font-A character position).
- */
+// ── Text-mode helpers (exported utilities) ────────────────────────────────────
+// Count printer column positions. Each Unicode code point = 1 position
+// (matches TIS-620 grid used by thermal printers).
 function cw(s: string): number { return [...s].length; }
 
-/** Pad right to exactly `w` columns (truncates on overflow). */
-function padR(s: string, w: number): string {
-  const n = cw(s);
-  if (n >= w) return [...s].slice(0, w).join('');
-  return s + ' '.repeat(w - n);
-}
-
-/** Pad left to exactly `w` columns (truncates on overflow). */
-function padL(s: string, w: number): string {
-  const n = cw(s);
-  if (n >= w) return [...s].slice(-w).join('');
-  return ' '.repeat(w - n) + s;
-}
-
-/**
- * Two-column row: `left` left-aligned, `right` right-aligned, total `width` chars.
- * If left is too long it is truncated with "…" to make room for right.
- */
 export function formatTwoColumns(left: string, right: string, width = COLS): string {
-  const rw    = cw(right);
+  const rw = cw(right);
   const avail = width - rw;
-  const lw    = cw(left);
-  if (lw >= avail) return [...left].slice(0, avail - 1).join('') + '…' + right;
-  return left + ' '.repeat(avail - lw) + right;
+  if (cw(left) >= avail) return [...left].slice(0, avail - 1).join('') + '…' + right;
+  return left + ' '.repeat(avail - cw(left)) + right;
 }
 
-// Item row column widths (must sum to COLS = 48)
-const QTY_W   = 4;   // "1x  "
-const PRICE_W = 10;  // "  1,234.00"
-const NAME_W  = COLS - QTY_W - PRICE_W; // = 34
-
-/**
- * Single item row: qty (4 cols) | name (34 cols) | price (10 cols, right-aligned).
- * Wraps name onto continuation lines (indented, no price column) when > 34 chars.
- */
+const QTY_C = 4, PRICE_C = 10, NAME_C = COLS - QTY_C - PRICE_C;
 export function formatItemRow(qty: string, name: string, price: string): string {
-  const q = padR(qty, QTY_W);
-  const p = padL(price, PRICE_W);
-
-  const nameChars = [...name];
-  if (nameChars.length <= NAME_W) {
-    return q + padR(name, NAME_W) + p;
-  }
-
-  const indent  = ' '.repeat(QTY_W);
-  const rows: string[] = [];
-  let   rest    = name;
-
+  const q = qty.slice(0, QTY_C).padEnd(QTY_C);
+  const p = price.padStart(PRICE_C).slice(-PRICE_C);
+  const ch = [...name];
+  if (ch.length <= NAME_C) return q + name + ' '.repeat(Math.max(0, NAME_C - ch.length)) + p;
+  const rows = [q + ch.slice(0, NAME_C).join('') + p];
+  let rest = ch.slice(NAME_C).join('');
   while (cw(rest) > 0) {
-    const chunk  = [...rest].slice(0, NAME_W);
-    const isFirst = rows.length === 0;
-    rows.push(isFirst
-      ? q + chunk.join('') + p                          // first line: qty + name + price
-      : indent + padR(chunk.join(''), NAME_W + PRICE_W) // continuation: indented only
-    );
-    rest = [...rest].slice(NAME_W).join('');
+    const sl = [...rest].slice(0, COLS - QTY_C);
+    rows.push(' '.repeat(QTY_C) + sl.join(''));
+    rest = [...rest].slice(COLS - QTY_C).join('');
   }
   return rows.join('\n');
 }
-
-/**
- * Add-on / option row.
- * "  + optionName                               +15.00"
- */
 export function formatOptionRow(optionName: string, optionPrice?: string): string {
   const prefix = '  + ';
-  if (!optionPrice || optionPrice === '' || optionPrice === '+0.00') {
-    return prefix + optionName;
-  }
+  if (!optionPrice || optionPrice === '' || optionPrice === '+0.00') return prefix + optionName;
   return formatTwoColumns(prefix + optionName, optionPrice);
 }
-
-// ── Backward-compatible exports ───────────────────────────────────────────────
-export function formatLine(l: string, r: string, w = COLS): string {
-  return formatTwoColumns(l, r, w);
-}
+export function formatLine(l: string, r: string, w = COLS): string { return formatTwoColumns(l, r, w); }
 export function centerLine(text: string, width = COLS): string {
   const pad = Math.max(0, Math.floor((width - cw(text)) / 2));
   return ' '.repeat(pad) + text;
 }
-export function dividerLine(char = '-', width = COLS): string {
-  return char.repeat(width);
-}
+export function dividerLine(char = '-', width = COLS): string { return char.repeat(width); }
 
-// ── Price formatter ───────────────────────────────────────────────────────────
+// ── Price formatter ────────────────────────────────────────────────────────────
 function fmt(n: number): string {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// ── Receipt builder (text mode) ───────────────────────────────────────────────
-function buildTextReceipt(r: PrintReceipt): Uint8Array {
-  // Split dateTime into date / time parts for two-column meta row
-  const dtStr   = r.dateTime.replace('T', ' ');
-  const dtSpace = dtStr.indexOf(' ');
-  const datePart = dtSpace > 0 ? dtStr.slice(0, dtSpace) : dtStr;
-  const timePart = dtSpace > 0 ? dtStr.slice(dtSpace + 1, dtSpace + 6) : '';
+// ── Canvas builder ────────────────────────────────────────────────────────────
+type Cmd =
+  | { t: 'txt'; font: string; text: string; x: number; y: number; align: CanvasTextAlign }
+  | { t: 'sep'; y: number; dashed: boolean };
 
+function buildCanvas(r: PrintReceipt): HTMLCanvasElement {
+  // Off-screen context used only for measureText() during name wrapping
+  const mc = document.createElement('canvas').getContext('2d')!;
+
+  // Wrap `text` to fit within `maxW` pixels using `font`.
+  // Uses character-by-character splitting — correct for Thai (no word spaces).
+  function wrap(text: string, font: string, maxW: number): string[] {
+    mc.font = font;
+    if (mc.measureText(text).width <= maxW) return [text];
+    const chars  = [...text]; // unicode code points
+    const lines: string[] = [];
+    let   line   = '';
+    for (const ch of chars) {
+      if (mc.measureText(line + ch).width <= maxW) {
+        line += ch;
+      } else {
+        if (line) lines.push(line);
+        line = ch;
+      }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [text];
+  }
+
+  const cmds: Cmd[] = [];
+  let cy = 20;  // Y cursor — text baseline position
+
+  // addT: queue a text command and advance cy
+  const addT = (font: string, text: string, x: number, align: CanvasTextAlign, lh: number) => {
+    cmds.push({ t: 'txt', font, text, x, y: cy, align });
+    cy += lh;
+  };
+
+  // Shorthand helpers
+  const C  = (t: string, f = F_NOR, lh = LH_NOR) => addT(f, t, PW / 2, 'center', lh);
+  const LR = (l: string, r: string, f = F_NOR, lh = LH_NOR) => {
+    cmds.push({ t: 'txt', font: f, text: l, x: M,      y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: f, text: r, x: PW - M, y: cy, align: 'right' });
+    cy += lh;
+  };
+
+  // sep: horizontal divider line with mathematically-safe gap.
+  //
+  // Gap analysis (F_BOLD 24px, ascent ≈ 20px, descent ≈ 4px):
+  //   prev text baseline at cy_prev, cy advanced by LH_NOR (34).
+  //   +12 before line → line clears prev descenders (prev_base + 4 + 12 = safe).
+  //   +24 after  line → next text top = next_base - ascent = (line_y + 24) - 20 = line_y + 4.
+  //   So next text's cap-height is always 4px BELOW the line. No overlap possible.
+  const sep = (dashed = false) => {
+    cy += 12;
+    cmds.push({ t: 'sep', y: cy, dashed });
+    cy += 24;
+  };
+
+  const sp = (h = 8) => { cy += h; };
+
+  // ── Zone 1: Header ──────────────────────────────────────────────────────────
+  C(r.branchName, F_SHOP, LH_SHOP);
+  sp(4);
+  C('ใบเสร็จรับเงิน / Receipt', F_BOLD, LH_NOR);
+  sp(4);
+
+  // ── Zone 2: Order meta ──────────────────────────────────────────────────────
+  sep();
+
+  const dtStr    = r.dateTime.replace('T', ' ');
+  const spIdx    = dtStr.indexOf(' ');
+  const datePart = spIdx > 0 ? dtStr.slice(0, spIdx)           : dtStr;
+  const timePart = spIdx > 0 ? dtStr.slice(spIdx + 1, spIdx + 6) : '';
   const orderType = r.source === 'DELIVERY' ? 'Delivery'
                   : r.tableName             ? 'กินที่ร้าน'
                   :                           'Take Away';
 
-  const p: Uint8Array[] = [];
+  LR(`ออเดอร์: #${r.orderNumber}`, `โต๊ะ: ${r.tableName ?? 'Take Away'}`);
+  if (r.staffName) LR(`พนักงาน: ${r.staffName}`, `ประเภท: ${orderType}`);
+  LR(`วันที่: ${datePart}`, `เวลา: ${timePart}`, F_MONO);
 
-  // ─── Init ────────────────────────────────────────────────────────────────────
-  p.push(INIT, AC, NL);
+  sep();
 
-  // ─── Zone 1: Header ──────────────────────────────────────────────────────────
-  p.push(SZ_DHDW);                         // bold + double-width + double-height
-  p.push(ln(r.branchName));
-  p.push(SZ_NOR);                          // reset size
-
-  p.push(NL);
-  p.push(BON, ln('ใบเสร็จรับเงิน / Receipt'), BOFF);
-  p.push(NL);
-
-  // ─── Zone 2: Order meta ──────────────────────────────────────────────────────
-  p.push(AL);                              // left-align for all data rows
-  p.push(tx(DIV));
-  p.push(ln(formatTwoColumns(`ออเดอร์: #${r.orderNumber}`, `โต๊ะ: ${r.tableName ?? 'Take Away'}`)));
-  if (r.staffName) {
-    p.push(ln(formatTwoColumns(`พนักงาน: ${r.staffName}`, `ประเภท: ${orderType}`)));
-  }
-  p.push(ln(formatTwoColumns(`วันที่: ${datePart}`, `เวลา: ${timePart}`)));
-  p.push(tx(DIV));
-
-  // ─── Zone 3: Items ───────────────────────────────────────────────────────────
-  p.push(NL);
+  // ── Zone 3: Items ───────────────────────────────────────────────────────────
+  sp(4);
   for (const item of r.items) {
-    const rowPrice = fmt(item.qty * item.unitPrice);
-    p.push(ln(formatItemRow(`${item.qty}x`, item.name, rowPrice)));
+    const priceStr  = `฿${fmt(item.qty * item.unitPrice)}`;
+    const nameLines = wrap(item.name, F_BOLD, NAME_MAX_W);
 
+    // First row: qty | name[0] | price
+    cmds.push({ t: 'txt', font: F_BOLD, text: `${item.qty}x`, x: M,       y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: F_BOLD, text: nameLines[0],   x: NAME_X,  y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: F_BOLD, text: priceStr,       x: PRICE_X, y: cy, align: 'right' });
+    cy += LH_NOR;
+
+    // Continuation rows if name wraps
+    for (let i = 1; i < nameLines.length; i++) {
+      cmds.push({ t: 'txt', font: F_BOLD, text: nameLines[i], x: NAME_X, y: cy, align: 'left' });
+      cy += LH_NOR;
+    }
+
+    // Option rows
     item.options?.forEach(o => {
-      const op = o.price > 0 ? `+${fmt(o.price)}` : '';
-      p.push(ln(formatOptionRow(o.name, op)));
+      const op = o.price > 0 ? `+฿${fmt(o.price)}` : '';
+      cmds.push({ t: 'txt', font: F_SM, text: `  + ${o.name}`, x: NAME_X, y: cy, align: 'left' });
+      if (op) cmds.push({ t: 'txt', font: F_SM, text: op, x: PRICE_X, y: cy, align: 'right' });
+      cy += LH_SM;
     });
 
-    if (item.notes) p.push(ln(`   ※ ${item.notes}`));
+    if (item.notes) {
+      cmds.push({ t: 'txt', font: F_SM, text: `  ※ ${item.notes}`, x: NAME_X, y: cy, align: 'left' });
+      cy += LH_SM;
+    }
+
+    sp(4);
   }
 
-  // ─── Zone 4: Totals & payment ────────────────────────────────────────────────
-  p.push(NL);
-  p.push(tx(DIV));
-  p.push(ln(formatTwoColumns(`จำนวนรายการ: ${r.items.length}`, `Subtotal: ${fmt(r.subtotal)}`)));
+  // ── Zone 4: Totals & payment ─────────────────────────────────────────────────
+  sep();
+  LR(`จำนวนรายการ: ${r.items.length}`, `Subtotal: ฿${fmt(r.subtotal)}`);
 
   if (r.discountAmount && r.discountAmount > 0) {
     const label = r.promoName ? `ส่วนลด (${r.promoName})` : 'ส่วนลด';
-    p.push(ln(formatTwoColumns(label, `-${fmt(r.discountAmount)}`)));
+    LR(label, `-฿${fmt(r.discountAmount)}`);
   }
 
-  p.push(tx(DDIV));
-  p.push(BON, ln(formatTwoColumns('ยอดรวมสุทธิ / Total', fmt(r.finalTotal))), BOFF);
-  p.push(tx(DDIV));
+  sep();
+  LR('ยอดรวมสุทธิ / Total', `฿${fmt(r.finalTotal)}`, F_BOLD, LH_NOR + 6);
+  sep();
 
   const payLabel = r.paymentType === 'CASH' ? 'เงินสด' : 'สแกน QR / โอนเงิน';
-  p.push(ln(formatTwoColumns('ชำระด้วย:', payLabel)));
+  LR('ชำระด้วย:', payLabel);
   if (r.paymentType === 'CASH' && r.receivedAmount != null) {
-    p.push(ln(formatTwoColumns('รับเงิน:', fmt(r.receivedAmount))));
-    p.push(ln(formatTwoColumns('เงินทอน:', fmt(r.changeAmount ?? 0))));
+    LR('รับเงิน:',  `฿${fmt(r.receivedAmount)}`);
+    LR('เงินทอน:', `฿${fmt(r.changeAmount ?? 0)}`, F_BOLD);
   }
-  p.push(tx(DIV));
 
-  // ─── Zone 5: Footer ──────────────────────────────────────────────────────────
-  p.push(AC, NL);
+  sep();
 
+  // ── Zone 5: Footer ──────────────────────────────────────────────────────────
   if (r.memberName) {
-    p.push(ln(`สมาชิก: ${r.memberName}`));
-    p.push(ln('สะสมแต้มเรียบร้อย ✓'));
-    p.push(tx(DIV));
-    p.push(NL);
+    C(`สมาชิก: ${r.memberName}`, F_SM, LH_SM);
+    C('สะสมแต้มเรียบร้อย ✓', F_SM, LH_SM);
+    sep();
+    sp(4);
   }
 
-  p.push(BON, ln('ขอบคุณที่ใช้บริการ / Thank You!'), BOFF);
-  p.push(ln('Powered by ChabaPOS'));
-  p.push(NL, NL, NL);
-  p.push(FEED, CUT);
+  C('ขอบคุณที่ใช้บริการ / Thank You!', F_BOLD, LH_NOR);
+  C('Powered by ChabaPOS', F_SM, LH_SM);
+  cy += 64;  // paper feed space before auto-cut
 
-  return join(p);
+  // ── Render command list to canvas ─────────────────────────────────────────
+  const canvas = document.createElement('canvas');
+  canvas.width  = PW;
+  canvas.height = cy;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, PW, cy);
+
+  for (const cmd of cmds) {
+    if (cmd.t === 'sep') {
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash(cmd.dashed ? [4, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(M, cmd.y);
+      ctx.lineTo(PW - M, cmd.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.font         = cmd.font;
+      ctx.textAlign    = cmd.align;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle    = '#000000';
+      ctx.fillText(cmd.text, cmd.x, cmd.y);
+    }
+  }
+
+  return canvas;
 }
 
-// ── Canvas raster (QR slip only — keeps Thai font rendering for graphics) ─────
-const THAI_F = '"Sarabun","Noto Sans Thai","TH Sarabun New",sans-serif';
-
+// ── canvasToEscPos — GS v 0 raster bitmap, no array-spread overflow ───────────
 function canvasToEscPos(canvas: HTMLCanvasElement): Uint8Array {
-  const W = canvas.width;
-  const H = canvas.height;
-  const bpr = Math.ceil(W / 8); // bytes per raster row
+  const W   = canvas.width;
+  const H   = canvas.height;
+  const bpr = Math.ceil(W / 8);  // bytes per raster row
   const ctx = canvas.getContext('2d')!;
   const { data } = ctx.getImageData(0, 0, W, H);
 
   const HDR = [
-    0x1B, 0x40, 0x1B, 0x61, 0x00,
-    0x1D, 0x76, 0x30, 0x00,
-    bpr & 0xFF, (bpr >> 8) & 0xFF,
-    H   & 0xFF, (H   >> 8) & 0xFF,
+    0x1B, 0x40,                                     // ESC @ — initialize
+    0x1B, 0x61, 0x00,                               // ESC a 0 — left align
+    0x1D, 0x76, 0x30, 0x00,                         // GS v 0 — raster bitmap
+    bpr & 0xFF, (bpr >> 8) & 0xFF,                  // xL, xH (bytes/row)
+    H   & 0xFF, (H   >> 8) & 0xFF,                  // yL, yH (rows)
   ];
   const FTR = [0x1B, 0x64, 0x05, 0x1D, 0x56, 0x42, 0x00];
 
@@ -299,75 +335,53 @@ export async function buildTableQRSlip(
   branchName: string,
   paperMm:    58 | 80 = 80,
 ): Promise<Uint8Array> {
-  const W       = paperMm === 80 ? 576 : 384;
+  const W       = paperMm === 80 ? PW : 384;
   const QR_SIZE = Math.min(W - 64, 256);
 
   const qrCanvas = document.createElement('canvas');
   await QRCode.toCanvas(qrCanvas, qrUrl, {
-    width:  QR_SIZE,
-    margin: 2,
-    color:  { dark: '#000000', light: '#ffffff' },
+    width: QR_SIZE, margin: 2,
+    color: { dark: '#000000', light: '#ffffff' },
   });
 
-  const PAD_TOP = 18;
-  const NAME_H  = 70;
-  const SEP_H   = 18;
-  const BADGE_H = 58;
-  const GAP_H   = 18;
-  const QR_H    = qrCanvas.height;
-  const GAP2_H  = 18;
-  const SCAN_H  = 40;
-  const POWER_H = 28;
-  const FEED_H  = 52;
-  const totalH  = PAD_TOP + NAME_H + SEP_H + BADGE_H + GAP_H + QR_H + GAP2_H + SCAN_H + POWER_H + FEED_H;
+  const PAD_TOP = 18; const NAME_H  = 70; const SEP_H   = 18;
+  const BADGE_H = 58; const GAP_H   = 18; const QR_H    = qrCanvas.height;
+  const GAP2_H  = 18; const SCAN_H  = 40; const POWER_H = 28; const FEED_H = 52;
+  const totalH = PAD_TOP + NAME_H + SEP_H + BADGE_H + GAP_H + QR_H + GAP2_H + SCAN_H + POWER_H + FEED_H;
 
   const canvas = document.createElement('canvas');
-  canvas.width  = W;
-  canvas.height = totalH;
+  canvas.width = W; canvas.height = totalH;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, W, totalH);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, totalH);
 
   let y = PAD_TOP;
 
-  // Branch name
   ctx.fillStyle = '#000000';
-  ctx.font = `bold 46px ${THAI_F}`;
+  ctx.font = `bold 46px ${THAI}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText(branchName, W / 2, y);
-  y += NAME_H;
+  ctx.fillText(branchName, W / 2, y); y += NAME_H;
 
-  // Dashed separator
   ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5;
   ctx.setLineDash([5, 5]);
   ctx.beginPath(); ctx.moveTo(12, y); ctx.lineTo(W - 12, y); ctx.stroke();
-  ctx.setLineDash([]);
-  y += SEP_H;
+  ctx.setLineDash([]); y += SEP_H;
 
-  // Table badge
-  const bW = Math.min(W - 40, 340);
-  const bX = (W - bW) / 2;
+  const bW = Math.min(W - 40, 340), bX = (W - bW) / 2;
   ctx.fillStyle = '#000000'; ctx.fillRect(bX, y, bW, 44);
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 30px ${THAI_F}`;
+  ctx.font = `bold 30px ${THAI}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(`TABLE: ${tableName}`, W / 2, y + 22);
-  y += BADGE_H;
+  ctx.fillText(`TABLE: ${tableName}`, W / 2, y + 22); y += BADGE_H;
 
-  // QR code
-  ctx.drawImage(qrCanvas, (W - qrCanvas.width) / 2, y);
-  y += QR_H + GAP2_H;
+  ctx.drawImage(qrCanvas, (W - qrCanvas.width) / 2, y); y += QR_H + GAP2_H;
 
-  // SCAN TO ORDER
   ctx.fillStyle = '#000000';
-  ctx.font = `bold 26px ${THAI_F}`;
+  ctx.font = `bold 26px ${THAI}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText('SCAN TO ORDER', W / 2, y);
-  y += SCAN_H;
+  ctx.fillText('SCAN TO ORDER', W / 2, y); y += SCAN_H;
 
-  // Powered by
   ctx.fillStyle = '#555555';
-  ctx.font = `17px ${THAI_F}`;
+  ctx.font = `17px ${THAI}`;
   ctx.fillText('Powered by ChabaPOS', W / 2, y);
 
   return canvasToEscPos(canvas);
@@ -375,5 +389,5 @@ export async function buildTableQRSlip(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 export function buildOrderReceipt(receipt: PrintReceipt): Uint8Array {
-  return buildTextReceipt(receipt);
+  return canvasToEscPos(buildCanvas(receipt));
 }
