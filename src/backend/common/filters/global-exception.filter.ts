@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
   Injectable,
+  Inject,
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { Prisma } from '@prisma/client';
@@ -30,8 +31,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
   constructor(
-    private readonly httpAdapterHost: HttpAdapterHost,
-    private readonly prisma: PrismaService,
+    @Inject(HttpAdapterHost) private readonly httpAdapterHost: HttpAdapterHost,
+    @Inject(PrismaService)   private readonly prisma: PrismaService,
   ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {

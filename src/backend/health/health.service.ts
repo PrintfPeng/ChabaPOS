@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LogLevel } from '@prisma/client';
 
@@ -14,7 +14,7 @@ export interface LogFilter {
 
 @Injectable()
 export class HealthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getStatus() {
     const dbOk = await this.prisma.$queryRaw`SELECT 1`

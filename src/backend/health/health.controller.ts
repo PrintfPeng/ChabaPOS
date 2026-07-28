@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Query, Body, UseGuards,
-  ParseIntPipe, DefaultValuePipe, Optional,
+  ParseIntPipe, DefaultValuePipe, Inject,
 } from '@nestjs/common';
 import { HealthService } from './health.service';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -35,7 +35,7 @@ class CreateLogDto {
 @UseGuards(RolesGuard)
 @Roles('SUPER_ADMIN')
 export class HealthController {
-  constructor(private readonly healthService: HealthService) {}
+  constructor(@Inject(HealthService) private readonly healthService: HealthService) {}
 
   @Get()
   getStatus() {
