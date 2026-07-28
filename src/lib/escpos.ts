@@ -16,25 +16,27 @@ const COLS = 48;    // reference column count for text-mode helper exports
 const THAI = '"Sarabun","Noto Sans Thai","TH Sarabun New",sans-serif';
 
 // ── Font definitions ──────────────────────────────────────────────────────────
-const F_SHOP = `bold 76px ${THAI}`;  // shop name  (double-height effect)
-const F_BOLD = `bold 40px ${THAI}`;  // item names, labels, totals
-const F_NOR  = `40px ${THAI}`;       // body text
-const F_SM   = `34px ${THAI}`;       // options, notes, small print
-const F_MONO = `36px "Courier New","Lucida Console",monospace`; // order#, timestamps
+const F_SHOP = `bold 57px ${THAI}`;  // shop name  (double-height effect)
+const F_BOLD = `bold 30px ${THAI}`;  // item names, labels, totals
+const F_NOR  = `30px ${THAI}`;       // body text
+const F_SM   = `26px ${THAI}`;       // options, notes, small print
+const F_MONO = `27px "Courier New","Lucida Console",monospace`; // order#, timestamps
 
 // Line heights (px to advance cy after each line)
-const LH_SHOP = 100;
-const LH_NOR  = 56;
-const LH_SM   = 46;
+const LH_SHOP = 75;
+const LH_NOR  = 42;
+const LH_SM   = 35;
 
-// ── Three-column item layout  (px positions) ──────────────────────────────────
-//   [qty 88px][    name up to NAME_MAX_W px    ][price 240px]
-//   ← M=14  ──────────────────────────────────────────── M=14 →
-const QTY_W_PX   = 88;                          // "99x " at F_BOLD 40px ≈ 80px
-const PRICE_W_PX = 240;                         // "฿99,999.00" at F_BOLD 40px ≈ 228px
-const NAME_X     = M + QTY_W_PX;               // 102px from left edge
+// ── Two-line item layout ───────────────────────────────────────────────────────
+//   Line 1:  [qty 66px]                             [price right]
+//   Line 2:           [name — full remaining width]
+//   Line 3+:          [options / notes]
+//   ← M=14  ────────────────────────────────────────────────── M=14 →
+const QTY_W_PX   = 66;                          // "99x " at F_BOLD 30px ≈ 60px
+const PRICE_W_PX = 180;                         // "฿99,999.00" at F_BOLD 30px ≈ 171px (kept for meta rows)
+const NAME_X     = M + QTY_W_PX;               // 80px — indent for name & options
 const PRICE_X    = PW - M;                     // right-align anchor
-const NAME_MAX_W = PW - M - QTY_W_PX - PRICE_W_PX - M;  // ≈ 220px (~8 Thai chars, wraps)
+const NAME_MAX_W = PW - NAME_X - M;            // ≈ 482px — name has full remaining width
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface PrintItem {
@@ -154,15 +156,15 @@ function buildCanvas(r: PrintReceipt): HTMLCanvasElement {
 
   // sep: horizontal divider line with mathematically-safe gap.
   //
-  // Gap analysis (F_BOLD 40px, ascent ≈ 32px, descent ≈ 8px):
-  //   prev text baseline at cy_prev, cy advanced by LH_NOR (56).
-  //   +20 before line → line clears prev descenders with margin.
-  //   +44 after  line → next text top = next_base - ascent = (line_y + 44) - 32 = line_y + 12.
-  //   So next text's cap-height is always 12px BELOW the line. No overlap possible.
+  // Gap analysis (F_BOLD 30px, ascent ≈ 24px, descent ≈ 6px):
+  //   prev text baseline at cy_prev, cy advanced by LH_NOR (42).
+  //   +15 before line → line clears prev descenders with margin.
+  //   +33 after  line → next text top = next_base - ascent = (line_y + 33) - 24 = line_y + 9.
+  //   So next text's cap-height is always 9px BELOW the line. No overlap possible.
   const sep = (dashed = false) => {
-    cy += 20;
+    cy += 15;
     cmds.push({ t: 'sep', y: cy, dashed });
-    cy += 44;
+    cy += 33;
   };
 
   const sp = (h = 8) => { cy += h; };
@@ -196,15 +198,14 @@ function buildCanvas(r: PrintReceipt): HTMLCanvasElement {
     const priceStr  = `฿${fmt(item.qty * item.unitPrice)}`;
     const nameLines = wrap(item.name, F_BOLD, NAME_MAX_W);
 
-    // First row: qty | name[0] | price
+    // Line 1: qty (left) + price (right) — name gets its own dedicated line below
     cmds.push({ t: 'txt', font: F_BOLD, text: `${item.qty}x`, x: M,       y: cy, align: 'left'  });
-    cmds.push({ t: 'txt', font: F_BOLD, text: nameLines[0],   x: NAME_X,  y: cy, align: 'left'  });
-    cmds.push({ t: 'txt', font: F_BOLD, text: priceStr,       x: PRICE_X, y: cy, align: 'right' });
+    cmds.push({ t: 'txt', font: F_BOLD, text: priceStr,        x: PRICE_X, y: cy, align: 'right' });
     cy += LH_NOR;
 
-    // Continuation rows if name wraps
-    for (let i = 1; i < nameLines.length; i++) {
-      cmds.push({ t: 'txt', font: F_BOLD, text: nameLines[i], x: NAME_X, y: cy, align: 'left' });
+    // Line 2+: item name indented under qty, full remaining width
+    for (const line of nameLines) {
+      cmds.push({ t: 'txt', font: F_BOLD, text: line, x: NAME_X, y: cy, align: 'left' });
       cy += LH_NOR;
     }
 
@@ -256,7 +257,7 @@ function buildCanvas(r: PrintReceipt): HTMLCanvasElement {
 
   C('ขอบคุณที่ใช้บริการ / Thank You!', F_BOLD, LH_NOR);
   C('Powered by ChabaPOS', F_SM, LH_SM);
-  cy += 96;  // paper feed space before auto-cut
+  cy += 72;  // paper feed space before auto-cut
 
   // ── Render command list to canvas ─────────────────────────────────────────
   const canvas = document.createElement('canvas');
