@@ -30,24 +30,48 @@ export default function Dashboard() {
   const [lockedFeature, setLockedFeature] = React.useState<string | null>(null);
   const { hasFeature, setAllowedFeatures } = useFeature();
 
-  // ── Load plan features for this brand ───────────────────────────────────
+  // ── Load plan features — re-fetch on every route change + window focus ──
+  // Two-effect pattern:
+  //   1. Fetch effect: re-runs when brandId OR pathname changes so an admin plan
+  //      upgrade is reflected the next time the user navigates or returns to the
+  //      tab — no logout/login needed.
+  //      Does NOT reset to [] before the fetch completes, so the sidebar never
+  //      flashes "locked" between route changes.
+  //   2. Cleanup effect: resets features only when brandId changes (brand switch
+  //      or logout), preventing stale permissions from leaking across brands.
   useEffect(() => {
     if (!brandId) return;
 
-    api.get(`/brands/${brandId}`)
-      .then(res => {
-        const features: string[] = Array.isArray(res.data.plan?.features)
-          ? (res.data.plan.features as string[])
-          : [];
-        console.log('Allowed Features:', features);
-        setAllowedFeatures(features);
-      })
-      .catch(err => {
-        console.error('[FeatureFlag] Failed to load brand plan features:', err);
-        setAllowedFeatures([]);
-      });
+    const ctrl = new AbortController();
 
-    // Reset to locked state when leaving this brand's dashboard
+    const fetchFeatures = () => {
+      api.get(`/brands/${brandId}`, { signal: ctrl.signal })
+        .then(res => {
+          const features: string[] = Array.isArray(res.data.plan?.features)
+            ? (res.data.plan.features as string[])
+            : [];
+          setAllowedFeatures(features);
+        })
+        .catch(err => {
+          // Ignore aborted requests (navigation away mid-fetch)
+          if (err.code !== 'ERR_CANCELED' && err.name !== 'CanceledError') {
+            console.error('[FeatureFlag] Failed to load brand plan features:', err);
+            setAllowedFeatures([]);
+          }
+        });
+    };
+
+    fetchFeatures();
+    window.addEventListener('focus', fetchFeatures);
+
+    return () => {
+      ctrl.abort();
+      window.removeEventListener('focus', fetchFeatures);
+    };
+  }, [brandId, location.pathname, setAllowedFeatures]);
+
+  // Reset features only when the brand changes or the dashboard unmounts
+  useEffect(() => {
     return () => { setAllowedFeatures([]); };
   }, [brandId, setAllowedFeatures]);
 
@@ -164,10 +188,6 @@ function SidebarContent({
   hasFeature, onLockedClick, handleLogout,
   isCollapsed = false,
 }: SidebarProps) {
-  const { allowedFeatures } = useFeature();
-  // TODO: remove after debugging
-  console.log('Allowed Features:', allowedFeatures);
-
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
 

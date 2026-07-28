@@ -28,7 +28,19 @@ export class BrandsService {
   async findOne(userId: number, id: number) {
     const brand = await this.prisma.brand.findUnique({
       where: { id },
-      select: this.safeSelect,
+      select: {
+        id: true,
+        name: true,
+        imageUrl: true,
+        userId: true,
+        createdAt: true,
+        updatedAt: true,
+        // Always include the live plan so the frontend can sync feature flags
+        // without requiring a logout/login cycle after an admin plan upgrade.
+        plan: {
+          select: { id: true, name: true, features: true },
+        },
+      },
     });
 
     if (!brand) throw new NotFoundException('Brand not found');
