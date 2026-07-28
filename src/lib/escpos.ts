@@ -170,7 +170,19 @@ function buildCanvas(r: PrintReceipt): HTMLCanvasElement {
   const sp = (h = 8) => { cy += h; };
 
   // ── Zone 1: Header ──────────────────────────────────────────────────────────
-  C(r.branchName, F_SHOP, LH_SHOP);
+  // Auto-fit shop name: shrink font until text fits within printable width.
+  // Needed because ASCII shop names (e.g. "ChabaBurger_YALA") are wider than Thai at the same px.
+  const SHOP_MAX_W = PW - 2 * M;  // 548px
+  let shopSize = 57;               // start at F_SHOP size
+  mc.font = `bold ${shopSize}px ${THAI}`;
+  while (mc.measureText(r.branchName).width > SHOP_MAX_W && shopSize > 24) {
+    shopSize -= 1;
+    mc.font = `bold ${shopSize}px ${THAI}`;
+  }
+  const F_SHOP_FIT = `bold ${shopSize}px ${THAI}`;
+  const LH_SHOP_FIT = Math.round(shopSize * 1.32);
+
+  C(r.branchName, F_SHOP_FIT, LH_SHOP_FIT);
   sp(4);
   C('ใบเสร็จรับเงิน / Receipt', F_BOLD, LH_NOR);
   sp(4);
