@@ -546,4 +546,27 @@ model PaymentTransaction {
   @@index([planId])
 }
 
+// ============================================
+// SYSTEM HEALTH & DIAGNOSTICS
+// ============================================
 
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+  CRITICAL
+}
+
+model SystemLog {
+  id         String   @id @default(uuid())
+  level      LogLevel
+  source     String   // 'FRONTEND' | 'BACKEND' | 'DATABASE'
+  module     String   // e.g. 'Orders', 'Auth', 'DeliveryService'
+  message    String
+  stackTrace String?  @db.Text
+  tenantId   String?  // userId or brandId — identifies which tenant was affected
+  createdAt  DateTime @default(now())
+
+  @@index([level])
+  @@index([createdAt])
+}

@@ -3,16 +3,17 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import {
   LayoutDashboard, Building2, CreditCard, Megaphone,
-  LogOut, Shield, Menu, X, ChevronLeft, Package, Settings,
+  LogOut, Shield, Menu, X, ChevronLeft, Package, Settings, Activity,
 } from 'lucide-react';
 
 const NAV = [
-  { label: 'ภาพรวม',                path: '/super-admin/dashboard', icon: LayoutDashboard },
-  { label: 'จัดการร้านค้า',          path: '/super-admin/tenants',   icon: Building2 },
-  { label: 'จัดการแพ็กเกจ',          path: '/super-admin/plans',     icon: Package },
-  { label: 'Subscription & Billing', path: '/super-admin/billing',    icon: CreditCard },
-  { label: 'ประกาศแจ้งเตือน',        path: '/super-admin/broadcast',  icon: Megaphone },
-  { label: 'ตั้งค่าระบบ',             path: '/super-admin/settings',   icon: Settings },
+  { label: 'ภาพรวม',                path: '/super-admin/dashboard',     icon: LayoutDashboard },
+  { label: 'จัดการร้านค้า',          path: '/super-admin/tenants',       icon: Building2 },
+  { label: 'จัดการแพ็กเกจ',          path: '/super-admin/plans',         icon: Package },
+  { label: 'Subscription & Billing', path: '/super-admin/billing',        icon: CreditCard },
+  { label: 'ประกาศแจ้งเตือน',        path: '/super-admin/broadcast',      icon: Megaphone },
+  { label: 'ตั้งค่าระบบ',             path: '/super-admin/settings',       icon: Settings },
+  { label: 'System Health',          path: '/super-admin/system-health',  icon: Activity },
 ];
 
 function SidebarNav({ onItemClick }: { onItemClick?: () => void }) {

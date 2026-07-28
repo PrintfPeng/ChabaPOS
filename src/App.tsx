@@ -19,6 +19,7 @@ import BillingManagement from './pages/superadmin/BillingManagement';
 import BroadcastMessage from './pages/superadmin/BroadcastMessage';
 import PlanManagement from './pages/superadmin/PlanManagement';
 import SystemSettings from './pages/superadmin/SystemSettings';
+import SystemHealth from './pages/superadmin/SystemHealth';
 import Register from './pages/Register';
 import Pricing from './pages/Pricing';
 import Checkout from './pages/Checkout';
@@ -86,8 +87,9 @@ export default function App() {
             <Route path="tenants"   element={<TenantManagement />} />
             <Route path="plans"     element={<PlanManagement />} />
             <Route path="billing"   element={<BillingManagement />} />
-            <Route path="broadcast" element={<BroadcastMessage />} />
-            <Route path="settings"  element={<SystemSettings />} />
+            <Route path="broadcast"     element={<BroadcastMessage />} />
+            <Route path="settings"      element={<SystemSettings />} />
+            <Route path="system-health" element={<SystemHealth />} />
           </Route>
           <Route path="/pricing" element={<Pricing />} />
           <Route
