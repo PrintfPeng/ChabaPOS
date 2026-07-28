@@ -16,9 +16,9 @@ import InventoryLayout from './dashboard/inventory/InventoryLayout';
 import Reports from './dashboard/Reports';
 import MarketingPage from './dashboard/MarketingPage';
 import KitchenDisplay from './dashboard/KitchenDisplay';
-import { auth } from '../lib/firebase';
 import { NAV_ITEMS, FEATURES } from '../lib/feature-config';
 import { useFeature } from '../contexts/FeatureContext';
+import { useAuth } from '../contexts/AuthContext';
 import { UpgradePlanModal } from '../components/UpgradePlanModal';
 import { FeatureGuard } from '../components/FeatureGuard';
 
@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [lockedFeature, setLockedFeature] = React.useState<string | null>(null);
   const { hasFeature, setAllowedFeatures } = useFeature();
+  const { logout } = useAuth();
 
   // ── Load plan features — re-fetch on every route change + window focus ──
   // Two-effect pattern:
@@ -76,8 +77,8 @@ export default function Dashboard() {
   }, [brandId, setAllowedFeatures]);
 
   const handleLogout = () => {
-    auth.signOut();
-    navigate('/auth');
+    logout();
+    navigate('/');
   };
 
   const sidebarProps = {
