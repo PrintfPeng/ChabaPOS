@@ -16,14 +16,12 @@ const COLS = 48;    // reference column count for text-mode helper exports
 const THAI = '"Sarabun","Noto Sans Thai","TH Sarabun New",sans-serif';
 
 // ── Font definitions ──────────────────────────────────────────────────────────
-const F_SHOP = `bold 57px ${THAI}`;  // shop name  (double-height effect)
 const F_BOLD = `bold 30px ${THAI}`;  // item names, labels, totals
 const F_NOR  = `30px ${THAI}`;       // body text
 const F_SM   = `26px ${THAI}`;       // options, notes, small print
 const F_MONO = `27px "Courier New","Lucida Console",monospace`; // order#, timestamps
 
 // Line heights (px to advance cy after each line)
-const LH_SHOP = 75;
 const LH_NOR  = 42;
 const LH_SM   = 35;
 
@@ -33,7 +31,6 @@ const LH_SM   = 35;
 //   Line 3+:          [options / notes]
 //   ← M=14  ────────────────────────────────────────────────── M=14 →
 const QTY_W_PX   = 66;                          // "99x " at F_BOLD 30px ≈ 60px
-const PRICE_W_PX = 180;                         // "฿99,999.00" at F_BOLD 30px ≈ 171px (kept for meta rows)
 const NAME_X     = M + QTY_W_PX;               // 80px — indent for name & options
 const PRICE_X    = PW - M;                     // right-align anchor
 const NAME_MAX_W = PW - NAME_X - M;            // ≈ 482px — name has full remaining width
@@ -137,8 +134,25 @@ function buildCanvas(r: PrintReceipt): HTMLCanvasElement {
     return lines.length ? lines : [text];
   }
 
+  // ── Zone 1: Header — compute auto-fit FIRST so cy starts correctly ──────────
+  // Auto-fit shop name: shrink from 57px until text fits within printable width.
+  // Needed because ASCII shop names (e.g. "ChabaBurger_YALA") are wider than Thai at the same px.
+  // Must run before cy is initialised: cy must be ≥ font ascent or the canvas clips the top of
+  // the first glyph (cap-height ≈ 0.72×size extends above the baseline into negative y territory).
+  const SHOP_MAX_W = PW - 2 * M;  // 548px
+  let shopSize = 57;
+  mc.font = `bold ${shopSize}px ${THAI}`;
+  while (mc.measureText(r.branchName).width > SHOP_MAX_W && shopSize > 24) {
+    shopSize -= 1;
+    mc.font = `bold ${shopSize}px ${THAI}`;
+  }
+  const F_SHOP_FIT   = `bold ${shopSize}px ${THAI}`;
+  const LH_SHOP_FIT  = Math.round(shopSize * 1.32);
+
   const cmds: Cmd[] = [];
-  let cy = 20;  // Y cursor — text baseline position
+  // cy starts at the shop-name baseline. 0.88×size gives enough room above for cap-height and
+  // diacritics (Latin cap ≈ 0.72×, Thai tone marks ≈ 0.85×) without wasting paper at the top.
+  let cy = Math.ceil(shopSize * 0.88);
 
   // addT: queue a text command and advance cy
   const addT = (font: string, text: string, x: number, align: CanvasTextAlign, lh: number) => {
@@ -168,19 +182,6 @@ function buildCanvas(r: PrintReceipt): HTMLCanvasElement {
   };
 
   const sp = (h = 8) => { cy += h; };
-
-  // ── Zone 1: Header ──────────────────────────────────────────────────────────
-  // Auto-fit shop name: shrink font until text fits within printable width.
-  // Needed because ASCII shop names (e.g. "ChabaBurger_YALA") are wider than Thai at the same px.
-  const SHOP_MAX_W = PW - 2 * M;  // 548px
-  let shopSize = 57;               // start at F_SHOP size
-  mc.font = `bold ${shopSize}px ${THAI}`;
-  while (mc.measureText(r.branchName).width > SHOP_MAX_W && shopSize > 24) {
-    shopSize -= 1;
-    mc.font = `bold ${shopSize}px ${THAI}`;
-  }
-  const F_SHOP_FIT = `bold ${shopSize}px ${THAI}`;
-  const LH_SHOP_FIT = Math.round(shopSize * 1.32);
 
   C(r.branchName, F_SHOP_FIT, LH_SHOP_FIT);
   sp(4);
