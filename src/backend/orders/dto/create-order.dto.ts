@@ -52,6 +52,10 @@ export class CreateOrderDto {
 
   @IsString()
   @IsOptional()
+  paymentStatus?: string;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
 
   @IsInt()
@@ -69,6 +73,10 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   orderType?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryPlatform?: string;
 
   @IsString()
   @IsOptional()

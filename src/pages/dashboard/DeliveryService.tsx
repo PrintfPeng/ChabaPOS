@@ -591,11 +591,11 @@ export default function DeliveryService() {
     try {
       const orderRes = await api.post('/orders', {
         branchId:         Number(branchId),
-        isPrepaid:        true,
         paymentType:      'TRANSFER',
+        paymentStatus:    'PAID',
         source:           'STAFF',
         orderType:        'DELIVERY',
-        deliveryProvider: selectedPlatform?.name ?? '',
+        deliveryPlatform: selectedPlatform?.name ?? '',
         ...(member        ? { customerId:     member.id }        : {}),
         ...(selectedPromo ? { promotionId:    selectedPromo.id } : {}),
         ...(discountAmount ? { discountAmount }                   : {}),
@@ -603,7 +603,6 @@ export default function DeliveryService() {
           menuItemId: item.menuItemId,
           quantity:   item.quantity,
           notes:      item.notes,
-          price:      item.price,
           options:    item.options.map(o => ({ optionId: o.optionId })),
         })),
       });
@@ -647,7 +646,8 @@ export default function DeliveryService() {
       clearCart();
       setIsPaymentDialogOpen(false);
       setTimeout(() => navigate(`/brands/${brandId}/branches/${branchId}`), 1500);
-    } catch {
+    } catch (err) {
+      console.error('[DeliveryService] handleSubmitOrder error:', err);
       toast.error('ทำรายการไม่สำเร็จ กรุณาลองใหม่');
     } finally {
       setIsSubmitting(false);

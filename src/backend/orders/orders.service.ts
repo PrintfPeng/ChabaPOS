@@ -185,7 +185,7 @@ export class OrdersService {
           status: (dto.orderType === 'DELIVERY' || dto.isPrepaid) ? 'PAID' : 'PENDING',
           paymentType: dto.orderType === 'DELIVERY' ? (dto.paymentType || 'TRANSFER') : (dto.isPrepaid ? dto.paymentType : null),
           orderType: dto.orderType || 'DINE_IN',
-          deliveryProvider: dto.deliveryProvider || null,
+          deliveryProvider: dto.deliveryPlatform ?? dto.deliveryProvider ?? null,
           branchId: dto.branchId,
           tableId: dto.tableId === 0 ? null : dto.tableId,
           source: dto.source || 'CUSTOMER',
