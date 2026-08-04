@@ -180,7 +180,6 @@ export default function TableManagement() {
 
   const handlePrintQRCode = async (e: React.MouseEvent, table: any) => {
     e.stopPropagation();
-    if (!(await ensurePrinterConnected())) return;
 
     let qrDataUrl: string;
     try {
@@ -190,8 +189,46 @@ export default function TableManagement() {
       return;
     }
 
-    // printTableQR shows its own success/error toasts
-    await printTableQR(qrDataUrl, table.name, branchName);
+    // Open browser print dialog — works on all devices, no BT required
+    const win = window.open('', '_blank', 'width=420,height=680,menubar=no,toolbar=no,scrollbars=no');
+    if (!win) {
+      toast.error('บล็อค Popup — กรุณาอนุญาต popup ในเบราว์เซอร์แล้วลองใหม่');
+      return;
+    }
+
+    win.document.open();
+    win.document.write(`<!DOCTYPE html><html><head><title>QR - ${table.name}</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{display:flex;flex-direction:column;align-items:center;padding:20px;background:#fff;font-family:sans-serif}
+      .wrap{width:210px;text-align:center;color:#000}
+      .shop{font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+      .badge{font-size:22px;font-weight:900;background:#000;color:#fff;padding:4px 12px;display:inline-block;margin-bottom:12px}
+      .qr-frame{padding:6px;border:3px solid #000;display:inline-block;margin-bottom:10px}
+      .qr-frame img{width:160px;height:160px;display:block}
+      .scan{font-size:11px;font-weight:700}
+      .powered{font-size:8px;opacity:.5;font-style:italic;margin-top:2px}
+      .actions{margin-top:16px;display:flex;gap:8px}
+      .btn{padding:6px 18px;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;background:#f5f5f5}
+      .btn-primary{background:#000;color:#fff;border-color:#000}
+      @media print{.actions{display:none!important}}
+    </style></head><body>
+      <div class="wrap">
+        <div class="shop">${branchName}</div>
+        <div class="badge">TABLE: ${table.name}</div>
+        <div class="qr-frame"><img src="${qrDataUrl}" alt="QR Code"/></div>
+        <div class="scan">SCAN TO ORDER</div>
+        <div class="powered">Powered by ChabaPOS</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="window.print()">🖨️ พิมพ์</button>
+        <button class="btn" onclick="window.close()">ปิด</button>
+      </div>
+      <script>
+        window.onload=function(){window.print();}
+        window.onafterprint=function(){window.close();}
+      </script>
+    </body></html>`);
+    win.document.close();
   };
 
   const handlePrintAllQRCodes = async () => {

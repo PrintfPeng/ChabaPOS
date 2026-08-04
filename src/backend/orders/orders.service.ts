@@ -27,15 +27,30 @@ export class OrdersService {
    * prices, then booked against this one.
    */
   private async priceItems(branchId: number, items: CreateOrderDto['items']) {
+    const menuItemIds = items.map(i => i.menuItemId);
+    const allOptionIds = items.flatMap(i => i.options?.map(o => o.optionId) ?? []);
+
+    // Batch-fetch all needed rows in 2 parallel queries — eliminates N+1
+    const [menuItems, options] = await Promise.all([
+      this.prisma.menuItem.findMany({
+        where: { id: { in: menuItemIds }, branchId },
+        include: { kitchen: true },
+      }),
+      allOptionIds.length > 0
+        ? this.prisma.option.findMany({
+            where: { id: { in: allOptionIds }, optionGroup: { branchId } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const menuMap   = new Map(menuItems.map(m => [m.id, m]));
+    const optionMap = new Map(options.map(o => [o.id, o]));
+
     let totalAmount = 0;
     const orderItemsData: any[] = [];
 
     for (const itemDto of items) {
-      const menuItem = await this.prisma.menuItem.findFirst({
-        where: { id: itemDto.menuItemId, branchId },
-        include: { kitchen: true },
-      });
-
+      const menuItem = menuMap.get(itemDto.menuItemId);
       if (!menuItem) {
         throw new NotFoundException(`Menu item ${itemDto.menuItemId} not found in this branch`);
       }
@@ -45,33 +60,24 @@ export class OrdersService {
 
       if (itemDto.options) {
         for (const optDto of itemDto.options) {
-          const option = await this.prisma.option.findFirst({
-            where: { id: optDto.optionId, optionGroup: { branchId } },
-          });
+          const option = optionMap.get(optDto.optionId);
           if (!option) {
             throw new NotFoundException(`Option ${optDto.optionId} not found in this branch`);
           }
           itemPrice += option.price;
-          optionsData.push({
-            optionId: option.id,
-            name: option.name,
-            price: option.price,
-          });
+          optionsData.push({ optionId: option.id, name: option.name, price: option.price });
         }
       }
 
       totalAmount += itemPrice * itemDto.quantity;
-
       orderItemsData.push({
         menuItemId: menuItem.id,
-        name: menuItem.name,
-        price: menuItem.price,
-        quantity: itemDto.quantity,
-        notes: itemDto.notes || null,
-        kitchenId: menuItem.kitchenId,
-        options: {
-          create: optionsData,
-        },
+        name:       menuItem.name,
+        price:      menuItem.price,
+        quantity:   itemDto.quantity,
+        notes:      itemDto.notes || null,
+        kitchenId:  menuItem.kitchenId,
+        options:    { create: optionsData },
       });
     }
 

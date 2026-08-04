@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { 
-  Loader2, QrCode, Save, Plus, Lock, Printer, Bluetooth, BluetoothOff, CheckCircle2, WifiOff
+  Loader2, QrCode, Save, Plus, Lock, Printer, Bluetooth, BluetoothOff, CheckCircle2, WifiOff, Search
 } from 'lucide-react';
 import { useBranch } from '../../hooks/useBranches';
 import { usePrinter } from '../../context/PrinterContext';
@@ -17,7 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/ta
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { cn } from '../../lib/utils';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -56,6 +56,12 @@ export default function BranchSettings() {
   const [bankType, setBankType] = useState('');
   const [bankAccountNo, setBankAccountNo] = useState('');
   const [bankAccountName, setBankAccountName] = useState('');
+  const [isSavingBasic, setIsSavingBasic] = useState(false);
+
+  // Map search state
+  const [mapSearch, setMapSearch] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([13.7563, 100.5018]);
 
 
   useEffect(() => {
@@ -70,8 +76,45 @@ export default function BranchSettings() {
       setBankType(branch.bankType || '');
       setBankAccountNo(branch.bankAccountNo || '');
       setBankAccountName(branch.bankAccountName || '');
+      if (branch.latitude && branch.longitude) {
+        setMapCenter([branch.latitude, branch.longitude]);
+      }
     }
   }, [branch]);
+
+  const handleSaveBasic = async () => {
+    setIsSavingBasic(true);
+    try {
+      await updateBranch({ address: address || null, phone: phone || null, latitude, longitude });
+      toast.success('บันทึกข้อมูลพื้นฐานสำเร็จ');
+    } catch (e: any) {
+      toast.error(e?.message || 'ไม่สามารถบันทึกข้อมูลได้');
+    } finally {
+      setIsSavingBasic(false);
+    }
+  };
+
+  const handleMapSearch = async () => {
+    if (!mapSearch.trim()) return;
+    setIsSearching(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(mapSearch)}`,
+        { headers: { 'Accept-Language': 'th,en' } },
+      );
+      const data = await res.json();
+      if (!data.length) return toast.error('ไม่พบสถานที่ที่ค้นหา กรุณาลองคำค้นอื่น');
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      setLatitude(lat);
+      setLongitude(lng);
+      setMapCenter([lat, lng]);
+    } catch {
+      toast.error('ค้นหาสถานที่ไม่สำเร็จ กรุณาลองใหม่');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const handleTabChange = (val: string) => {
     setSearchParams({ tab: val }, { replace: true });
@@ -209,21 +252,56 @@ export default function BranchSettings() {
                      <Input type="number" step="any" value={longitude ?? ''} onChange={e => setLongitude(parseFloat(e.target.value) || null)} placeholder="100.5018" />
                    </div>
                 </div>
+
+                {/* Map search bar */}
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    value={mapSearch}
+                    onChange={e => setMapSearch(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleMapSearch()}
+                    placeholder="ค้นหาสถานที่, จังหวัด..."
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleMapSearch}
+                    disabled={isSearching}
+                    className="shrink-0 gap-2"
+                  >
+                    {isSearching
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Search className="w-4 h-4" />}
+                    ค้นหา
+                  </Button>
+                </div>
+
                 <div className="h-[300px] w-full rounded-xl overflow-hidden border z-0 relative">
-                  <MapContainer 
-                    center={[latitude || 13.7563, longitude || 100.5018]} 
-                    zoom={13} 
+                  <MapContainer
+                    center={mapCenter}
+                    zoom={13}
                     style={{ height: '100%', width: '100%' }}
                   >
                     <TileLayer
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    <MapClickHandler setLat={(l) => setLatitude(l)} setLng={(l) => setLongitude(l)} />
+                    <ChangeView center={mapCenter} />
+                    <MapClickHandler
+                      setLat={l => setLatitude(l)}
+                      setLng={l => setLongitude(l)}
+                    />
                     {latitude && longitude && <Marker position={[latitude, longitude]} />}
                   </MapContainer>
                 </div>
-                <p className="text-xs text-slate-500">คลิกบนแผนที่เพื่อปักหมุดพิกัดร้านของคุณ</p>
+                <p className="text-xs text-slate-500">คลิกบนแผนที่เพื่อปักหมุด หรือพิมพ์ค้นหาสถานที่ด้านบน</p>
+              </div>
+
+              <div className="flex justify-end mt-6">
+                <Button onClick={handleSaveBasic} disabled={isSavingBasic} className="gap-2 px-8">
+                  {isSavingBasic ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  บันทึกข้อมูลพื้นฐาน
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -359,6 +437,14 @@ export default function BranchSettings() {
 
     </div>
   );
+}
+
+function ChangeView({ center }: { center: [number, number] }) {
+  const map = useMap();
+  useEffect(() => {
+    map.flyTo(center, map.getZoom());
+  }, [center[0], center[1]]);
+  return null;
 }
 
 function MapClickHandler({ setLat, setLng }: { setLat: (l: number) => void, setLng: (l: number) => void }) {

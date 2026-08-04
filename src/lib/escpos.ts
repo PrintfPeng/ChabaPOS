@@ -61,6 +61,13 @@ export interface PrintReceipt {
   staffName?:      string;
 }
 
+export interface KitchenSlip {
+  orderNumber: string;
+  tableName?:  string;
+  dateTime:    string;
+  items:       PrintItem[];
+}
+
 export interface ShiftSummaryReceipt {
   branchName: string;
   openedAt: Date;
@@ -558,4 +565,126 @@ function buildShiftSummaryCanvas(r: ShiftSummaryReceipt): HTMLCanvasElement {
 
 export function buildShiftSummaryReceipt(receipt: ShiftSummaryReceipt): Uint8Array {
   return canvasToEscPos(buildShiftSummaryCanvas(receipt));
+}
+
+// ── Kitchen slip — large fonts, no price header, emphasis on readability ──────
+function buildKitchenSlipCanvas(slip: KitchenSlip): HTMLCanvasElement {
+  const mc = document.createElement('canvas').getContext('2d')!;
+
+  function wrap(text: string, font: string, maxW: number): string[] {
+    mc.font = font;
+    if (mc.measureText(text).width <= maxW) return [text];
+    const chars = [...text];
+    const lines: string[] = [];
+    let line = '';
+    for (const ch of chars) {
+      if (mc.measureText(line + ch).width <= maxW) { line += ch; }
+      else { if (line) lines.push(line); line = ch; }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [text];
+  }
+
+  const F_KH    = `bold 44px ${THAI}`;
+  const F_KSB   = `bold 34px ${THAI}`;
+  const F_KQTY  = `bold 52px ${THAI}`;
+  const F_KNAME = `bold 40px ${THAI}`;
+  const F_KOPT  = `34px ${THAI}`;
+  const F_KMETA = `28px ${THAI}`;
+
+  const LH_KH    = 58;
+  const LH_KSB   = 46;
+  const LH_KQTY  = 66;
+  const LH_KNAME = 54;
+  const LH_KOPT  = 46;
+  const LH_KMETA = 38;
+  const QTY_COL  = 92;
+
+  const cmds: Cmd[] = [];
+  let cy = 46;
+
+  const addT = (font: string, text: string, x: number, align: CanvasTextAlign, lh: number) => {
+    cmds.push({ t: 'txt', font, text, x, y: cy, align });
+    cy += lh;
+  };
+  const C  = (t: string, f: string, lh: number) => addT(f, t, PW / 2, 'center', lh);
+  const LR = (l: string, r: string, f: string, lh: number) => {
+    cmds.push({ t: 'txt', font: f, text: l, x: M,      y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: f, text: r, x: PW - M, y: cy, align: 'right' });
+    cy += lh;
+  };
+  const sep = () => { cy += 12; cmds.push({ t: 'sep', y: cy, dashed: false }); cy += 26; };
+  const sp  = (h = 8) => { cy += h; };
+
+  // Header
+  C('ใบสั่งอาหาร', F_KH, LH_KH);
+  C('■  Kitchen Order  ■', F_KSB, LH_KSB);
+  sp(4);
+  sep();
+
+  // Meta
+  const dtStr    = slip.dateTime.replace('T', ' ');
+  const spIdx    = dtStr.indexOf(' ');
+  const datePart = spIdx > 0 ? dtStr.slice(0, spIdx) : dtStr;
+  const timePart = spIdx > 0 ? dtStr.slice(spIdx + 1, spIdx + 6) : '';
+
+  LR(`#${slip.orderNumber}`, slip.tableName ?? 'Take Away', F_KSB, LH_KSB);
+  LR(datePart, timePart, F_KMETA, LH_KMETA);
+  sep();
+
+  // Items
+  sp(4);
+  const nameMaxW = PW - M - QTY_COL - M;
+
+  for (const item of slip.items) {
+    const nameLines = wrap(item.name, F_KNAME, nameMaxW);
+
+    cmds.push({ t: 'txt', font: F_KQTY,  text: `${item.qty}x`, x: M,            y: cy, align: 'left' });
+    cmds.push({ t: 'txt', font: F_KNAME, text: nameLines[0],    x: M + QTY_COL, y: cy, align: 'left' });
+    cy += LH_KQTY;
+
+    for (let i = 1; i < nameLines.length; i++) {
+      cmds.push({ t: 'txt', font: F_KNAME, text: nameLines[i], x: M + QTY_COL, y: cy, align: 'left' });
+      cy += LH_KNAME;
+    }
+
+    item.options?.forEach(o => {
+      cmds.push({ t: 'txt', font: F_KOPT, text: `  + ${o.name}`, x: M + QTY_COL, y: cy, align: 'left' });
+      cy += LH_KOPT;
+    });
+
+    if (item.notes) {
+      cmds.push({ t: 'txt', font: F_KOPT, text: `  ※ ${item.notes}`, x: M + QTY_COL, y: cy, align: 'left' });
+      cy += LH_KOPT;
+    }
+
+    sep();
+  }
+
+  cy += 60;
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = PW;
+  canvas.height = cy;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, PW, cy);
+
+  for (const cmd of cmds) {
+    if (cmd.t === 'sep') {
+      ctx.strokeStyle = '#000000'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(M, cmd.y); ctx.lineTo(PW - M, cmd.y); ctx.stroke();
+    } else {
+      ctx.font = cmd.font; ctx.textAlign = cmd.align;
+      ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#000000';
+      ctx.fillText(cmd.text, cmd.x, cmd.y);
+    }
+  }
+
+  return canvas;
+}
+
+export function buildKitchenSlip(slip: KitchenSlip): Uint8Array {
+  return canvasToEscPos(buildKitchenSlipCanvas(slip));
 }

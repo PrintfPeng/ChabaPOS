@@ -333,7 +333,7 @@ function MemberPromoSection({
 export default function CounterService() {
   const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
   const navigate = useNavigate();
-  const { status: printerStatus, printReceipt } = usePrinter();
+  const { status: printerStatus, printReceipt, printKitchenSlip } = usePrinter();
   const { currentShift } = useShift();
   const isShiftOpen = currentShift?.status === 'OPEN';
 
@@ -572,26 +572,38 @@ export default function CounterService() {
         { icon: <CheckCircle2 className="w-5 h-5 text-green-500" /> },
       );
 
-      // ── Auto-print receipt if Bluetooth printer is connected ──
+      // ── Snapshot cart before clearing ──
+      const cartSnapshot = [...cart];
+      const tableSnapshot = selectedTableId ? tables.find(t => t.id === selectedTableId) : null;
+      const now = new Date().toLocaleString('th-TH', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      });
+
+      // ── Reset UI immediately — do NOT await print ──
+      clearCart();
+      setIsPaymentDialogOpen(false);
+      setSelectedTableId(null);
+      setReceivedAmount('');
+      setIsSubmitting(false);
+
+      // ── Fire-and-forget: Receipt → cut → Kitchen slip → cut ──
       if (printerStatus === 'connected') {
-        const table = selectedTableId ? tables.find(t => t.id === selectedTableId) : null;
-        const now   = new Date().toLocaleString('th-TH', {
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit',
-        });
-        await printReceipt({
+        const printItems = cartSnapshot.map(item => ({
+          name:      item.name,
+          qty:       item.quantity,
+          unitPrice: item.price + item.options.reduce((s: number, o: any) => s + o.price, 0),
+          options:   item.options.map((o: any) => ({ name: o.name, price: o.price })),
+          notes:     item.notes,
+        }));
+
+        printReceipt({
           branchName:     branchData?.name ?? 'ChabaPOS',
           orderNumber:    orderRes.data.orderNumber ?? '-',
-          tableName:      table?.name,
+          tableName:      tableSnapshot?.name,
           dateTime:       now,
           paymentType:    paymentMode,
-          items:          cart.map(item => ({
-            name:      item.name,
-            qty:       item.quantity,
-            unitPrice: item.price + item.options.reduce((s: number, o: any) => s + o.price, 0),
-            options:   item.options.map((o: any) => ({ name: o.name, price: o.price })),
-            notes:     item.notes,
-          })),
+          items:          printItems,
           subtotal:       totalAmount,
           discountAmount: discountAmount || undefined,
           promoName:      selectedPromo?.name,
@@ -600,17 +612,19 @@ export default function CounterService() {
           changeAmount:   paymentMode === 'CASH' ? changeAmount : undefined,
           memberName:     member?.name,
           source:         'STAFF',
-        });
+        })
+          .then(() => printKitchenSlip({
+            orderNumber: orderRes.data.orderNumber ?? '-',
+            tableName:   tableSnapshot?.name,
+            dateTime:    now,
+            items:       printItems,
+          }))
+          .catch(() => toast.error('พิมพ์ไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ Printer'));
       }
 
-      clearCart();
-      setIsPaymentDialogOpen(false);
-      setSelectedTableId(null);
-      setReceivedAmount('');
       setTimeout(() => navigate(`/brands/${brandId}/branches/${branchId}`), 1500);
     } catch {
       toast.error('ทำรายการไม่สำเร็จ กรุณาลองใหม่');
-    } finally {
       setIsSubmitting(false);
     }
   };
