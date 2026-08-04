@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useParams, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import api from '../lib/api';
 import { ChevronLeft, LogOut, Menu, Lock } from 'lucide-react';
@@ -16,11 +16,15 @@ import InventoryLayout from './dashboard/inventory/InventoryLayout';
 import Reports from './dashboard/Reports';
 import MarketingPage from './dashboard/MarketingPage';
 import KitchenDisplay from './dashboard/KitchenDisplay';
+import ShiftManagement from './dashboard/ShiftManagement';
 import { NAV_ITEMS, FEATURES } from '../lib/feature-config';
 import { useFeature } from '../contexts/FeatureContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useShift, Shift } from '../contexts/ShiftContext';
 import { UpgradePlanModal } from '../components/UpgradePlanModal';
 import { FeatureGuard } from '../components/FeatureGuard';
+import { OpenShiftModal } from '../components/shifts/OpenShiftModal';
+import { CloseShiftModal } from '../components/shifts/CloseShiftModal';
 
 export default function Dashboard() {
   const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
@@ -28,8 +32,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [lockedFeature, setLockedFeature] = React.useState<string | null>(null);
+  const [shiftModal, setShiftModal] = useState<'open' | 'close' | null>(null);
   const { hasFeature, setAllowedFeatures } = useFeature();
   const { logout } = useAuth();
+  const { currentShift, fetchCurrentShift } = useShift();
 
   // ── Load plan features — re-fetch on every route change + window focus ──
   // Two-effect pattern:
@@ -76,6 +82,11 @@ export default function Dashboard() {
     return () => { setAllowedFeatures([]); };
   }, [brandId, setAllowedFeatures]);
 
+  // โหลดสถานะกะปัจจุบันทันทีที่เข้า Dashboard
+  useEffect(() => {
+    if (branchId) fetchCurrentShift(branchId);
+  }, [branchId, fetchCurrentShift]);
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -88,6 +99,8 @@ export default function Dashboard() {
     hasFeature,
     onLockedClick: setLockedFeature,
     handleLogout,
+    currentShift,
+    onShiftClick: () => setShiftModal(currentShift?.status === 'OPEN' ? 'close' : 'open'),
   };
 
   return (
@@ -125,6 +138,7 @@ export default function Dashboard() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 print:p-0 print:overflow-visible print:block">
           <Routes>
             <Route index element={<Overview />} />
+            <Route path="shifts"          element={<ShiftManagement />} />
             <Route path="counter-service" element={<CounterService />} />
             <Route path="tables"          element={<TableManagement />} />
             <Route path="payment"         element={<Payment />} />
@@ -168,6 +182,25 @@ export default function Dashboard() {
         featureName={lockedFeature ?? ''}
         onClose={() => setLockedFeature(null)}
       />
+
+      {/* Shift modals */}
+      {branchId && (
+        <>
+          <OpenShiftModal
+            open={shiftModal === 'open'}
+            branchId={branchId}
+            onClose={() => setShiftModal(null)}
+          />
+          {currentShift && currentShift.status === 'OPEN' && (
+            <CloseShiftModal
+              open={shiftModal === 'close'}
+              branchId={branchId}
+              shift={currentShift}
+              onClose={() => setShiftModal(null)}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -182,12 +215,16 @@ interface SidebarProps {
   onLockedClick: (featureName: string) => void;
   handleLogout: () => void;
   isCollapsed?: boolean;
+  currentShift?: Shift | null;
+  onShiftClick?: () => void;
 }
 
 function SidebarContent({
   brandId, branchId, location,
   hasFeature, onLockedClick, handleLogout,
   isCollapsed = false,
+  currentShift,
+  onShiftClick,
 }: SidebarProps) {
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
@@ -203,11 +240,11 @@ function SidebarContent({
         </Link>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shrink-0">
-            <span className="text-white text-xs font-black">N</span>
+            <span className="text-white text-xs font-black">C</span>
           </div>
           {!isCollapsed
-            ? <h2 className="font-black text-xl text-slate-900 tracking-tight">Nex<span className="text-primary">OS</span></h2>
-            : <h2 className="font-black text-lg text-primary tracking-tighter">N</h2>
+            ? <h2 className="font-black text-xl text-slate-900 tracking-tight">Chaba<span className="text-primary">POS</span></h2>
+            : <h2 className="font-black text-lg text-primary tracking-tighter">C</h2>
           }
         </div>
       </div>
@@ -291,8 +328,32 @@ function SidebarContent({
         })}
       </nav>
 
+      {/* Shift badge */}
+      <div className={cn("shrink-0 border-t border-slate-100", isCollapsed ? "p-2" : "px-4 py-3")}>
+        <button
+          onClick={onShiftClick}
+          title={isCollapsed ? (currentShift?.status === 'OPEN' ? 'เปิดร้านอยู่ — คลิกเพื่อปิดกะ' : 'ยังไม่เปิดร้าน — คลิกเพื่อเปิดกะ') : undefined}
+          className={cn(
+            "flex items-center w-full rounded-xl h-11 text-xs font-bold transition-all duration-200 truncate",
+            currentShift?.status === 'OPEN'
+              ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+              : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200",
+            isCollapsed ? "justify-center px-0" : "px-3 gap-2",
+          )}
+        >
+          <span className="text-base shrink-0 leading-none">
+            {currentShift?.status === 'OPEN' ? '🟢' : '🔴'}
+          </span>
+          {!isCollapsed && (
+            <span className="truncate">
+              {currentShift?.status === 'OPEN' ? 'เปิดร้านอยู่' : 'ยังไม่เปิดร้าน'}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Logout */}
-      <div className={cn("border-t border-slate-200 mt-auto shrink-0", isCollapsed ? "p-2" : "p-4")}>
+      <div className={cn("border-t border-slate-200 shrink-0", isCollapsed ? "p-2" : "p-4")}>
         <button
           onClick={handleLogout}
           className={cn(

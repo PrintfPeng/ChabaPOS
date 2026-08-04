@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { usePrinter } from '../../context/PrinterContext';
+import { useShift } from '../../contexts/ShiftContext';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import {
   Loader2, ShoppingCart, Plus, Minus, X, Search, UtensilsCrossed,
   Banknote, QrCode, Calculator, CheckCircle2, Trash2, ChevronRight,
-  Phone, UserPlus, Star, Tag, Sparkles,
+  Phone, UserPlus, Star, Tag, Sparkles, AlertTriangle,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -333,6 +334,8 @@ export default function CounterService() {
   const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
   const navigate = useNavigate();
   const { status: printerStatus, printReceipt } = usePrinter();
+  const { currentShift } = useShift();
+  const isShiftOpen = currentShift?.status === 'OPEN';
 
   // ── Menu & table data ──
   const [categories,  setCategories]  = useState<Category[]>([]);
@@ -529,6 +532,7 @@ export default function CounterService() {
 
   // ── Checkout ──
   const handleCheckout = () => {
+    if (!isShiftOpen) return toast.error('กรุณาเปิดกะก่อนรับออเดอร์');
     if (cart.length === 0) return toast.error('กรุณาเลือกรายการอาหารก่อน');
     setReceivedAmount('');
     setIsPaymentDialogOpen(true);
@@ -651,6 +655,15 @@ export default function CounterService() {
       {/* ── Left: Menu Grid ── */}
       <div className="flex-1 min-w-0 flex flex-col gap-4 sm:gap-6 overflow-hidden">
         <div className="flex flex-col gap-3 sm:gap-4 shrink-0">
+
+          {/* แบนเนอร์เตือนเมื่อร้านยังไม่เปิด */}
+          {!isShiftOpen && (
+            <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm font-semibold text-amber-700">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span>ร้านยังไม่เปิด — กรุณา <strong>เปิดกะ</strong> จากแถบด้านซ้ายก่อนรับออเดอร์</span>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2 truncate">
               <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
@@ -685,8 +698,13 @@ export default function CounterService() {
             {filteredItems(Number(activeTab)).map(item => (
               <Card
                 key={item.id}
-                className="overflow-hidden cursor-pointer hover:border-primary hover:shadow-md transition-all group border-white shadow-sm active:scale-95 flex flex-col"
-                onClick={() => handleSelectItem(item)}
+                className={cn(
+                  "overflow-hidden transition-all group border-white shadow-sm flex flex-col",
+                  isShiftOpen
+                    ? "cursor-pointer hover:border-primary hover:shadow-md active:scale-95"
+                    : "opacity-50 cursor-not-allowed",
+                )}
+                onClick={() => isShiftOpen && handleSelectItem(item)}
               >
                 <CardContent className="p-0 flex flex-col h-full">
                   <div className="relative aspect-[4/3] sm:aspect-video overflow-hidden shrink-0">
@@ -734,6 +752,7 @@ export default function CounterService() {
           isSubmitting={isSubmitting}
           clearCart={clearCart}
           memberPromoProps={memberPromoProps}
+          isShiftOpen={isShiftOpen}
         />
       </div>
 
@@ -775,6 +794,7 @@ export default function CounterService() {
               isSubmitting={isSubmitting}
               clearCart={clearCart}
               memberPromoProps={memberPromoProps}
+              isShiftOpen={isShiftOpen}
             />
           </SheetContent>
         </Sheet>
@@ -1077,13 +1097,14 @@ interface CartSummaryProps {
   isSubmitting: boolean;
   clearCart: () => void;
   memberPromoProps: MemberPromoProps;
+  isShiftOpen: boolean;
 }
 
 function CartSummaryContent({
   cart, updateCartQuantity, removeFromCart,
   totalAmount, finalTotal, discountAmount, selectedPromo,
   handleCheckout, isSubmitting, clearCart,
-  memberPromoProps,
+  memberPromoProps, isShiftOpen,
 }: CartSummaryProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -1204,13 +1225,13 @@ function CartSummaryContent({
 
         <Button
           className="w-full h-16 sm:h-20 rounded-[28px] text-xl font-black shadow-2xl shadow-primary/20 flex items-center justify-center gap-4 transition-all hover:scale-[1.01] active:scale-95"
-          disabled={isSubmitting || cart.length === 0}
+          disabled={isSubmitting || cart.length === 0 || !isShiftOpen}
           onClick={handleCheckout}
         >
           {isSubmitting ? (
             <><Loader2 className="w-6 h-6 animate-spin" /><span>กำลังบักทึก...</span></>
           ) : (
-            <><Calculator className="w-6 h-6" /><span>คิดเงิน & ชำระเงิน</span></>
+            <><Calculator className="w-6 h-6" /><span>ชำระเงิน</span></>
           )}
         </Button>
       </div>

@@ -61,6 +61,20 @@ export interface PrintReceipt {
   staffName?:      string;
 }
 
+export interface ShiftSummaryReceipt {
+  branchName: string;
+  openedAt: Date;
+  closedAt: Date | null;
+  openedByName: string;
+  closedByName: string | null;
+  startingCash: number;
+  actualCash: number | null;
+  expectedCash: number | null;
+  shortOver: number | null;
+  totalCashSales: number;
+  aggregatedItems: { name: string; qty: number; totalPrice: number }[];
+}
+
 // ── Text-mode helpers (exported utilities) ────────────────────────────────────
 // Count printer column positions. Each Unicode code point = 1 position
 // (matches TIS-620 grid used by thermal printers).
@@ -404,4 +418,144 @@ export async function buildTableQRSlip(
 // ── Public API ────────────────────────────────────────────────────────────────
 export function buildOrderReceipt(receipt: PrintReceipt): Uint8Array {
   return canvasToEscPos(buildCanvas(receipt));
+}
+
+function buildShiftSummaryCanvas(r: ShiftSummaryReceipt): HTMLCanvasElement {
+  const mc = document.createElement('canvas').getContext('2d')!;
+
+  function wrap(text: string, font: string, maxW: number): string[] {
+    mc.font = font;
+    if (mc.measureText(text).width <= maxW) return [text];
+    const chars  = [...text];
+    const lines: string[] = [];
+    let   line   = '';
+    for (const ch of chars) {
+      if (mc.measureText(line + ch).width <= maxW) {
+        line += ch;
+      } else {
+        if (line) lines.push(line);
+        line = ch;
+      }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [text];
+  }
+
+  const cmds: Cmd[] = [];
+  let cy = 40; // initial y offset
+
+  const addT = (font: string, text: string, x: number, align: CanvasTextAlign, lh: number) => {
+    cmds.push({ t: 'txt', font, text, x, y: cy, align });
+    cy += lh;
+  };
+
+  const C  = (t: string, f = F_NOR, lh = LH_NOR) => addT(f, t, PW / 2, 'center', lh);
+  const LR = (l: string, r: string, f = F_NOR, lh = LH_NOR) => {
+    cmds.push({ t: 'txt', font: f, text: l, x: M,      y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: f, text: r, x: PW - M, y: cy, align: 'right' });
+    cy += lh;
+  };
+  const sep = (dashed = false) => {
+    cy += 15;
+    cmds.push({ t: 'sep', y: cy, dashed });
+    cy += 33;
+  };
+  const sp = (h = 8) => { cy += h; };
+
+  // Header
+  C(r.branchName, F_BOLD, 46);
+  sp(4);
+  C('ใบสรุปยอดขายประจำกะ', F_BOLD, LH_NOR);
+  sp(4);
+
+  // Dates & Staff
+  sep();
+  const formatDateTime = (d: Date | string) => {
+    const date = typeof d === 'string' ? new Date(d) : d;
+    return date.toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  LR(`เปิดกะ: ${formatDateTime(r.openedAt)}`, `โดย: ${r.openedByName}`, F_SM, LH_SM);
+  if (r.closedAt) {
+    LR(`ปิดกะ: ${formatDateTime(r.closedAt)}`, `โดย: ${r.closedByName || '-'}`, F_SM, LH_SM);
+  }
+  
+  // Items List
+  sep();
+  C('สรุปรายการอาหาร / เมนู', F_BOLD, LH_NOR);
+  sp(4);
+
+  for (const item of r.aggregatedItems) {
+    const priceStr  = `฿${fmt(item.totalPrice)}`;
+    const nameLines = wrap(item.name, F_NOR, NAME_MAX_W);
+
+    cmds.push({ t: 'txt', font: F_BOLD, text: `${item.qty}x`, x: M,       y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: F_BOLD, text: priceStr,        x: PRICE_X, y: cy, align: 'right' });
+    cy += LH_NOR;
+
+    for (const line of nameLines) {
+      cmds.push({ t: 'txt', font: F_NOR, text: line, x: NAME_X, y: cy, align: 'left' });
+      cy += LH_NOR;
+    }
+    sp(4);
+  }
+
+  // Financial Summary
+  sep();
+  C('สรุปยอดการเงิน (เงินสด)', F_BOLD, LH_NOR);
+  sp(4);
+  
+  LR('เงินทอนเริ่มต้น:', `฿${fmt(r.startingCash)}`);
+  LR('ยอดขายเงินสดทั้งหมด:', `฿${fmt(r.totalCashSales)}`);
+  if (r.expectedCash !== null) {
+    LR('ยอดที่ควรมีในลิ้นชัก:', `฿${fmt(r.expectedCash)}`, F_BOLD);
+  }
+  
+  sep();
+  if (r.actualCash !== null) {
+    LR('เงินที่นับได้จริง:', `฿${fmt(r.actualCash)}`, F_BOLD);
+    if (r.shortOver !== null) {
+      const diffText = r.shortOver === 0 ? 'ยอดตรง' : r.shortOver > 0 ? 'เงินเกิน' : 'เงินขาด';
+      LR(`ส่วนต่าง (${diffText}):`, `฿${fmt(Math.abs(r.shortOver))}`, F_BOLD);
+    }
+  }
+
+  // Footer
+  sep();
+  C('ขอบคุณที่ใช้บริการ / Thank You!', F_BOLD, LH_NOR);
+  C('Powered by ChabaPOS', F_SM, LH_SM);
+  cy += 72;  // paper feed space before auto-cut
+
+  // Render to canvas
+  const canvas = document.createElement('canvas');
+  canvas.width  = PW;
+  canvas.height = cy;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, PW, cy);
+
+  for (const cmd of cmds) {
+    if (cmd.t === 'sep') {
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash(cmd.dashed ? [4, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(M, cmd.y);
+      ctx.lineTo(PW - M, cmd.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.font         = cmd.font;
+      ctx.textAlign    = cmd.align;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle    = '#000000';
+      ctx.fillText(cmd.text, cmd.x, cmd.y);
+    }
+  }
+
+  return canvas;
+}
+
+export function buildShiftSummaryReceipt(receipt: ShiftSummaryReceipt): Uint8Array {
+  return canvasToEscPos(buildShiftSummaryCanvas(receipt));
 }

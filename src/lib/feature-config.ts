@@ -8,6 +8,7 @@ import {
   Gift,
   Bike,
   Settings,
+  Clock,
 } from 'lucide-react';
 
 // ── Feature Key Registry ──────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ export const FEATURE_LABELS: Record<FeatureKey, FeatureMeta> = {
  */
 export const NAV_ITEMS: NavItem[] = [
   { name: 'ภาพรวม',                 path: '',                 icon: LayoutDashboard },
+  { name: 'เปิด/ปิดกะ',             path: 'shifts',           icon: Clock },
   { name: 'สั่งอาหารแบบชำระทันที',   path: 'counter-service',  icon: QrCode },
   { name: 'เปิดโต๊ะสั่งอาหาร',       path: 'tables',           icon: TableIcon },
   { name: 'การชำระเงิน',             path: 'payment',          icon: Banknote },

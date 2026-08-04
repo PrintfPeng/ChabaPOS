@@ -132,7 +132,7 @@ function PdfReportTemplate({ data, periodLabel, branchName }: {
       {/* Header */}
       <div style={s.headerWrap}>
         <div>
-          <div style={s.brandLabel}>NEXOS SYSTEM</div>
+          <div style={s.brandLabel}>CHABAPOS SYSTEM</div>
           <div style={s.title}>รายงานการขาย</div>
           <div style={s.subtitle}>
             สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong>
@@ -222,7 +222,7 @@ function PdfReportTemplate({ data, periodLabel, branchName }: {
 
       {/* Footer */}
       <div style={s.footer}>
-        <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>สร้างโดยระบบ CHABAPOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
         <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr} {timeStr}</span>
       </div>
     </div>

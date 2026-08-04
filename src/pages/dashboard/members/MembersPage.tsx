@@ -27,7 +27,7 @@ interface Customer {
   _count?: { orders: number };
 }
 
-const EMPTY_FORM = { phone: '', name: '' };
+const EMPTY_FORM = { phone: '', name: '', points: 0 };
 
 /* ─── Reward Rate Setting Card ─────────────────────── */
 function RewardRateCard({ branchId }: { branchId: number }) {
@@ -219,7 +219,7 @@ export default function MembersPage() {
 
   const openEdit = (c: Customer) => {
     setEditing(c);
-    setForm({ phone: c.phone, name: c.name });
+    setForm({ phone: c.phone, name: c.name, points: c.points });
     setIsDialogOpen(true);
   };
 
@@ -228,7 +228,7 @@ export default function MembersPage() {
     setIsSaving(true);
     try {
       if (editing) {
-        await api.patch(`/customers/${editing.id}`, { name: form.name });
+        await api.patch(`/customers/${editing.id}`, { name: form.name, points: Number(form.points) });
         toast.success('แก้ไขข้อมูลสมาชิกสำเร็จ');
       } else {
         await api.post('/customers', { ...form, branchId: Number(branchId) });
@@ -404,6 +404,19 @@ export default function MembersPage() {
                 className="h-10 rounded-xl"
               />
             </div>
+            {editing && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-500">แต้มสะสม</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.points}
+                  onChange={(e) => setForm({ ...form, points: Number(e.target.value) })}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                  className="h-10 rounded-xl"
+                />
+              </div>
+            )}
             <Button
               onClick={handleSave}
               disabled={isSaving}

@@ -77,8 +77,4 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   deliveryPlatform?: string;
-
-  @IsString()
-  @IsOptional()
-  deliveryProvider?: string;
 }

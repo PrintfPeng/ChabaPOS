@@ -143,7 +143,12 @@ export default function Overview() {
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 pb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">ภาพรวมสาขา {branch?.name}</h1>
+          {branch?.brand?.name && (
+            <h2 className="text-lg font-semibold text-primary/80 tracking-wide mb-1">
+              {branch.brand.name}
+            </h2>
+          )}
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">สาขา {branch?.name}</h1>
           <p className="text-slate-500 text-sm mt-1">สรุปข้อมูลการดำเนินงาน ยอดขาย และความเคลื่อนไหวล่าสุด</p>
         </div>
         <div className="flex flex-wrap gap-2 items-center shrink-0">

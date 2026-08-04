@@ -6,6 +6,7 @@ import { TableAccessService } from '../common/table-access.service';
 import { PromotionsService } from '../promotions/promotions.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderAtTableDto } from './dto/create-order-at-table.dto';
+import { ShiftsService } from '../shifts/shifts.service';
 
 @Injectable()
 export class OrdersService {
@@ -14,6 +15,7 @@ export class OrdersService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TableAccessService) private readonly tableAccess: TableAccessService,
     @Inject(PromotionsService) private readonly promotions: PromotionsService,
+    @Inject(ShiftsService) private readonly shifts: ShiftsService,
   ) {
     this.logger.log('OrdersService initialized');
   }
@@ -89,7 +91,9 @@ export class OrdersService {
   /** Staff-created order (counter, delivery, in-house ordering). */
   async createAsStaff(userId: number, dto: CreateOrderDto) {
     await this.assertBranchOwner(userId, dto.branchId);
-    return this.create(dto);
+    // ผูก shiftId อัตโนมัติจากกะที่เปิดอยู่ของสาขา
+    const shiftId = await this.shifts.findOpenShiftId(dto.branchId);
+    return this.create({ ...dto, shiftId: shiftId ?? undefined });
   }
 
   /**
@@ -139,7 +143,7 @@ export class OrdersService {
   }
 
   async create(
-    dto: CreateOrderDto,
+    dto: CreateOrderDto & { shiftId?: string },
     pricing?: { totalAmount: number; orderItemsData: any[] },
   ) {
     // 1. Validate Branch
@@ -185,13 +189,14 @@ export class OrdersService {
           status: (dto.orderType === 'DELIVERY' || dto.isPrepaid) ? 'PAID' : 'PENDING',
           paymentType: dto.orderType === 'DELIVERY' ? (dto.paymentType || 'TRANSFER') : (dto.isPrepaid ? dto.paymentType : null),
           orderType: dto.orderType || 'DINE_IN',
-          deliveryProvider: dto.deliveryPlatform ?? dto.deliveryProvider ?? null,
+          deliveryPlatform: dto.deliveryPlatform ?? null,
           branchId: dto.branchId,
           tableId: dto.tableId === 0 ? null : dto.tableId,
           source: dto.source || 'CUSTOMER',
           notes: dto.notes || null,
           ...(dto.customerId  ? { customerId:  dto.customerId }  : {}),
           ...(dto.promotionId ? { promotionId: dto.promotionId } : {}),
+          ...(dto.shiftId     ? { shiftId:     dto.shiftId }     : {}),
           items: {
             create: orderItemsData,
           },

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { BluetoothPrinter, PrinterStatus } from '../lib/bluetoothPrinter';
-import { buildOrderReceipt, buildTableQRSlip, PrintReceipt } from '../lib/escpos';
+import { buildOrderReceipt, buildTableQRSlip, PrintReceipt, buildShiftSummaryReceipt, ShiftSummaryReceipt } from '../lib/escpos';
 import { toast } from 'sonner';
 
 interface PrinterCtx {
@@ -10,6 +10,7 @@ interface PrinterCtx {
   connect:      () => Promise<void>;
   disconnect:   () => void;
   printReceipt: (receipt: PrintReceipt) => Promise<void>;
+  printShiftSummary: (receipt: ShiftSummaryReceipt) => Promise<void>;
   /** Print a table QR Code slip. Pass silent=true to suppress per-table toasts (bulk printing). */
   printTableQR: (qrDataUrl: string, tableName: string, branchName: string, silent?: boolean) => Promise<void>;
 }
@@ -67,6 +68,22 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const printShiftSummary = useCallback(async (receipt: ShiftSummaryReceipt) => {
+    if (!printerRef.current.isConnected) {
+      toast.warning('กรุณาเชื่อมต่อ printer ก่อน');
+      return;
+    }
+    try {
+      const data = buildShiftSummaryReceipt(receipt);
+      await printerRef.current.print(data);
+      toast.success('พิมพ์ใบสรุปยอดสำเร็จ');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'พิมพ์ใบสรุปยอดไม่สำเร็จ กรุณาลองใหม่');
+      setStatus('disconnected');
+      setDeviceName(null);
+    }
+  }, []);
+
   const printTableQR = useCallback(async (
     qrDataUrl: string,
     tableName: string,
@@ -90,7 +107,7 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ status, deviceName, isSupported, connect, disconnect, printReceipt, printTableQR }}>
+    <Ctx.Provider value={{ status, deviceName, isSupported, connect, disconnect, printReceipt, printShiftSummary, printTableQR }}>
       {children}
     </Ctx.Provider>
   );
@@ -102,4 +119,4 @@ export function usePrinter(): PrinterCtx {
   return ctx;
 }
 
-export type { PrintReceipt };
+export type { PrintReceipt, ShiftSummaryReceipt };

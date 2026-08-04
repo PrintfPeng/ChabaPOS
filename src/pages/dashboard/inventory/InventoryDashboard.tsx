@@ -107,7 +107,7 @@ function PdfSingleTemplate({
       {/* Header */}
       <div style={s.hdr}>
         <div>
-          <div style={s.brand}>NEXOS SYSTEM</div>
+          <div style={s.brand}>CHABAPOS SYSTEM</div>
           <div style={s.title}>ใบสั่งซื้อวัตถุดิบ</div>
           <div style={s.sub}>สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong></div>
         </div>
@@ -208,7 +208,7 @@ function PdfSingleTemplate({
 
       {/* Footer */}
       <div style={s.footer}>
-        <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>สร้างโดยระบบ CHABAPOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
         <span>{dateStr} {timeStr}</span>
       </div>
     </div>
@@ -246,7 +246,7 @@ function PdfAllTemplate({
       {/* Header */}
       <div style={s.hdr}>
         <div>
-          <div style={s.brand}>NEXOS SYSTEM</div>
+          <div style={s.brand}>CHABAPOS SYSTEM</div>
           <div style={s.title}>รายงานการสั่งซื้อวัตถุดิบ</div>
           <div style={s.sub}>
             สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong>
@@ -328,7 +328,7 @@ function PdfAllTemplate({
 
       {/* Footer */}
       <div style={s.footer}>
-        <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+        <span>สร้างโดยระบบ CHABAPOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
         <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr} {timeStr}</span>
       </div>
     </div>
@@ -973,7 +973,7 @@ export default function InventoryDashboard() {
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 14, marginBottom: 18 }}>
                 <div>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>NEXOS SYSTEM</div>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CHABAPOS SYSTEM</div>
                   <div style={{ fontSize: 20, fontWeight: 900 }}>ใบสั่งซื้อวัตถุดิบ</div>
                   <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
                     สาขา: <strong>{branchName}</strong>
@@ -1083,7 +1083,7 @@ export default function InventoryDashboard() {
 
               {/* Footer */}
               <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8' }}>
-                <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+                <span>สร้างโดยระบบ CHABAPOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
                 <span>{dateStr}</span>
               </div>
             </div>
@@ -1097,7 +1097,7 @@ export default function InventoryDashboard() {
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 14, marginBottom: 18 }}>
             <div>
-              <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>NEXOS SYSTEM</div>
+              <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CHABAPOS SYSTEM</div>
               <div style={{ fontSize: 20, fontWeight: 900 }}>รายงานการสั่งซื้อวัตถุดิบ</div>
               <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
                 สาขา: <strong>{branchName}</strong> &nbsp;·&nbsp; ช่วงเวลา: <strong style={{ color: '#dc2626' }}>{periodLabel}</strong>
@@ -1175,7 +1175,7 @@ export default function InventoryDashboard() {
 
           {/* Footer */}
           <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 7, color: '#94a3b8' }}>
-            <span>สร้างโดยระบบ NEXOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
+            <span>สร้างโดยระบบ CHABAPOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
             <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr}</span>
           </div>
         </div>

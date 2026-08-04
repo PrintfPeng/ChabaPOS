@@ -99,7 +99,7 @@ function PdfReceiptTemplate({
     <div style={s.root}>
       <div style={s.hdr}>
         <div>
-          <div style={s.brand}>NEXOS SYSTEM</div>
+          <div style={s.brand}>CHABAPOS SYSTEM</div>
           <div style={s.title}>ใบรับเข้าสินค้า & บันทึกรายจ่าย</div>
           <div style={s.sub}>สาขา: <strong style={{ color: '#0f172a' }}>{branchName}</strong></div>
         </div>
@@ -170,7 +170,7 @@ function PdfReceiptTemplate({
       </div>
 
       <div style={s.footer}>
-        <span>สร้างโดยระบบ NEXOS • เอกสารบันทึกรับเข้าสินค้า</span>
+        <span>สร้างโดยระบบ CHABAPOS • เอกสารบันทึกรับเข้าสินค้า</span>
         <span>{dateStr} {timeStr}</span>
       </div>
     </div>

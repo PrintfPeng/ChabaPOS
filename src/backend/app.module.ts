@@ -23,6 +23,7 @@ import { SuperAdminModule } from './super-admin/super-admin.module';
 import { SettingsModule } from './settings/settings.module';
 import { BillingModule } from './billing/billing.module';
 import { HealthModule } from './health/health.module';
+import { ShiftsModule } from './shifts/shifts.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { HealthModule } from './health/health.module';
     SettingsModule,
     BillingModule,
     HealthModule,
+    ShiftsModule,
   ],
   providers: [
     {

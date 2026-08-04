@@ -13,3 +13,13 @@ db-push-result.log
 
 # Local SQLite scratch database (the project runs on Postgres/Supabase)
 *.db
+
+# Debug / dev output logs
+dev-out.txt
+dev-out2.txt
+
+# Playwright test reports
+playwright-report/
+
+# Claude Code session data
+.claude/

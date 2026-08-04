@@ -369,7 +369,7 @@ export class DashboardService {
         take: 1,
       }),
       this.prisma.order.groupBy({
-        by: ['deliveryProvider'],
+        by: ['deliveryPlatform'],
         _sum: { totalAmount: true },
         _count: { id: true },
         where: {
@@ -577,7 +577,7 @@ export class DashboardService {
       chartData,
       tableData,
       deliveryBreakdown: deliveryBreakdown.map(db => ({
-        provider: db.deliveryProvider || 'UNKNOWN',
+        provider: db.deliveryPlatform || 'UNKNOWN',
         sales: db._sum.totalAmount || 0,
         orders: db._count.id || 0,
       })),

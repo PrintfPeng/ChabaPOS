@@ -22,7 +22,7 @@ import { PinVerificationDialog } from '../../components/PinVerificationDialog';
 export default function MenuManagement() {
   const { branchId } = useParams<{ branchId: string }>();
   const bid = Number(branchId);
-  
+
   const {
     categories,
     menuItems,
@@ -42,7 +42,7 @@ export default function MenuManagement() {
   const { kitchens } = useKitchens(bid);
   const { groups: optionGroups } = useOptions(bid);
   const [activeTab, setActiveTab] = useState<string>('');
-  
+
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newItem, setNewItem] = useState<{
     name: string;
@@ -54,7 +54,7 @@ export default function MenuManagement() {
     deliveryPrices?: { platformId: number; price: number }[];
     isDeliveryAvailable: boolean;
   }>({ name: '', price: '', categoryId: '', kitchenId: '', imageUrl: '', optionGroupIds: [], deliveryPrices: [], isDeliveryAvailable: true });
-  
+
   const [editingCategory, setEditingCategory] = useState<any | null>(null);
   const [editingItem, setEditingItem] = useState<any | null>(null);
 
@@ -84,7 +84,7 @@ export default function MenuManagement() {
 
   const handleCreateCategory = async () => {
     if (!bid || !newCategoryName) return;
-    
+
     // Frontend Duplicate Validation
     if (Array.isArray(categories) && categories.some(cat => cat.name.toLowerCase() === newCategoryName.toLowerCase())) {
       return toast.error('ชื่อหมวดหมู่นี้มีอยู่ในระบบแล้ว');
@@ -127,7 +127,7 @@ export default function MenuManagement() {
     if (!newItem.kitchenId || newItem.kitchenId === "") {
       return toast.error("กรุณาเลือกห้องครัวสำหรับส่งออเดอร์");
     }
-    
+
     if (Array.isArray(menuItems) && menuItems.some(item => item.name.toLowerCase() === newItem.name.toLowerCase())) {
       return toast.error('ชื่อเมนูนี้มีอยู่ในระบบแล้ว');
     }
@@ -135,7 +135,7 @@ export default function MenuManagement() {
     setIsUploading(true);
     try {
       let finalImageUrl = newItem.imageUrl;
-      
+
       // Upload to Supabase if a file was selected
       if (selectedFile) {
         finalImageUrl = await uploadImageToSupabase(selectedFile, 'items');
@@ -174,7 +174,7 @@ export default function MenuManagement() {
     setIsUploading(true);
     try {
       let finalImageUrl = newItem.imageUrl;
-      
+
       // Upload to Supabase if a new file was selected
       if (selectedFile) {
         finalImageUrl = await uploadImageToSupabase(selectedFile, 'items');
@@ -205,7 +205,7 @@ export default function MenuManagement() {
 
   const handleCreatePlatform = async () => {
     if (!bid || !newPlatformName) return;
-    
+
     if (Array.isArray(deliveryPlatforms) && deliveryPlatforms.some(dp => dp.name.toLowerCase() === newPlatformName.toLowerCase())) {
       return toast.error('มีชื่อแพลตฟอร์มนี้อยู่แล้ว');
     }
@@ -352,15 +352,15 @@ export default function MenuManagement() {
               </DialogHeader>
               <div className="py-6 space-y-2">
                 <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">ชื่อหมวดหมู่</Label>
-                <Input 
-                  value={newCategoryName} 
-                  onChange={(e) => setNewCategoryName(e.target.value)} 
+                <Input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
                   className="h-12 rounded-xl focus:ring-primary"
                   placeholder="เช่น อาหารจานเดียว, เครื่องดื่ม..."
                 />
               </div>
               <DialogFooter>
-                <Button 
+                <Button
                   className="w-full h-12 rounded-xl font-black text-lg"
                   onClick={editingCategory ? handleUpdateCategory : handleCreateCategory}
                 >
@@ -392,9 +392,9 @@ export default function MenuManagement() {
                     {editingPlatform ? 'แก้ไขชื่อแพลตฟอร์ม' : 'เพิ่มแพลตฟอร์มใหม่'}
                   </Label>
                   <div className="flex gap-2">
-                    <Input 
-                      value={newPlatformName} 
-                      onChange={(e) => setNewPlatformName(e.target.value)} 
+                    <Input
+                      value={newPlatformName}
+                      onChange={(e) => setNewPlatformName(e.target.value)}
                       className="h-12 rounded-xl focus:ring-primary flex-1 text-sm font-semibold"
                       placeholder="เช่น Grab, LINEMAN, ShopeeFood..."
                       onKeyDown={(e) => {
@@ -403,7 +403,7 @@ export default function MenuManagement() {
                         }
                       }}
                     />
-                    <Button 
+                    <Button
                       className="h-12 rounded-xl font-black px-6"
                       onClick={editingPlatform ? handleUpdatePlatform : handleCreatePlatform}
                     >
@@ -411,8 +411,8 @@ export default function MenuManagement() {
                     </Button>
                   </div>
                   {editingPlatform && (
-                    <Button 
-                      variant="link" 
+                    <Button
+                      variant="link"
                       className="text-xs text-slate-500 font-bold p-0 h-auto"
                       onClick={() => {
                         setEditingPlatform(null);
@@ -433,9 +433,9 @@ export default function MenuManagement() {
                         <div key={platform.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100/50 transition-colors">
                           <span className="font-bold text-sm text-slate-700">{platform.name}</span>
                           <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="h-8 w-8 rounded-full text-slate-500 hover:bg-primary/10 hover:text-primary"
                               onClick={() => {
                                 setEditingPlatform(platform);
@@ -444,9 +444,9 @@ export default function MenuManagement() {
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="h-8 w-8 rounded-full text-slate-500 hover:bg-red-50 hover:text-red-500"
                               onClick={() => handleDeletePlatform(platform.id)}
                             >
@@ -640,7 +640,7 @@ export default function MenuManagement() {
           }}>
             <DialogTrigger render={<Button className="flex-1 sm:flex-none h-11 rounded-xl font-black" />}>
               <Plus className="w-4 h-4 mr-2" />
-              เพิ่มรายการ
+              เพิ่มเมนู
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px] rounded-[32px] overflow-hidden p-0 gap-0">
               <ScrollArea className="max-h-[85vh]">
@@ -651,20 +651,20 @@ export default function MenuManagement() {
                   <div className="space-y-5">
                     <div className="space-y-2">
                       <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">รูปภาพรายการ</Label>
-                      <ImageUpload 
-                        value={newItem.imageUrl} 
-                        onChange={(url) => setNewItem({...newItem, imageUrl: url})} 
+                      <ImageUpload
+                        value={newItem.imageUrl}
+                        onChange={(url) => setNewItem({ ...newItem, imageUrl: url })}
                         onFileSelect={(file) => setSelectedFile(file)}
                       />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">ชื่อรายการ</Label>
-                        <Input value={newItem.name} onChange={(e) => setNewItem({...newItem, name: e.target.value})} className="h-11 rounded-xl" />
+                        <Input value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} className="h-11 rounded-xl" />
                       </div>
                       <div className="space-y-2">
                         <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">ราคา (฿)</Label>
-                        <Input type="number" value={newItem.price} onChange={(e) => setNewItem({...newItem, price: e.target.value})} className="h-11 rounded-xl" />
+                        <Input type="number" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} className="h-11 rounded-xl" />
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -672,7 +672,7 @@ export default function MenuManagement() {
                         <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">หมวดหมู่</Label>
                         <Select
                           value={newItem.categoryId !== '' ? newItem.categoryId : undefined}
-                          onValueChange={(val) => setNewItem({...newItem, categoryId: val})}
+                          onValueChange={(val) => setNewItem({ ...newItem, categoryId: val })}
                           items={Array.isArray(categories) ? categories.map(cat => ({ value: String(cat.id), label: cat.name })) : []}
                         >
                           <SelectTrigger className="h-11 rounded-xl">
@@ -693,7 +693,7 @@ export default function MenuManagement() {
                         <Label className="font-bold text-xs uppercase tracking-widest text-slate-400">ส่งไปที่ครัว</Label>
                         <Select
                           value={newItem.kitchenId !== '' ? newItem.kitchenId : undefined}
-                          onValueChange={(val) => setNewItem({...newItem, kitchenId: val})}
+                          onValueChange={(val) => setNewItem({ ...newItem, kitchenId: val })}
                           items={[
                             ...(Array.isArray(kitchens) ? kitchens.map(k => ({ value: String(k.id), label: k.name })) : [])
                           ]}
@@ -723,7 +723,7 @@ export default function MenuManagement() {
                             const dpValue = newItem.deliveryPrices?.find(
                               (dp: any) => dp.platformId === platform.id
                             )?.price ?? '';
-                            
+
                             return (
                               <div key={platform.id} className="flex items-center gap-3">
                                 <span className="text-xs font-bold text-slate-600 min-w-[100px] truncate">
@@ -775,7 +775,7 @@ export default function MenuManagement() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setNewItem({...newItem, isDeliveryAvailable: !newItem.isDeliveryAvailable})}
+                        onClick={() => setNewItem({ ...newItem, isDeliveryAvailable: !newItem.isDeliveryAvailable })}
                         className={cn(
                           'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
                           newItem.isDeliveryAvailable ? 'bg-emerald-500' : 'bg-slate-200',
@@ -796,13 +796,13 @@ export default function MenuManagement() {
                             const ids = newItem.optionGroupIds.includes(og.id)
                               ? newItem.optionGroupIds.filter(id => id !== og.id)
                               : [...newItem.optionGroupIds, og.id];
-                            setNewItem({...newItem, optionGroupIds: ids});
+                            setNewItem({ ...newItem, optionGroupIds: ids });
                           }}>
                             <div className={cn(
-                                "w-4 h-4 border-2 rounded flex items-center justify-center transition-all",
-                                newItem.optionGroupIds.includes(og.id) ? "bg-primary border-primary text-white" : "border-slate-300"
+                              "w-4 h-4 border-2 rounded flex items-center justify-center transition-all",
+                              newItem.optionGroupIds.includes(og.id) ? "bg-primary border-primary text-white" : "border-slate-300"
                             )}>
-                                {newItem.optionGroupIds.includes(og.id) && <Plus className="w-3 h-3 stroke-[4]" />}
+                              {newItem.optionGroupIds.includes(og.id) && <Plus className="w-3 h-3 stroke-[4]" />}
                             </div>
                             <span className="text-xs font-bold text-slate-600 truncate">{og.name}</span>
                           </div>
@@ -811,7 +811,7 @@ export default function MenuManagement() {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button 
+                    <Button
                       className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20"
                       onClick={editingItem ? handleUpdateItem : handleCreateItem}
                       disabled={isUploading}
@@ -838,25 +838,25 @@ export default function MenuManagement() {
           <TabsList className="bg-transparent h-auto p-0 flex gap-1">
             {Array.isArray(categories) && categories.map(cat => (
               <div key={cat.id} className="flex items-center group">
-                <TabsTrigger 
-                    value={cat.id.toString()} 
-                    className="px-4 sm:px-8 py-2.5 sm:py-3 font-black text-xs sm:text-sm rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary transition-all"
+                <TabsTrigger
+                  value={cat.id.toString()}
+                  className="px-4 sm:px-8 py-2.5 sm:py-3 font-black text-xs sm:text-sm rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary transition-all"
                 >
                   {cat.name}
                 </TabsTrigger>
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-primary/10 hover:text-primary" 
-                    onClick={() => openEditCategory(cat)}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-primary/10 hover:text-primary"
+                  onClick={() => openEditCategory(cat)}
                 >
                   <Edit2 className="w-3 h-3" />
                 </Button>
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-red-50 hover:text-red-500" 
-                    onClick={() => handleDeleteCategory(cat.id)}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-red-50 hover:text-red-500"
+                  onClick={() => handleDeleteCategory(cat.id)}
                 >
                   <Trash2 className="w-3 h-3" />
                 </Button>
@@ -866,98 +866,98 @@ export default function MenuManagement() {
         </ScrollArea>
 
         <div className="mt-8">
-            {Array.isArray(categories) && categories.map(cat => (
+          {Array.isArray(categories) && categories.map(cat => (
             <TabsContent key={cat.id} value={cat.id.toString()} className="mt-0 focus-visible:ring-0">
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-6">
                 {Array.isArray(menuItems) && menuItems.filter(item => item.categoryId === cat.id).map(item => (
-                    <Card key={item.id} className="overflow-hidden border-none shadow-sm group hover:shadow-xl transition-all rounded-[24px] sm:rounded-[32px] flex flex-col bg-white">
-                        <div className="aspect-[4/3] bg-slate-50 relative overflow-hidden shrink-0">
-                            {item.imageUrl ? (
-                                <img 
-                                  src={item.imageUrl} 
-                                  alt={item.name} 
-                                  className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" 
-                                  referrerPolicy="no-referrer" 
-                                />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-slate-200">
-                                    <LayoutGrid className="w-10 h-10" />
-                                </div>
-                            )}
-                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-lg bg-white/90 backdrop-blur-sm" onClick={() => openEditItem(item)}>
-                                    <Edit2 className="w-4 h-4 text-slate-600" />
-                                </Button>
-                                <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full shadow-lg" onClick={() => handleDeleteItem(item.id)}>
-                                    <Trash2 className="w-4 h-4" />
-                                </Button>
-                            </div>
-                            <div className="absolute bottom-2 left-2">
-                                <Badge className="bg-white/95 text-slate-900 border-none font-black shadow-sm text-[10px] sm:text-xs">฿{item.price.toLocaleString()}</Badge>
-                            </div>
+                  <Card key={item.id} className="overflow-hidden border-none shadow-sm group hover:shadow-xl transition-all rounded-[24px] sm:rounded-[32px] flex flex-col bg-white">
+                    <div className="aspect-[4/3] bg-slate-50 relative overflow-hidden shrink-0">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-200">
+                          <LayoutGrid className="w-10 h-10" />
                         </div>
-                        <CardContent className="p-3 sm:p-5 flex-1 flex flex-col justify-between">
-                            <div>
-                                <h3 className="font-bold text-slate-900 line-clamp-1 text-sm sm:text-base leading-tight">{item.name}</h3>
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                    <Badge variant="outline" className="text-[8px] sm:text-[9px] px-1.5 py-0 border-slate-100 text-slate-400 bg-slate-50 font-bold truncate max-w-[80px]">
-                                        {Array.isArray(kitchens) && kitchens.find(k => k.id === item.kitchenId)?.name || 'ครัวกลาง'}
-                                    </Badge>
-                                    {Array.isArray(item.optionGroups) && item.optionGroups.slice(0, 1).map(og => (
-                                        <Badge key={og.id} variant="secondary" className="text-[8px] sm:text-[9px] px-1.5 py-0 bg-primary/5 text-primary border-none max-w-[60px] truncate">
-                                            {og.name}
-                                        </Badge>
-                                    ))}
-                                    {item.optionGroups?.length > 1 && (
-                                        <span className="text-[8px] font-bold text-slate-300">+{item.optionGroups.length - 1}</span>
-                                    )}
-                                    {item.isDeliveryAvailable === false && (
-                                      <Badge className="text-[8px] sm:text-[9px] px-1.5 py-0 bg-slate-100 text-slate-400 border-none font-bold flex items-center gap-0.5">
-                                        <Bike className="w-2.5 h-2.5" />
-                                        ไม่ส่ง Delivery
-                                      </Badge>
-                                    )}
-                                    {Array.isArray(item.deliveryPrices) && item.deliveryPrices.map(dp => {
-                                        const platform = deliveryPlatforms?.find(p => p.id === dp.deliveryPlatformId);
-                                        if (!platform) return null;
-                                        return (
-                                          <Badge key={dp.id} variant="outline" className="text-[8px] sm:text-[9px] px-1.5 py-0 border-emerald-100 text-emerald-600 bg-emerald-50 font-bold truncate max-w-[85px]">
-                                              {platform.name}: ฿{dp.price}
-                                          </Badge>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                      )}
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-lg bg-white/90 backdrop-blur-sm" onClick={() => openEditItem(item)}>
+                          <Edit2 className="w-4 h-4 text-slate-600" />
+                        </Button>
+                        <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full shadow-lg" onClick={() => handleDeleteItem(item.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div className="absolute bottom-2 left-2">
+                        <Badge className="bg-white/95 text-slate-900 border-none font-black shadow-sm text-[10px] sm:text-xs">฿{item.price.toLocaleString()}</Badge>
+                      </div>
+                    </div>
+                    <CardContent className="p-3 sm:p-5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-bold text-slate-900 line-clamp-1 text-sm sm:text-base leading-tight">{item.name}</h3>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          <Badge variant="outline" className="text-[8px] sm:text-[9px] px-1.5 py-0 border-slate-100 text-slate-400 bg-slate-50 font-bold truncate max-w-[80px]">
+                            {Array.isArray(kitchens) && kitchens.find(k => k.id === item.kitchenId)?.name || 'ครัวกลาง'}
+                          </Badge>
+                          {Array.isArray(item.optionGroups) && item.optionGroups.slice(0, 1).map(og => (
+                            <Badge key={og.id} variant="secondary" className="text-[8px] sm:text-[9px] px-1.5 py-0 bg-primary/5 text-primary border-none max-w-[60px] truncate">
+                              {og.name}
+                            </Badge>
+                          ))}
+                          {item.optionGroups?.length > 1 && (
+                            <span className="text-[8px] font-bold text-slate-300">+{item.optionGroups.length - 1}</span>
+                          )}
+                          {item.isDeliveryAvailable === false && (
+                            <Badge className="text-[8px] sm:text-[9px] px-1.5 py-0 bg-slate-100 text-slate-400 border-none font-bold flex items-center gap-0.5">
+                              <Bike className="w-2.5 h-2.5" />
+                              ไม่ส่ง Delivery
+                            </Badge>
+                          )}
+                          {Array.isArray(item.deliveryPrices) && item.deliveryPrices.map(dp => {
+                            const platform = deliveryPlatforms?.find(p => p.id === dp.deliveryPlatformId);
+                            if (!platform) return null;
+                            return (
+                              <Badge key={dp.id} variant="outline" className="text-[8px] sm:text-[9px] px-1.5 py-0 border-emerald-100 text-emerald-600 bg-emerald-50 font-bold truncate max-w-[85px]">
+                                {platform.name}: ฿{dp.price}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
                 {(!Array.isArray(menuItems) || menuItems.filter(item => item.categoryId === cat.id).length === 0) && (
-                    <div className="col-span-full text-center py-24 bg-white rounded-[40px] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center space-y-4">
-                        <div className="p-6 bg-slate-50 rounded-3xl">
-                            <Plus className="w-10 h-10 text-slate-200" />
-                        </div>
-                        <p className="text-slate-400 font-bold italic">ยังไม่มีรายการในหมวดหมู่นี้</p>
+                  <div className="col-span-full text-center py-24 bg-white rounded-[40px] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center space-y-4">
+                    <div className="p-6 bg-slate-50 rounded-3xl">
+                      <Plus className="w-10 h-10 text-slate-200" />
                     </div>
+                    <p className="text-slate-400 font-bold italic">ยังไม่มีรายการในหมวดหมู่นี้</p>
+                  </div>
                 )}
-                </div>
+              </div>
             </TabsContent>
-            ))}
+          ))}
         </div>
-        
+
         {(!Array.isArray(categories) || categories.length === 0) && (
           <div className="text-center py-24 sm:py-32 bg-white rounded-[40px] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center space-y-6">
             <div className="p-10 bg-slate-50 rounded-[48px]">
-                <List className="w-16 h-16 text-slate-200" />
+              <List className="w-16 h-16 text-slate-200" />
             </div>
             <div className="space-y-4 max-w-xs">
-                <div className="space-y-1">
-                    <h3 className="text-xl font-black text-slate-900">ยังไม่มีหมวดหมู่</h3>
-                    <p className="text-sm text-slate-400 font-medium">สร้างหมวดหมู่แรกเพื่อเริ่มเพิ่มความอร่อยลงในเมนูของคุณ</p>
-                </div>
-                <Button className="rounded-2xl h-12 w-full font-black" onClick={() => setIsCatDialogOpen(true)}>
-                    <Plus className="w-5 h-5 mr-2" />
-                    สร้างหมวดหมู่แรก
-                </Button>
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-slate-900">ยังไม่มีหมวดหมู่</h3>
+                <p className="text-sm text-slate-400 font-medium">สร้างหมวดหมู่แรกเพื่อเริ่มเพิ่มความอร่อยลงในเมนูของคุณ</p>
+              </div>
+              <Button className="rounded-2xl h-12 w-full font-black" onClick={() => setIsCatDialogOpen(true)}>
+                <Plus className="w-5 h-5 mr-2" />
+                สร้างหมวดหมู่แรก
+              </Button>
             </div>
           </div>
         )}

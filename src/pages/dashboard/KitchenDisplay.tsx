@@ -24,7 +24,7 @@ interface OrderItem {
     orderNumber: string;
     source?: string;
     orderType?: string;
-    deliveryProvider?: string | null;
+    deliveryPlatform?: string | null;
     createdAt: string;
     table?: { name: string } | null;
   };
@@ -35,7 +35,7 @@ interface OrderGroup {
   orderNumber: string;
   source?: string;
   orderType?: string;
-  deliveryProvider?: string | null;
+  deliveryPlatform?: string | null;
   tableName?: string;
   createdAt: string;
   items: OrderItem[];
@@ -193,7 +193,7 @@ function OrderTicket({
   const hasTable   = !!group.tableName;
   const typeLabel  = isDelivery ? 'Delivery' : hasTable ? 'ทานที่ร้าน' : 'Counter';
   const mainLabel  = isDelivery
-    ? (group.deliveryProvider || 'Delivery')
+    ? (group.deliveryPlatform || 'Delivery')
     : hasTable
     ? `โต๊ะ ${group.tableName}`
     : 'Counter';
@@ -399,7 +399,7 @@ export default function KitchenDisplay() {
           orderNumber:      item.order.orderNumber,
           source:           item.order.source,
           orderType:        item.order.orderType,
-          deliveryProvider: item.order.deliveryProvider,
+          deliveryPlatform: item.order.deliveryPlatform,
           tableName:        item.order.table?.name,
           createdAt:        item.order.createdAt,
           items:            [],

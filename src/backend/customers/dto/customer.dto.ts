@@ -24,6 +24,10 @@ export class UpdateCustomerDto {
   @MaxLength(100)
   @IsOptional()
   name?: string;
+
+  @IsNumber()
+  @IsOptional()
+  points?: number;
 }
 
 /**

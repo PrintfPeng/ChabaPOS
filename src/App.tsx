@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { FeatureProvider } from './contexts/FeatureContext';
+import { ShiftProvider } from './contexts/ShiftContext';
 import { PrinterProvider } from './context/PrinterContext';
 import { Toaster } from './components/ui/sonner';
 import Auth from './pages/Auth';
@@ -45,6 +46,7 @@ export default function App() {
     <AuthProvider>
       <CartProvider>
         <FeatureProvider>
+        <ShiftProvider>
         <PrinterProvider>
         <Router>
           <Routes>
@@ -112,6 +114,7 @@ export default function App() {
         </Routes>
       </Router>
         </PrinterProvider>
+        </ShiftProvider>
         </FeatureProvider>
         </CartProvider>
       <Toaster />

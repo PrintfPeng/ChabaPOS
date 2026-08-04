@@ -92,7 +92,7 @@ export class CustomersService {
               totalAmount: true,
               discountAmount: true,
               orderType: true,
-              deliveryProvider: true,
+              deliveryPlatform: true,
               createdAt: true,
             },
           },

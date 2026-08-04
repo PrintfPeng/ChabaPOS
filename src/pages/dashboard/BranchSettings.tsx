@@ -5,8 +5,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { 
-  Loader2, QrCode, Save, Plus, Lock, Printer, Bluetooth, BluetoothOff, 
-  CheckCircle2, WifiOff, BadgePercent, ArrowRight, Settings2 
+  Loader2, QrCode, Save, Plus, Lock, Printer, Bluetooth, BluetoothOff, CheckCircle2, WifiOff
 } from 'lucide-react';
 import { useBranch } from '../../hooks/useBranches';
 import { usePrinter } from '../../context/PrinterContext';
@@ -16,7 +15,20 @@ import { ImageUpload } from '../../components/ImageUpload';
 import { uploadImageToSupabase } from '../../lib/supabase-storage';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { cn } from '../../lib/utils';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 import KitchenManagement from './KitchenManagement';
 import MenuManagement from './MenuManagement';
@@ -36,16 +48,28 @@ export default function BranchSettings() {
   const [isSavingPin, setIsSavingPin] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Point Collection Rate State
-  const [isRewardRateDialogOpen, setIsRewardRateDialogOpen] = useState(false);
-  const [rewardRateInput, setRewardRateInput] = useState('');
-  const [isSavingRewardRate, setIsSavingRewardRate] = useState(false);
+  // New Fields State
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [bankType, setBankType] = useState('');
+  const [bankAccountNo, setBankAccountNo] = useState('');
+  const [bankAccountName, setBankAccountName] = useState('');
+
 
   useEffect(() => {
     if (branch) {
       setQrCodeUrl(branch.qrCodeUrl || '');
       setPin(''); // Reset to empty instead of branch.pin so they don't see it
       setConfirmPin('');
+      setAddress(branch.address || '');
+      setPhone(branch.phone || '');
+      setLatitude(branch.latitude || null);
+      setLongitude(branch.longitude || null);
+      setBankType(branch.bankType || '');
+      setBankAccountNo(branch.bankAccountNo || '');
+      setBankAccountName(branch.bankAccountName || '');
     }
   }, [branch]);
 
@@ -63,7 +87,14 @@ export default function BranchSettings() {
       }
 
       await updateBranch({
-        qrCodeUrl: finalQrCodeUrl
+        qrCodeUrl: finalQrCodeUrl,
+        address: address || null,
+        phone: phone || null,
+        latitude: latitude,
+        longitude: longitude,
+        bankType: bankType || null,
+        bankAccountNo: bankAccountNo || null,
+        bankAccountName: bankAccountName || null,
       });
       setQrCodeUrl(finalQrCodeUrl);
       setSelectedFile(null);
@@ -97,29 +128,6 @@ export default function BranchSettings() {
     }
   };
 
-  const openRewardRateDialog = () => {
-    setRewardRateInput(String(branch?.rewardPointRate ?? 100));
-    setIsRewardRateDialogOpen(true);
-  };
-
-  const handleSaveRewardRate = async () => {
-    const parsed = parseFloat(rewardRateInput);
-    if (!rewardRateInput || isNaN(parsed) || parsed < 1) {
-      return toast.error('กรุณากรอกตัวเลขที่ถูกต้อง (ขั้นต่ำ 1 บาท)');
-    }
-    setIsSavingRewardRate(true);
-    try {
-      await updateBranch({ rewardPointRate: parsed });
-      toast.success(`บันทึกสำเร็จ — ทุก ฿${parsed.toLocaleString()} = 1 แต้ม`);
-      setIsRewardRateDialogOpen(false);
-    } catch {
-      toast.error('บันทึกไม่สำเร็จ กรุณาลองใหม่');
-    } finally {
-      setIsSavingRewardRate(false);
-    }
-  };
-
-  const rewardPresets = [25, 50, 100, 200];
 
   if (isLoading) {
     return (
@@ -159,6 +167,69 @@ export default function BranchSettings() {
         <TabsContent value="general" className="space-y-6 mt-0 animate-fade-in">
           <Card>
             <CardHeader>
+              <CardTitle>ข้อมูลพื้นฐาน</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>ชื่อสาขา</Label>
+                <Input value={branch?.name} disabled />
+              </div>
+              <div className="space-y-2">
+                <Label>แบรนด์</Label>
+                <Input value={branch?.brand?.name} disabled />
+              </div>
+              <div className="space-y-2">
+                <Label>ที่อยู่ร้าน (Address)</Label>
+                <textarea
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                  rows={3}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="กรอกที่อยู่สาขา"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>เบอร์โทรศัพท์ร้าน</Label>
+                <Input 
+                  value={phone} 
+                  onChange={(e) => setPhone(e.target.value)} 
+                  placeholder="08X-XXX-XXXX" 
+                />
+              </div>
+              
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-base font-semibold">พิกัดร้านบนแผนที่ (Latitude / Longitude)</Label>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                   <div className="space-y-1">
+                     <Label className="text-xs text-slate-500">Latitude</Label>
+                     <Input type="number" step="any" value={latitude ?? ''} onChange={e => setLatitude(parseFloat(e.target.value) || null)} placeholder="13.7563" />
+                   </div>
+                   <div className="space-y-1">
+                     <Label className="text-xs text-slate-500">Longitude</Label>
+                     <Input type="number" step="any" value={longitude ?? ''} onChange={e => setLongitude(parseFloat(e.target.value) || null)} placeholder="100.5018" />
+                   </div>
+                </div>
+                <div className="h-[300px] w-full rounded-xl overflow-hidden border z-0 relative">
+                  <MapContainer 
+                    center={[latitude || 13.7563, longitude || 100.5018]} 
+                    zoom={13} 
+                    style={{ height: '100%', width: '100%' }}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <MapClickHandler setLat={(l) => setLatitude(l)} setLng={(l) => setLongitude(l)} />
+                    {latitude && longitude && <Marker position={[latitude, longitude]} />}
+                  </MapContainer>
+                </div>
+                <p className="text-xs text-slate-500">คลิกบนแผนที่เพื่อปักหมุดพิกัดร้านของคุณ</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <QrCode className="w-5 h-5 text-primary" />
                 การชำระเงินผ่านการโอน
@@ -178,52 +249,47 @@ export default function BranchSettings() {
                 />
               </div>
 
-              <div className="pt-4 flex justify-end">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>ธนาคาร / ประเภท</Label>
+                  <Select value={bankType} onValueChange={setBankType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="เลือกธนาคาร" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PromptPay">พร้อมเพย์ (PromptPay)</SelectItem>
+                      <SelectItem value="KBANK">กสิกรไทย (KBANK)</SelectItem>
+                      <SelectItem value="SCB">ไทยพาณิชย์ (SCB)</SelectItem>
+                      <SelectItem value="BBL">กรุงเทพ (BBL)</SelectItem>
+                      <SelectItem value="KTB">กรุงไทย (KTB)</SelectItem>
+                      <SelectItem value="BAY">กรุงศรีอยุธยา (BAY)</SelectItem>
+                      <SelectItem value="TTB">ทีทีบี (TTB)</SelectItem>
+                      <SelectItem value="OTHER">อื่นๆ</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>เลขบัญชี / เบอร์พร้อมเพย์</Label>
+                  <Input 
+                    value={bankAccountNo} 
+                    onChange={e => setBankAccountNo(e.target.value)} 
+                    placeholder="เลขบัญชี 10-15 หลัก"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>ชื่อบัญชี</Label>
+                  <Input 
+                    value={bankAccountName} 
+                    onChange={e => setBankAccountName(e.target.value)} 
+                    placeholder="นาย ทดสอบ ระบบ"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end mt-4">
                 <Button onClick={handleSave} disabled={isSaving} className="gap-2 px-8">
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   บันทึกการตั้งค่า
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BadgePercent className="w-5 h-5 text-violet-500" />
-                ระบบสะสมแต้ม
-              </CardTitle>
-              <CardDescription>
-                ตั้งค่าอัตราการแจกแต้มสะสมสำหรับสมาชิกเมื่อมียอดใช้จ่ายตามกำหนด
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-violet-100 bg-violet-50/40">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-violet-500 rounded-xl text-white shrink-0">
-                    <BadgePercent className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      อัตราสะสมแต้มปัจจุบัน
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <h3 className="text-lg font-black text-slate-900 leading-none">
-                        ฿{(branch?.rewardPointRate ?? 100).toLocaleString()}
-                      </h3>
-                      <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="text-sm font-black text-violet-600 leading-none">1 แต้ม</span>
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={openRewardRateDialog}
-                  className="rounded-xl font-bold gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 shrink-0"
-                >
-                  <Settings2 className="w-3.5 h-3.5" />
-                  แก้ไขอัตราแต้ม
                 </Button>
               </div>
             </CardContent>
@@ -265,7 +331,7 @@ export default function BranchSettings() {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-start">
+              <div className="flex justify-end mt-4">
                 <Button onClick={handleSavePin} disabled={isSavingPin} className="gap-2 px-8">
                   {isSavingPin ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   บันทึกรหัส PIN
@@ -275,22 +341,6 @@ export default function BranchSettings() {
           </Card>
 
           <PrinterCard />
-
-          <Card>
-            <CardHeader>
-              <CardTitle>ข้อมูลพื้นฐาน</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>ชื่อสาขา</Label>
-                <Input value={branch?.name} disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>แบรนด์</Label>
-                <Input value={branch?.brand?.name} disabled />
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="kitchens" className="mt-0 animate-fade-in">
@@ -306,85 +356,19 @@ export default function BranchSettings() {
         </TabsContent>
       </Tabs>
 
-      {/* Reward Rate Dialog */}
-      <Dialog open={isRewardRateDialogOpen} onOpenChange={setIsRewardRateDialogOpen}>
-        <DialogContent className="rounded-2xl sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <BadgePercent className="w-5 h-5 text-violet-600" />
-              ตั้งค่าอัตราการแจกแต้ม
-            </DialogTitle>
-          </DialogHeader>
 
-          <div className="space-y-5 py-2">
-            {/* Current rate display */}
-            <div className="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
-              <p className="text-xs text-slate-400 font-semibold mb-1">อัตราปัจจุบัน</p>
-              <p className="text-lg font-black text-slate-700">
-                ฿{(branch?.rewardPointRate ?? 100).toLocaleString()} = 1 แต้ม
-              </p>
-            </div>
-
-            {/* Preset quick select */}
-            <div>
-              <p className="text-xs font-bold text-slate-500 mb-2">เลือกอัตราสำเร็จรูป</p>
-              <div className="grid grid-cols-4 gap-2">
-                {rewardPresets.map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setRewardRateInput(String(p))}
-                    className={cn(
-                      'py-2 rounded-xl border-2 text-sm font-black transition-all cursor-pointer',
-                      rewardRateInput === String(p)
-                        ? 'border-violet-500 bg-violet-50 text-violet-700'
-                        : 'border-slate-100 text-slate-500 hover:border-slate-200',
-                    )}
-                  >
-                    ฿{p}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Custom input */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-500">หรือกำหนดเอง (บาท / 1 แต้ม)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-slate-400 pointer-events-none">฿</span>
-                <Input
-                  type="number"
-                  min={1}
-                  step={1}
-                  placeholder="100"
-                  value={rewardRateInput}
-                  onChange={(e) => setRewardRateInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveRewardRate()}
-                  className="pl-7 h-11 rounded-xl font-bold text-lg"
-                />
-              </div>
-              {rewardRateInput && !isNaN(parseFloat(rewardRateInput)) && parseFloat(rewardRateInput) >= 1 && (
-                <p className="text-xs text-violet-600 font-semibold flex items-center gap-1.5 pl-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  ลูกค้าจ่ายทุก ฿{parseFloat(rewardRateInput).toLocaleString()} จะได้ 1 แต้ม
-                </p>
-              )}
-            </div>
-
-            <Button
-              onClick={handleSaveRewardRate}
-              disabled={isSavingRewardRate}
-              className="w-full h-11 rounded-xl font-bold bg-violet-600 hover:bg-violet-700"
-            >
-              {isSavingRewardRate
-                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                : <CheckCircle2 className="w-4 h-4 mr-2" />}
-              บันทึกอัตราใหม่
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
+}
+
+function MapClickHandler({ setLat, setLng }: { setLat: (l: number) => void, setLng: (l: number) => void }) {
+  useMapEvents({
+    click(e) {
+      setLat(e.latlng.lat);
+      setLng(e.latlng.lng);
+    },
+  });
+  return null;
 }
 
 function PrinterCard() {
@@ -457,7 +441,7 @@ function PrinterCard() {
         </div>
 
         {/* Action button */}
-        <div className="flex gap-3">
+        <div className="flex justify-end gap-3 mt-4">
           {isConnected ? (
             <Button
               variant="outline"

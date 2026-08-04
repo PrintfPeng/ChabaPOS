@@ -11,4 +11,32 @@ export class UpdateBranchDto extends PartialType(CreateBranchDto) {
   @IsOptional()
   @Min(1)
   rewardPointRate?: number;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  bankType?: string;
+
+  @IsOptional()
+  @IsString()
+  bankAccountNo?: string;
+
+  @IsOptional()
+  @IsString()
+  bankAccountName?: string;
 }

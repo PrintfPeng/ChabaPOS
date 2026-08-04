@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useBranches, Branch } from '../hooks/useBranches';
+import { useBrands } from '../hooks/useBrands';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Plus, MapPin, ChevronLeft, Loader2, Edit2 } from 'lucide-react';
@@ -15,7 +16,8 @@ export default function BranchSelection() {
   const { brandId } = useParams<{ brandId: string }>();
   const navigate = useNavigate();
   const { branches, isLoading, createBranch, updateBranch } = useBranches(Number(brandId));
-  
+  const { brands } = useBrands();
+  const currentBrand = brands.find(b => b.id === Number(brandId));
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -99,6 +101,7 @@ export default function BranchSelection() {
               <ChevronLeft className="w-5 h-5 sm:w-6 h-6" />
             </Button>
             <div className="min-w-0">
+              {currentBrand && <div className="text-sm text-primary font-semibold truncate mb-1">{currentBrand.name}</div>}
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 truncate">สาขา</h1>
               <p className="text-slate-500 text-sm">เลือกสาขาเพื่อเปิด POS</p>
             </div>
