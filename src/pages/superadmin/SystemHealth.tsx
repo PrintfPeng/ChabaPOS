@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../lib/api';
+import { toast } from 'sonner';
 import {
   Activity, Database, Clock, MemoryStick, AlertTriangle,
-  AlertCircle, Info, Zap, RefreshCw, Filter, ChevronLeft, ChevronRight,
+  AlertCircle, Info, Zap, RefreshCw, Filter, ChevronLeft, ChevronRight, Trash2,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -78,6 +79,9 @@ export default function SystemHealth() {
   const [module, setModule] = useState('');
   const [page,   setPage]   = useState(1);
 
+  const [clearing,   setClearing]   = useState(false);
+  const [clearRange, setClearRange] = useState('7d');
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -99,6 +103,34 @@ export default function SystemHealth() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const applyFilters = (e: React.FormEvent) => { e.preventDefault(); setPage(1); fetchAll(); };
+
+  const handleClearLogs = useCallback(async () => {
+    const labels: Record<string, string> = {
+      '1d': '1 วัน', '7d': '7 วัน', '30d': '30 วัน', 'all': 'ทั้งหมด',
+    };
+    const label = labels[clearRange] ?? clearRange;
+    if (!window.confirm(`ลบ Log ที่เก่ากว่า ${label} ออก?\nไม่สามารถกู้คืนได้`)) return;
+
+    setClearing(true);
+    try {
+      let before: string | undefined;
+      if (clearRange !== 'all') {
+        const days = parseInt(clearRange);
+        const d = new Date(Date.now() - days * 86400_000);
+        before = d.toISOString();
+      }
+      const res = await api.delete<{ deleted: number }>('/super-admin/health/logs', {
+        params: before ? { before } : {},
+      });
+      toast.success(`ลบ Log สำเร็จ ${res.data.deleted} รายการ`);
+      setPage(1);
+      fetchAll();
+    } catch {
+      toast.error('ลบ Log ไม่สำเร็จ');
+    } finally {
+      setClearing(false);
+    }
+  }, [clearRange, fetchAll]);
 
   const totalPages = logsRes ? Math.ceil(logsRes.total / logsRes.limit) : 1;
 
@@ -224,11 +256,31 @@ export default function SystemHealth() {
 
       {/* Logs table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm font-black text-slate-700">
             System Logs
             {logsRes && <span className="ml-2 text-slate-400 font-semibold">({logsRes.total.toLocaleString()} รายการ)</span>}
           </p>
+          <div className="flex items-center gap-2">
+            <select
+              value={clearRange}
+              onChange={e => setClearRange(e.target.value)}
+              className="h-8 rounded-lg border border-slate-200 px-2 text-xs text-slate-600 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-400"
+            >
+              <option value="1d">เก่ากว่า 1 วัน</option>
+              <option value="7d">เก่ากว่า 7 วัน</option>
+              <option value="30d">เก่ากว่า 30 วัน</option>
+              <option value="all">ทั้งหมด</option>
+            </select>
+            <button
+              onClick={handleClearLogs}
+              disabled={clearing || loading}
+              className="h-8 flex items-center gap-1.5 px-3 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-xs font-bold hover:bg-rose-100 disabled:opacity-40 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {clearing ? 'กำลังลบ...' : 'Clear Logs'}
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">

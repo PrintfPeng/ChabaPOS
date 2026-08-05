@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Query, Body, UseGuards,
+  Controller, Get, Post, Delete, Query, Body, UseGuards,
   ParseIntPipe, DefaultValuePipe, Inject,
 } from '@nestjs/common';
 import { HealthService } from './health.service';
@@ -58,5 +58,11 @@ export class HealthController {
   @Post('logs')
   createLog(@Body(validateBody(CreateLogDto)) dto: CreateLogDto) {
     return this.healthService.createLog(dto);
+  }
+
+  @Delete('logs')
+  clearLogs(@Query('before') before?: string) {
+    const beforeDate = before ? new Date(before) : undefined;
+    return this.healthService.clearLogs(beforeDate);
   }
 }

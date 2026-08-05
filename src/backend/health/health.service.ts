@@ -107,6 +107,12 @@ export class HealthService {
     });
   }
 
+  async clearLogs(before?: Date) {
+    const where = before ? { createdAt: { lt: before } } : {};
+    const { count } = await this.prisma.systemLog.deleteMany({ where });
+    return { deleted: count };
+  }
+
   private hoursAgo(h: number): Date {
     return new Date(Date.now() - h * 60 * 60 * 1000);
   }
