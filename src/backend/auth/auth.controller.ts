@@ -1,9 +1,10 @@
-import { Controller, Post, Body, UnauthorizedException, Logger, Inject } from '@nestjs/common';
+﻿import { Controller, Post, Body, UnauthorizedException, Logger, Inject, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { Public } from './public.decorator';
 import { validateBody } from '../common/validate-body';
+import { ThrottleGuard } from './throttle.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -16,6 +17,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(ThrottleGuard)
   @Post('login')
   async login(@Body(validateBody(LoginDto)) body: LoginDto) {
     this.logger.log(`Login attempt for: ${body.email}`);
@@ -34,7 +36,6 @@ export class AuthController {
     return this.authService.register(body);
   }
 
-  /** Full tenant onboarding with plan selection and payment slip. Returns success message only (no JWT). */
   @Public()
   @Post('register-tenant')
   async registerTenant(@Body(validateBody(RegisterTenantDto)) body: RegisterTenantDto) {

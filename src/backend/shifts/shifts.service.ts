@@ -22,14 +22,23 @@ export class ShiftsService {
 
     await this.prisma.branch.findUniqueOrThrow({ where: { id: branchId } });
 
-    return this.prisma.shift.create({
-      data: {
-        branchId,
-        openedById: userId,
-        startingCash: dto.startingCash,
-        status: 'OPEN',
-      },
-    });
+    // FIX E1: catch P2002 from a unique-constraint race (two staff opening
+    // simultaneously both pass the check above, but only one can commit).
+    try {
+      return await this.prisma.shift.create({
+        data: {
+          branchId,
+          openedById:   userId,
+          startingCash: dto.startingCash,
+          status:       'OPEN',
+        },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') {
+        throw new BadRequestException('มีกะที่เปิดอยู่แล้ว กรุณาปิดกะเดิมก่อน');
+      }
+      throw e;
+    }
   }
 
   async closeShift(branchId: number, userId: number, dto: CloseShiftDto) {

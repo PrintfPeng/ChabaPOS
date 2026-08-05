@@ -1,14 +1,18 @@
-import { Controller, Get, Post, Body, Param, Patch, UseGuards, Query, ParseIntPipe, Inject, Logger, Request } from '@nestjs/common';
+﻿import {
+  Controller, Get, Post, Delete, Body, Param, Patch,
+  Query, ParseIntPipe, Inject, Logger, Request, UseGuards,
+} from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderAtTableDto } from './dto/create-order-at-table.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Public } from '../auth/public.decorator';
+import { ThrottleGuard } from '../auth/throttle.guard';
 import { validateBody } from '../common/validate-body';
 
 @Controller('orders')
 export class OrdersController {
   private readonly logger = new Logger(OrdersController.name);
+
   constructor(@Inject(OrdersService) private readonly ordersService: OrdersService) {
     if (!this.ordersService) {
       this.logger.error('OrdersService failed to inject!');
@@ -17,30 +21,42 @@ export class OrdersController {
     }
   }
 
-  /**
-   * ออเดอร์จากหน้าสั่งอาหาร QR — ไม่ต้องล็อกอิน แต่ต้องมี QR ของโต๊ะ
-   * สาขา/โต๊ะ/สมาชิก/ส่วนลด คำนวณฝั่ง server ทั้งหมด
-   */
+  /** QR self-order — no login required, but needs a valid QR code */
+  /** FIX H4: ThrottleGuard limits spam orders per IP */
   @Public()
+  @UseGuards(ThrottleGuard)
   @Post('at-table')
   createAtTable(@Body(validateBody(CreateOrderAtTableDto)) dto: CreateOrderAtTableDto) {
     return this.ordersService.createAtTable(dto);
   }
 
-  /** ออเดอร์จากพนักงาน (หน้าร้าน / delivery) — ต้องล็อกอินและเป็นเจ้าของสาขา */
+  /** Staff / delivery order — must be logged in and own the branch */
   @Post()
-  create(@Request() req, @Body(validateBody(CreateOrderDto)) createOrderDto: CreateOrderDto) {
-    return this.ordersService.createAsStaff(req.user.userId, createOrderDto);
+  create(@Request() req, @Body(validateBody(CreateOrderDto)) dto: CreateOrderDto) {
+    return this.ordersService.createAsStaff(req.user.userId, dto);
   }
 
+  /** FIX M7: Accepts optional page/limit for pagination */
   @Get()
-  findAll(@Query('branchId', ParseIntPipe) branchId: number) {
-    return this.ordersService.findAllByBranch(branchId);
+  findAll(
+    @Query('branchId', ParseIntPipe) branchId: number,
+    @Query('page')  page?:  string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.ordersService.findAllByBranch(
+      branchId,
+      page  ? parseInt(page,  10) : 1,
+      limit ? parseInt(limit, 10) : 50,
+    );
   }
 
+  /** FIX C2: passes userId so the service can verify kitchen ownership */
   @Get('kitchen/:id')
-  findByKitchen(@Param('id', ParseIntPipe) kitchenId: number) {
-    return this.ordersService.findByKitchen(kitchenId);
+  findByKitchen(
+    @Request() req,
+    @Param('id', ParseIntPipe) kitchenId: number,
+  ) {
+    return this.ordersService.findByKitchen(req.user.userId, kitchenId);
   }
 
   @Get('branch/:branchId/kitchen-items')
@@ -58,26 +74,39 @@ export class OrdersController {
     return this.ordersService.findUnpaidByTable(tableId);
   }
 
+  /** FIX C1: passes userId so the service can assert branch ownership */
   @Post('table/:tableId/pay')
   completePayment(
+    @Request() req,
     @Param('tableId', ParseIntPipe) tableId: number,
-    @Body('paymentType') paymentType: 'CASH' | 'TRANSFER',
-    @Body('customerId')  customerId?: number,
-    @Body('promotionId') promotionId?: number,
+    @Body('paymentType')   paymentType:    'CASH' | 'TRANSFER',
+    @Body('customerId')    customerId?:    number,
+    @Body('promotionId')   promotionId?:   number,
     @Body('discountAmount') discountAmount?: number,
   ) {
-    return this.ordersService.completePayment(tableId, paymentType, {
+    return this.ordersService.completePayment(req.user.userId, tableId, paymentType, {
       customerId:     customerId     ? Number(customerId)     : undefined,
       promotionId:    promotionId    ? Number(promotionId)    : undefined,
       discountAmount: discountAmount ? Number(discountAmount) : undefined,
     });
   }
 
+  /** FIX C2: passes userId so the service can verify ownership before status change */
   @Patch('items/:id/status')
   updateItemStatus(
+    @Request() req,
     @Param('id', ParseIntPipe) itemId: number,
     @Body('status') status: string,
   ) {
-    return this.ordersService.updateItemStatus(itemId, status);
+    return this.ordersService.updateItemStatus(req.user.userId, itemId, status);
+  }
+
+  /** FIX M3: cancel an order and release the table when no orders remain */
+  @Delete(':id')
+  cancelOrder(
+    @Request() req,
+    @Param('id', ParseIntPipe) orderId: number,
+  ) {
+    return this.ordersService.cancelOrder(req.user.userId, orderId);
   }
 }

@@ -1,4 +1,7 @@
-import { IsString, IsArray, ValidateNested, IsOptional, IsInt, MinLength, MaxLength, Matches } from 'class-validator';
+import {
+  IsString, IsArray, ValidateNested, IsOptional, IsInt,
+  MinLength, MaxLength, Matches, Min, ArrayMinSize,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class AtTableOptionDto {
@@ -10,7 +13,9 @@ class AtTableItemDto {
   @IsInt()
   menuItemId: number;
 
+  /** FIX H1: quantity must be at least 1 */
   @IsInt()
+  @Min(1)
   quantity: number;
 
   @IsArray()
@@ -27,16 +32,17 @@ class AtTableItemDto {
 /**
  * Order placed from the QR page.
  *
- * Deliberately omits branchId, tableId, customerId and discountAmount: each of
- * those decides who gets billed, who earns points, or how much is taken off, so
- * the server derives them instead of accepting them.
+ * branchId, tableId, customerId and discountAmount are intentionally
+ * absent — the server derives them to prevent client-side tampering.
  */
 export class CreateOrderAtTableDto {
   @IsString()
   @MinLength(1)
   qrCode: string;
 
+  /** FIX E2: order must have at least one item */
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => AtTableItemDto)
   items: AtTableItemDto[];
@@ -45,7 +51,6 @@ export class CreateOrderAtTableDto {
   @IsOptional()
   notes?: string;
 
-  /** Resolved to a member of this branch, or ignored if it matches nobody. */
   @IsString()
   @IsOptional()
   @MinLength(9)

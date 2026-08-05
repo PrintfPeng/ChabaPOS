@@ -149,33 +149,34 @@ export class PurchaseOrdersService {
       });
       if (count === 0) throw new BadRequestException('ใบสั่งซื้อนี้ได้รับการดำเนินการแล้ว หรือถูกยกเลิกแล้ว');
 
+      // FIX E5: fetch all valid rawMaterialIds from the original PO before touching stock
+      const poItems = await tx.purchaseOrderItem.findMany({
+        where:  { purchaseOrderId: id },
+        select: { id: true, rawMaterialId: true },
+      });
+      const validIds = new Set(poItems.map(p => p.rawMaterialId));
+
       // 2. Loop through each received item
       for (const item of dto.items) {
-        // Increment stock
+        // E5: reject any rawMaterialId that was not part of this PO
+        if (!validIds.has(item.rawMaterialId)) {
+          throw new BadRequestException(
+            `วัตถุดิบ ID ${item.rawMaterialId} ไม่ได้อยู่ในใบสั่งซื้อนี้`,
+          );
+        }
+
+        // Increment stock only for validated materials
         await tx.rawMaterial.update({
           where: { id: item.rawMaterialId },
-          data: {
-            stock: {
-              increment: item.actualQuantity,
-            },
-          },
+          data:  { stock: { increment: item.actualQuantity } },
         });
 
-        // Find and update item quantity and price
-        const poItem = await tx.purchaseOrderItem.findFirst({
-          where: {
-            purchaseOrderId: id,
-            rawMaterialId: item.rawMaterialId,
-          },
-        });
-
+        // Update item quantity and price
+        const poItem = poItems.find(p => p.rawMaterialId === item.rawMaterialId);
         if (poItem) {
           await tx.purchaseOrderItem.update({
             where: { id: poItem.id },
-            data: {
-              quantity: item.actualQuantity,
-              price: item.pricePerUnit,
-            },
+            data:  { quantity: item.actualQuantity, price: item.pricePerUnit },
           });
         }
       }

@@ -1,6 +1,8 @@
-import { IsNumber, IsString, IsArray, ValidateNested, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsNumber, IsString, IsArray, ValidateNested, IsOptional,
+  IsBoolean, IsInt, Min, ArrayMinSize, ValidateIf, IsNotEmpty,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { IsInt } from 'class-validator';
 
 class OrderOptionDto {
   @IsNumber()
@@ -11,7 +13,9 @@ class OrderItemDto {
   @IsNumber()
   menuItemId: number;
 
+  /** FIX H1: quantity must be at least 1 */
   @IsNumber()
+  @Min(1)
   quantity: number;
 
   @IsArray()
@@ -37,7 +41,9 @@ export class CreateOrderDto {
   @IsOptional()
   source?: 'CUSTOMER' | 'STAFF' | 'QR';
 
+  /** FIX E2: order must have at least one item */
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
   items: OrderItemDto[];
@@ -74,7 +80,17 @@ export class CreateOrderDto {
   @IsOptional()
   orderType?: string;
 
+  /** FIX E4: deliveryPlatform is required when orderType is DELIVERY */
+  @ValidateIf(o => o.orderType === 'DELIVERY')
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   deliveryPlatform?: string;
+
+  /** FIX L1: the specific delivery platform record for per-platform pricing */
+  @ValidateIf(o => o.orderType === 'DELIVERY')
+  @IsInt()
+  @IsOptional()
+  deliveryPlatformId?: number;
+
+  shiftId?: string;
 }

@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { BrandStatusGuard } from './auth/brand-status.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { BrandsModule } from './brands/brands.module';
@@ -55,6 +56,11 @@ import { ShiftsModule } from './shifts/shifts.module';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // FIX H3: blocks suspended/expired brands on all authenticated routes
+    {
+      provide: APP_GUARD,
+      useClass: BrandStatusGuard,
     },
   ],
 })

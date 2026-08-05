@@ -1,7 +1,13 @@
-import { Injectable, ForbiddenException, NotFoundException, Inject, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable, ForbiddenException, NotFoundException, Inject, UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
+
+const PIN_SALT_ROUNDS = 10;
 
 @Injectable()
 export class BranchesService {
@@ -27,7 +33,12 @@ export class BranchesService {
 
   async create(userId: number, dto: CreateBranchDto) {
     await this.assertBrandOwner(userId, dto.brandId);
-    return this.prisma.branch.create({ data: dto });
+    const data: any = { ...dto };
+    // C4: hash PIN before persisting if provided at creation time
+    if (data.pin) {
+      data.pin = await bcrypt.hash(data.pin, PIN_SALT_ROUNDS);
+    }
+    return this.prisma.branch.create({ data });
   }
 
   async findByBrand(userId: number, brandId: number) {
@@ -37,20 +48,35 @@ export class BranchesService {
 
   async findOne(userId: number, id: number) {
     await this.assertBranchOwner(userId, id);
-    const branch = await this.prisma.branch.findUnique({
+    return this.prisma.branch.findUnique({
       where: { id },
       include: { brand: { select: { id: true, name: true, userId: true } } },
     });
-    return branch;
   }
 
   async update(userId: number, id: number, dto: UpdateBranchDto) {
     await this.assertBranchOwner(userId, id);
-    return this.prisma.branch.update({ where: { id }, data: dto });
+    const data: any = { ...dto };
+    // FIX C4: hash the new PIN before writing to the database
+    if (data.pin) {
+      data.pin = await bcrypt.hash(data.pin, PIN_SALT_ROUNDS);
+    }
+    return this.prisma.branch.update({ where: { id }, data });
   }
 
   async remove(userId: number, id: number) {
     await this.assertBranchOwner(userId, id);
+
+    // FIX H5: refuse to delete a branch that has occupied tables
+    const occupiedCount = await this.prisma.table.count({
+      where: { zone: { branchId: id }, status: 'OCCUPIED' },
+    });
+    if (occupiedCount > 0) {
+      throw new BadRequestException(
+        `ไม่สามารถลบสาขาได้ มีโต๊ะที่มีลูกค้าอยู่ ${occupiedCount} โต๊ะ กรุณาชำระเงินก่อน`,
+      );
+    }
+
     return this.prisma.branch.delete({ where: { id } });
   }
 
@@ -62,11 +88,7 @@ export class BranchesService {
           include: {
             items: {
               include: {
-                optionGroups: {
-                  include: {
-                    options: true,
-                  },
-                },
+                optionGroups: { include: { options: true } },
                 deliveryPrices: true,
               },
               orderBy: { id: 'asc' },
@@ -80,19 +102,24 @@ export class BranchesService {
 
   async getTables(id: number) {
     return this.prisma.table.findMany({
-      where: { zone: { branchId: id } },
+      where:   { zone: { branchId: id } },
       include: { zone: true },
       orderBy: { name: 'asc' },
     });
   }
 
+  /** FIX C4: Compares against the bcrypt hash stored in DB, not plaintext. */
   async verifyPin(userId: number, id: number, pin: string) {
     await this.assertBranchOwner(userId, id);
     const branch = await this.prisma.branch.findUnique({
-      where: { id },
+      where:  { id },
       select: { pin: true },
     });
-    if (!branch?.pin || branch.pin !== pin) {
+    if (!branch?.pin) {
+      throw new UnauthorizedException('สาขานี้ยังไม่ได้ตั้งรหัส PIN');
+    }
+    const valid = await bcrypt.compare(pin, branch.pin);
+    if (!valid) {
       throw new UnauthorizedException('รหัส PIN ไม่ถูกต้อง');
     }
     return { success: true };
