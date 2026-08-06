@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsOptional, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsIn, IsInt, IsOptional, IsNumber, Min, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PurchaseOrderItemDto {
@@ -29,6 +29,7 @@ export class CreatePurchaseOrderDto {
 
 export class UpdatePurchaseOrderStatusDto {
   @IsString()
+  @IsIn(['PENDING', 'COMPLETED', 'CANCELLED'])
   status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
 }
 
@@ -37,6 +38,7 @@ export class ReceivePurchaseOrderItemDto {
   rawMaterialId: number;
 
   @IsNumber()
+  @Min(0)
   actualQuantity: number;
 
   @IsNumber()

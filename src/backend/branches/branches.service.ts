@@ -67,6 +67,13 @@ export class BranchesService {
   async remove(userId: number, id: number) {
     await this.assertBranchOwner(userId, id);
 
+    const openShift = await this.prisma.shift.findFirst({
+      where: { branchId: id, status: 'OPEN' },
+    });
+    if (openShift) {
+      throw new BadRequestException('ไม่สามารถลบสาขาได้ มีกะที่ยังเปิดอยู่ กรุณาปิดกะก่อน');
+    }
+
     // FIX H5: refuse to delete a branch that has occupied tables
     const occupiedCount = await this.prisma.table.count({
       where: { zone: { branchId: id }, status: 'OCCUPIED' },

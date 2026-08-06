@@ -62,7 +62,10 @@ export class HealthController {
 
   @Delete('logs')
   clearLogs(@Query('before') before?: string) {
-    const beforeDate = before ? new Date(before) : undefined;
+    // C5: default to 30 days ago to prevent accidental full log wipe
+    const beforeDate = before
+      ? new Date(before)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     return this.healthService.clearLogs(beforeDate);
   }
 }

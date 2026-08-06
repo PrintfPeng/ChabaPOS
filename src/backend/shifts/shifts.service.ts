@@ -1,4 +1,4 @@
-import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { CloseShiftDto } from './dto/close-shift.dto';
@@ -6,6 +6,16 @@ import { CloseShiftDto } from './dto/close-shift.dto';
 @Injectable()
 export class ShiftsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  private async assertBranchOwner(userId: number, branchId: number) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { brand: { select: { userId: true } } },
+    });
+    if (!branch || branch.brand.userId !== userId) {
+      throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+    }
+  }
 
   async getCurrentShift(branchId: number) {
     return this.prisma.shift.findFirst({
@@ -15,6 +25,8 @@ export class ShiftsService {
   }
 
   async openShift(branchId: number, userId: number, dto: OpenShiftDto) {
+    await this.assertBranchOwner(userId, branchId);
+
     const existing = await this.getCurrentShift(branchId);
     if (existing) {
       throw new BadRequestException('มีกะที่เปิดอยู่แล้ว กรุณาปิดกะเดิมก่อน');
@@ -42,6 +54,8 @@ export class ShiftsService {
   }
 
   async closeShift(branchId: number, userId: number, dto: CloseShiftDto) {
+    await this.assertBranchOwner(userId, branchId);
+
     const shift = await this.getCurrentShift(branchId);
     if (!shift) {
       throw new NotFoundException('ไม่พบกะที่เปิดอยู่');

@@ -30,6 +30,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(ThrottleGuard)
   @Post('register')
   async register(@Body(validateBody(RegisterDto)) body: RegisterDto) {
     this.logger.log(`Registration attempt for: ${body.email}`);
@@ -37,6 +38,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(ThrottleGuard)
   @Post('register-tenant')
   async registerTenant(@Body(validateBody(RegisterTenantDto)) body: RegisterTenantDto) {
     this.logger.log(`Tenant registration for: ${body.email}`);

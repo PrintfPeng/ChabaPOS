@@ -80,7 +80,7 @@ export class AuthService {
     const existingEmail = await this.prisma.user.findUnique({ where: { email: trimmedEmail } });
     if (existingEmail) {
       this.logger.warn(`[AuthService] Email already exists: ${trimmedEmail}`);
-      throw new UnauthorizedException('อีเมลนี้ถูกใช้งานแล้ว');
+      throw new ConflictException('อีเมลนี้ถูกใช้งานแล้ว');
     }
 
     try {

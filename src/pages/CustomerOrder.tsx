@@ -424,7 +424,7 @@ export default function CustomerOrder() {
         const [menuRes, tableRes, promoRes] = await Promise.all([
           api.get(`/branches/${branchId}/menu`),
           api.get(`/tables/by-qrcode/${tableId}`),
-          api.get(`/promotions?branchId=${branchId}&activeOnly=true`).catch(() => ({ data: [] })),
+          api.get(`/promotions/at-table?qrCode=${tableId}`).catch(() => ({ data: [] })),
         ]);
         const cats: Category[] = menuRes.data.categories || [];
         setCategories(cats);

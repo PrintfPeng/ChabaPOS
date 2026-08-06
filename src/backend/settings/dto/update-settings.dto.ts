@@ -1,14 +1,17 @@
 import { IsString, IsOptional } from 'class-validator';
 
 export class UpdateSettingsDto {
+  @IsOptional()
   @IsString()
-  bankName: string;
+  bankName?: string;
 
+  @IsOptional()
   @IsString()
-  accountName: string;
+  accountName?: string;
 
+  @IsOptional()
   @IsString()
-  accountNumber: string;
+  accountNumber?: string;
 
   @IsOptional()
   @IsString()

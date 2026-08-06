@@ -303,16 +303,20 @@ export class OrdersService {
 
   // ─── Query helpers ─────────────────────────────────────────────────────────
 
-  /** FIX M7: Paginated — avoids loading thousands of records in one shot. */
-  async findAllByBranch(branchId: number, page = 1, limit = 50) {
+  /** FIX M7: Paginated. FIX C1: enforces ownership. Supports optional status filter. */
+  async findAllByBranch(userId: number, branchId: number, page = 1, limit = 50, status?: string) {
+    await this.assertBranchOwner(userId, branchId);
+
     const safePage  = Math.max(1, page);
     const safeLimit = Math.min(100, Math.max(1, limit));
     const skip      = (safePage - 1) * safeLimit;
+    const where: any = { branchId };
+    if (status) where.status = status;
 
     const [total, orders] = await Promise.all([
-      this.prisma.order.count({ where: { branchId } }),
+      this.prisma.order.count({ where }),
       this.prisma.order.findMany({
-        where:   { branchId },
+        where,
         include: { items: { include: { options: true } }, table: true },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -350,7 +354,8 @@ export class OrdersService {
     }
   }
 
-  async findByBranchKitchenItems(branchId: number) {
+  async findByBranchKitchenItems(userId: number, branchId: number) {
+    await this.assertBranchOwner(userId, branchId);
     try {
       return await this.prisma.orderItem.findMany({
         where: {
@@ -434,7 +439,14 @@ export class OrdersService {
     return { success: true };
   }
 
-  async findUnpaidByTable(tableId: number) {
+  async findUnpaidByTable(userId: number, tableId: number) {
+    const table = await this.prisma.table.findUnique({
+      where:  { id: tableId },
+      select: { zone: { select: { branchId: true } } },
+    });
+    if (!table) throw new NotFoundException('ไม่พบโต๊ะ');
+    await this.assertBranchOwner(userId, table.zone.branchId);
+
     return this.prisma.order.findMany({
       where: {
         tableId,
@@ -445,7 +457,9 @@ export class OrdersService {
     });
   }
 
-  async findUnpaidByBranch(branchId: number) {
+  async findUnpaidByBranch(userId: number, branchId: number) {
+    await this.assertBranchOwner(userId, branchId);
+
     const orders = await this.prisma.order.findMany({
       where: {
         branchId,
@@ -479,12 +493,13 @@ export class OrdersService {
     tableId: number,
     paymentType: 'CASH' | 'TRANSFER',
     opts?: {
-      customerId?:     number;
-      promotionId?:    number;
-      discountAmount?: number;
+      customerId?:      number;
+      promotionId?:     number;
+      discountAmount?:  number;
+      walkinBranchId?:  number;
     },
   ) {
-    // C1: Establish and verify branch ownership BEFORE any mutation
+    // C1/C2: Establish and verify branch ownership BEFORE any mutation
     let branchId: number;
     if (tableId && tableId !== 0) {
       const table = await this.prisma.table.findUnique({
@@ -494,14 +509,11 @@ export class OrdersService {
       if (!table) throw new NotFoundException('ไม่พบโต๊ะ');
       branchId = table.zone.branchId;
     } else {
-      // Walk-in (tableId = 0): derive branchId from the most recent unpaid walk-in
-      const sample = await this.prisma.order.findFirst({
-        where:   { tableId: null, status: { notIn: ['PAID', 'CANCELLED'] } },
-        select:  { branchId: true },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (!sample) return { success: true };
-      branchId = sample.branchId;
+      // C2: walk-in — branchId must come from the caller (who knows their own branch)
+      if (!opts?.walkinBranchId) {
+        throw new BadRequestException('กรุณาระบุ branchId สำหรับออเดอร์ walk-in');
+      }
+      branchId = opts.walkinBranchId;
     }
     await this.assertBranchOwner(userId, branchId);
 

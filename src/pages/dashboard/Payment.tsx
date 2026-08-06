@@ -566,9 +566,9 @@ export default function Payment() {
   const fetchPaidOrders = async () => {
     setIsHistoryLoading(true);
     try {
-      const res = await api.get(`/orders?branchId=${branchId}`);
-      const all: any[] = Array.isArray(res.data) ? res.data : [];
-      setPaidOrders(all.filter((o: any) => o.status === 'PAID').slice(0, 50));
+      const res = await api.get(`/orders?branchId=${branchId}&status=PAID&limit=50`);
+      const orders: any[] = Array.isArray(res.data?.orders) ? res.data.orders : [];
+      setPaidOrders(orders);
     } catch {
       toast.error('โหลดประวัติบิลไม่สำเร็จ');
     } finally {
@@ -607,6 +607,7 @@ export default function Payment() {
       const totalDiscount = preAppliedDiscount + discountAmount;
       await api.post(`/orders/table/${tableId}/pay`, {
         paymentType:    paymentMode === 'CASH' ? 'CASH' : 'TRANSFER',
+        branchId:       Number(branchId),          // C2: needed when tableId=0 (walk-in)
         ...(memberInfo      ? { customerId:     memberInfo.id }  : {}),
         ...(activePromoId   ? { promotionId:    activePromoId }  : {}),
         ...(totalDiscount   ? { discountAmount: totalDiscount }  : {}),
