@@ -1,95 +1,105 @@
-import { Injectable, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOptionGroupDto, CreateOptionDto } from './dto/option.dto';
 import { UpdateOptionGroupDto, UpdateOptionDto } from './dto/update-option.dto';
+import { assertBranchAccess } from '../common/branch-access.helper';
 
 @Injectable()
 export class OptionsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async createGroup(userId: number, dto: CreateOptionGroupDto) {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id: dto.branchId },
-      include: { brand: true },
-    });
-    if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
-
+    // A2-2
+    await assertBranchAccess(this.prisma, userId, dto.branchId);
     return this.prisma.optionGroup.create({ data: dto });
   }
 
   async findAllGroups(userId: number, branchId: number) {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id: branchId },
-      include: { brand: true },
-    });
-    if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
-
+    // A2-2
+    await assertBranchAccess(this.prisma, userId, branchId);
     return this.prisma.optionGroup.findMany({
-      where: { branchId },
+      where:   { branchId },
       include: { options: true, menuItems: true },
     });
   }
 
   async updateGroup(userId: number, id: number, dto: UpdateOptionGroupDto) {
     const group = await this.prisma.optionGroup.findUnique({
-      where: { id },
-      include: { branch: { include: { brand: true } } },
+      where:  { id },
+      select: { id: true, branchId: true },
     });
-    if (!group || group.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์แก้ไขกลุ่มตัวเลือกนี้');
+    if (!group) throw new NotFoundException('ไม่พบกลุ่มตัวเลือกนี้');
+
+    // A2-2
+    await assertBranchAccess(this.prisma, userId, group.branchId);
 
     const { menuItemIds, ...data } = dto;
+
+    // A1-8: verify all menuItemIds belong to this branch before linking them
+    if (menuItemIds && menuItemIds.length > 0) {
+      const validItems = await this.prisma.menuItem.findMany({
+        where:  { id: { in: menuItemIds }, branchId: group.branchId },
+        select: { id: true },
+      });
+      if (validItems.length !== menuItemIds.length) {
+        throw new BadRequestException('เมนูบางรายการไม่ได้อยู่ในสาขานี้');
+      }
+    }
 
     return this.prisma.optionGroup.update({
       where: { id },
       data: {
         ...data,
-        menuItems: menuItemIds ? {
-          set: menuItemIds.map(id => ({ id })),
-        } : undefined,
+        menuItems: menuItemIds ? { set: menuItemIds.map(mid => ({ id: mid })) } : undefined,
       },
     });
   }
 
   async removeGroup(userId: number, id: number) {
     const group = await this.prisma.optionGroup.findUnique({
-      where: { id },
-      include: { branch: { include: { brand: true } } },
+      where:  { id },
+      select: { id: true, branchId: true },
     });
-    if (!group || group.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์ลบกลุ่มตัวเลือกนี้');
+    if (!group) throw new NotFoundException('ไม่พบกลุ่มตัวเลือกนี้');
 
+    // A2-2
+    await assertBranchAccess(this.prisma, userId, group.branchId);
     return this.prisma.optionGroup.delete({ where: { id } });
   }
 
   async createOption(userId: number, dto: CreateOptionDto) {
     const group = await this.prisma.optionGroup.findUnique({
-      where: { id: dto.optionGroupId },
-      include: { branch: { include: { brand: true } } },
+      where:  { id: dto.optionGroupId },
+      select: { id: true, branchId: true },
     });
-    if (!group || group.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงกลุ่มตัวเลือกนี้');
+    if (!group) throw new NotFoundException('ไม่พบกลุ่มตัวเลือกนี้');
 
+    // A2-2
+    await assertBranchAccess(this.prisma, userId, group.branchId);
     return this.prisma.option.create({ data: dto });
   }
 
   async updateOption(userId: number, id: number, dto: UpdateOptionDto) {
     const option = await this.prisma.option.findUnique({
-      where: { id },
-      include: { optionGroup: { include: { branch: { include: { brand: true } } } } },
+      where:   { id },
+      include: { optionGroup: { select: { branchId: true } } },
     });
-    if (!option || option.optionGroup.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์แก้ไขตัวเลือกนี้');
+    if (!option) throw new NotFoundException('ไม่พบตัวเลือกนี้');
 
-    return this.prisma.option.update({
-      where: { id },
-      data: dto,
-    });
+    // A2-2
+    await assertBranchAccess(this.prisma, userId, option.optionGroup.branchId);
+    return this.prisma.option.update({ where: { id }, data: dto });
   }
 
   async removeOption(userId: number, id: number) {
     const option = await this.prisma.option.findUnique({
-      where: { id },
-      include: { optionGroup: { include: { branch: { include: { brand: true } } } } },
+      where:   { id },
+      include: { optionGroup: { select: { branchId: true } } },
     });
-    if (!option || option.optionGroup.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์ลบตัวเลือกนี้');
+    if (!option) throw new NotFoundException('ไม่พบตัวเลือกนี้');
 
+    // A2-2
+    await assertBranchAccess(this.prisma, userId, option.optionGroup.branchId);
     return this.prisma.option.delete({ where: { id } });
   }
 }

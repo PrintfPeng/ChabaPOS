@@ -11,8 +11,11 @@ export class ShiftsController {
 
   /** GET /api/branches/:branchId/shifts/current */
   @Get('current')
-  getCurrent(@Param('branchId', ParseIntPipe) branchId: number) {
-    return this.shiftsService.getCurrentShift(branchId);
+  getCurrent(
+    @Param('branchId', ParseIntPipe) branchId: number,
+    @Request() req: any,
+  ) {
+    return this.shiftsService.getCurrentShift(req.user.userId, branchId);
   }
 
   /** POST /api/branches/:branchId/shifts/open */
@@ -40,7 +43,8 @@ export class ShiftsController {
   getSummary(
     @Param('branchId', ParseIntPipe) branchId: number,
     @Param('shiftId') shiftId: string,
+    @Request() req: any,
   ) {
-    return this.shiftsService.getShiftSummary(branchId, shiftId);
+    return this.shiftsService.getShiftSummary(req.user.userId, branchId, shiftId);
   }
 }

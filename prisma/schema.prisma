@@ -28,6 +28,7 @@ model User {
   phone        String?
   role         Role          @default(OWNER)
   brands       Brand[]
+  branchAccess BranchUser[]
   activityLogs ActivityLog[]
   shiftsOpened Shift[]       @relation("ShiftOpenedBy")
   shiftsClosed Shift[]       @relation("ShiftClosedBy")
@@ -101,6 +102,7 @@ model Branch {
   promotions         Promotion[]
   deliveryPlatforms  DeliveryPlatform[]
   shifts             Shift[]
+  staffUsers         BranchUser[]
 
   @@index([brandId])
 }
@@ -300,7 +302,7 @@ enum OrderItemStatus {
 model OrderItem {
   id         Int               @id @default(autoincrement())
   orderId    Int
-  order      Order             @relation(fields: [orderId], references: [id])
+  order      Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItemId Int
   menuItem   MenuItem          @relation(fields: [menuItemId], references: [id])
   name       String
@@ -320,7 +322,7 @@ model OrderItem {
 model OrderItemOption {
   id          Int       @id @default(autoincrement())
   orderItemId Int
-  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
   optionId    Int
   option      Option    @relation(fields: [optionId], references: [id])
   name        String
@@ -434,7 +436,7 @@ model Expense {
 model PurchaseOrderItem {
   id              Int           @id @default(autoincrement())
   purchaseOrderId Int
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   rawMaterialId   Int
   rawMaterial     RawMaterial   @relation(fields: [rawMaterialId], references: [id])
   quantity        Float
@@ -442,6 +444,7 @@ model PurchaseOrderItem {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  @@unique([purchaseOrderId, rawMaterialId])
   @@index([purchaseOrderId])
   @@index([rawMaterialId])
 }
@@ -608,4 +611,26 @@ model SystemLog {
 
   @@index([level])
   @@index([createdAt])
+}
+
+// ============================================
+// MULTI-STAFF ACCESS CONTROL (A2-2 fix)
+// ============================================
+
+// Links non-owner users (CASHIER role) to a specific Branch.
+// Allows multiple staff accounts to operate a branch without sharing the owner's credentials.
+// A2-2: fixes "CASHIER role locked out" — ownership checks accept both brand.userId == caller
+//        AND BranchUser records where userId == caller.
+model BranchUser {
+  id        Int      @id @default(autoincrement())
+  branchId  Int
+  userId    Int
+  role      Role     @default(CASHIER)
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([branchId, userId])
+  @@index([branchId])
+  @@index([userId])
 }

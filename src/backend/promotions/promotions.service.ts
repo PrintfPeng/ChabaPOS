@@ -1,11 +1,12 @@
 import {
-  Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject,
+  Injectable, NotFoundException, BadRequestException, Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TableAccessService } from '../common/table-access.service';
 import {
   CreatePromotionDto, UpdatePromotionDto, ValidatePromotionDto,
 } from './dto/promotion.dto';
+import { assertBranchAccess } from '../common/branch-access.helper';
 
 @Injectable()
 export class PromotionsService {
@@ -23,12 +24,9 @@ export class PromotionsService {
     });
   }
 
-  private async assertBranchOwner(userId: number, branchId: number) {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id: branchId },
-      include: { brand: { select: { userId: true } } },
-    });
-    if (!branch || branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
+  // A2-2: delegates to shared helper — allows both owner and assigned staff
+  private assertBranchOwner(userId: number, branchId: number) {
+    return assertBranchAccess(this.prisma, userId, branchId);
   }
 
   async findAll(userId: number, branchId: number, activeOnly = false) {

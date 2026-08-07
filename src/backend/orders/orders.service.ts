@@ -8,6 +8,7 @@ import { PromotionsService } from '../promotions/promotions.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderAtTableDto } from './dto/create-order-at-table.dto';
 import { ShiftsService } from '../shifts/shifts.service';
+import { assertBranchAccess } from '../common/branch-access.helper';
 
 @Injectable()
 export class OrdersService {
@@ -24,14 +25,8 @@ export class OrdersService {
 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
-  private async assertBranchOwner(userId: number, branchId: number) {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id: branchId },
-      select: { brand: { select: { userId: true } } },
-    });
-    if (!branch || branch.brand.userId !== userId) {
-      throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงสาขานี้');
-    }
+  private assertBranchOwner(userId: number, branchId: number) {
+    return assertBranchAccess(this.prisma, userId, branchId);
   }
 
   /**
@@ -106,19 +101,29 @@ export class OrdersService {
 
   // ─── Staff order ───────────────────────────────────────────────────────────
 
-  /** FIX H2: discount is capped so it can never exceed totalAmount. */
+  /** A4-5: server-side promotion validation — discount is derived from checkAndPrice,
+   *  never trusted from the client. Manual discount (no promoId) is still capped to total. */
   async createAsStaff(userId: number, dto: CreateOrderDto) {
     await this.assertBranchOwner(userId, dto.branchId);
 
-    const shiftId           = await this.shifts.findOpenShiftId(dto.branchId);
+    const shiftId            = await this.shifts.findOpenShiftId(dto.branchId);
     const deliveryPlatformId = dto.orderType === 'DELIVERY' ? dto.deliveryPlatformId : undefined;
     const pricing            = await this.priceItems(dto.branchId, dto.items, deliveryPlatformId);
 
-    // H2: cap the discount the client sends so it cannot exceed the real total
-    const cappedDiscount = Math.min(dto.discountAmount ?? 0, pricing.totalAmount);
+    let authorizedDiscount = 0;
+    if (dto.promotionId) {
+      // A4-5: server re-validates — client cannot inflate the discount
+      const promoResult = await this.promotions.checkAndPrice(
+        dto.branchId, dto.promotionId, pricing.totalAmount, dto.customerId,
+      );
+      authorizedDiscount = promoResult.discountAmount;
+    } else {
+      // Manual discount with no promotion: still cap to prevent free orders
+      authorizedDiscount = Math.min(dto.discountAmount ?? 0, pricing.totalAmount);
+    }
 
     return this.create(
-      { ...dto, discountAmount: cappedDiscount, shiftId: shiftId ?? undefined },
+      { ...dto, discountAmount: authorizedDiscount, shiftId: shiftId ?? undefined },
       pricing,
     );
   }
@@ -517,6 +522,44 @@ export class OrdersService {
     }
     await this.assertBranchOwner(userId, branchId);
 
+    // A4-1 + A1-4: Pre-read to compute grossTotal for server-side promo validation.
+    // This also lets us validate customer scope before any mutation.
+    const unpaidPrecheck = await this.prisma.order.findMany({
+      where: {
+        branchId,
+        tableId: tableId === 0 ? null : tableId,
+        status:  { notIn: ['PAID', 'CANCELLED'] },
+      },
+      select: { id: true, totalAmount: true, customerId: true },
+    });
+
+    const grossTotalEstimate = unpaidPrecheck.reduce((s, o) => s + o.totalAmount, 0);
+    const customerId = opts?.customerId
+      ?? unpaidPrecheck.find(o => o.customerId)?.customerId
+      ?? undefined;
+
+    // A1-3 + A4-2: Verify customerId belongs to this branch (prevent cross-branch points abuse)
+    if (customerId) {
+      const custCheck = await this.prisma.customer.findFirst({
+        where: { id: customerId, branchId },
+        select: { id: true },
+      });
+      if (!custCheck) throw new BadRequestException('ลูกค้าไม่ได้อยู่ในสาขานี้');
+    }
+
+    // A4-1: Server-side promotion validation — the client-supplied discountAmount is ignored.
+    // The server calls checkAndPrice() which validates scope, date, minSpend, and member rules.
+    let authorizedDiscount = 0;
+    if (opts?.promotionId) {
+      const promoResult = await this.promotions.checkAndPrice(
+        branchId, opts.promotionId, grossTotalEstimate, customerId,
+      );
+      authorizedDiscount = promoResult.discountAmount;
+    } else {
+      // Manual discount with no promotion: cap to total to prevent negative finalAmount
+      authorizedDiscount = Math.min(opts?.discountAmount ?? 0, grossTotalEstimate);
+    }
+
     await this.prisma.$transaction(async (tx) => {
       const unpaid = await tx.order.findMany({
         where: {
@@ -528,10 +571,6 @@ export class OrdersService {
       });
       if (!unpaid.length) return;
 
-      const customerId = opts?.customerId
-        ?? unpaid.find(o => o.customerId)?.customerId
-        ?? undefined;
-
       const branchRow = await tx.branch.findUnique({
         where:  { id: branchId },
         select: { rewardPointRate: true },
@@ -542,7 +581,7 @@ export class OrdersService {
           : 100;
 
       const grossTotal   = unpaid.reduce((s, o) => s + o.totalAmount, 0);
-      const discount     = opts?.discountAmount ?? 0;
+      const discount     = authorizedDiscount;              // A4-1: server-computed, not client
       const finalTotal   = Math.max(0, grossTotal - discount);
       const orderIds     = unpaid.map(o => o.id);
       const firstOrderId = unpaid[0].id;

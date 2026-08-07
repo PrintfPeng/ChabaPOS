@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateTenantPlanDto } from './dto/update-tenant-plan.dto';
 import { UpdateTenantStatusDto } from './dto/update-tenant-status.dto';
@@ -182,6 +182,11 @@ export class SuperAdminService {
   async approveTransaction(id: number) {
     const txn = await this.prisma.paymentTransaction.findUnique({ where: { id } });
     if (!txn) throw new NotFoundException('ไม่พบรายการนี้');
+
+    // A1-12: prevent double-approval — only PENDING transactions can be approved
+    if (txn.status !== 'PENDING') {
+      throw new BadRequestException(`รายการนี้มีสถานะ "${txn.status}" แล้ว ไม่สามารถอนุมัติซ้ำได้`);
+    }
 
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + 1);

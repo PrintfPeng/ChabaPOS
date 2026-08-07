@@ -87,16 +87,22 @@ export class BranchesService {
     return this.prisma.branch.delete({ where: { id } });
   }
 
+  // A1-5: explicit select omits pin/bankAccountNo/bankAccountName/bankType from the branch row
   async getMenu(id: number) {
     return this.prisma.branch.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true, name: true, imageUrl: true, address: true, phone: true,
+        rewardPointRate: true,
         categories: {
-          include: {
+          select: {
+            id: true, name: true, order: true,
             items: {
-              include: {
-                optionGroups: { include: { options: true } },
-                deliveryPrices: true,
+              select: {
+                id: true, name: true, price: true,
+                imageUrl: true, isDeliveryAvailable: true, categoryId: true, branchId: true,
+                optionGroups: { select: { id: true, name: true, isMultiple: true, options: { select: { id: true, name: true, price: true } } } },
+                deliveryPrices: { select: { deliveryPlatformId: true, price: true } },
               },
               orderBy: { id: 'asc' },
             },
@@ -107,10 +113,11 @@ export class BranchesService {
     });
   }
 
+  // A1-6: omit qrCode from table responses — QR code is an internal routing secret
   async getTables(id: number) {
     return this.prisma.table.findMany({
       where:   { zone: { branchId: id } },
-      include: { zone: true },
+      select:  { id: true, name: true, status: true, zoneId: true, zone: { select: { id: true, name: true } } },
       orderBy: { name: 'asc' },
     });
   }
