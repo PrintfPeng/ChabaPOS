@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import {
   Activity, Database, Clock, MemoryStick, AlertTriangle,
-  AlertCircle, Info, Zap, RefreshCw, Filter, ChevronLeft, ChevronRight, Trash2, Copy,
+  AlertCircle, Info, Zap, RefreshCw, Filter, ChevronLeft, ChevronRight, Trash2, Copy, Pause, Play,
 } from 'lucide-react';
+
+const POLL_INTERVAL = 5_000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,7 +73,12 @@ export default function SystemHealth() {
   const [status,  setStatus]  = useState<HealthStatus | null>(null);
   const [logsRes, setLogsRes] = useState<LogsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [silentRefreshing, setSilentRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [lastUpdated,  setLastUpdated]  = useState<Date | null>(null);
+  const [isLive,       setIsLive]       = useState(true);
+  const [newLogFlash,  setNewLogFlash]  = useState(false);
+  const prevTotalRef = useRef<number | null>(null);
 
   // Filters
   const [level,  setLevel]  = useState('');
@@ -82,8 +89,9 @@ export default function SystemHealth() {
   const [clearing,   setClearing]   = useState(false);
   const [clearRange, setClearRange] = useState('7d');
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  const fetchAll = useCallback(async (silent = false) => {
+    if (silent) setSilentRefreshing(true);
+    else setLoading(true);
     try {
       const [statusRes, logsData] = await Promise.all([
         api.get<HealthStatus>('/super-admin/health'),
@@ -92,15 +100,34 @@ export default function SystemHealth() {
         }),
       ]);
       setStatus(statusRes.data);
+
+      // Flash count badge when new logs arrive
+      const newTotal = logsData.data.total;
+      if (prevTotalRef.current !== null && newTotal > prevTotalRef.current) {
+        setNewLogFlash(true);
+        setTimeout(() => setNewLogFlash(false), 1500);
+      }
+      prevTotalRef.current = newTotal;
+
       setLogsRes(logsData.data);
+      setLastUpdated(new Date());
     } catch {
       // keep stale data
     } finally {
-      setLoading(false);
+      if (silent) setSilentRefreshing(false);
+      else setLoading(false);
     }
   }, [level, source, module, page]);
 
+  // Initial load
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Auto-polling — paused while the user is reading an expanded row
+  useEffect(() => {
+    if (!isLive || expanded !== null) return;
+    const id = setInterval(() => fetchAll(true), POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [isLive, expanded, fetchAll]);
 
   const applyFilters = (e: React.FormEvent) => { e.preventDefault(); setPage(1); fetchAll(); };
 
@@ -158,16 +185,53 @@ export default function SystemHealth() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-slate-800">System Health</h1>
-          <p className="text-sm text-slate-500 mt-0.5">ตรวจสอบสถานะระบบและ Error Log แบบ Real-time</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            {isLive ? (
+              <span className="flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span className="text-xs font-bold text-emerald-600">Live</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-slate-300" />
+                <span className="text-xs font-bold text-slate-400">หยุด</span>
+              </span>
+            )}
+            {lastUpdated && (
+              <span className="text-xs text-slate-400">
+                · อัปเดต {lastUpdated.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+            {silentRefreshing && <RefreshCw className="w-3 h-3 text-slate-300 animate-spin" />}
+            {expanded !== null && isLive && (
+              <span className="text-xs text-amber-500">· หยุดชั่วคราว (กำลังอ่าน log)</span>
+            )}
+          </div>
         </div>
-        <button
-          onClick={fetchAll}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 text-sm font-semibold disabled:opacity-50 transition-all"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          รีเฟรช
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsLive(v => !v)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all border ${
+              isLive
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+            }`}
+          >
+            {isLive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            {isLive ? 'หยุด Live' : 'เปิด Live'}
+          </button>
+          <button
+            onClick={() => fetchAll()}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 text-sm font-semibold disabled:opacity-50 transition-all"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            รีเฟรช
+          </button>
+        </div>
       </div>
 
       {/* Status cards */}
@@ -276,7 +340,12 @@ export default function SystemHealth() {
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm font-black text-slate-700">
             System Logs
-            {logsRes && <span className="ml-2 text-slate-400 font-semibold">({logsRes.total.toLocaleString()} รายการ)</span>}
+            {logsRes && (
+              <span className={`ml-2 font-semibold transition-colors duration-500 ${newLogFlash ? 'text-rose-500' : 'text-slate-400'}`}>
+                ({logsRes.total.toLocaleString()} รายการ)
+                {newLogFlash && <span className="ml-1 text-xs animate-pulse">▲ ใหม่</span>}
+              </span>
+            )}
           </p>
           <div className="flex items-center gap-2">
             <select
