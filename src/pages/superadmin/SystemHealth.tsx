@@ -3,7 +3,7 @@ import api from '../../lib/api';
 import { toast } from 'sonner';
 import {
   Activity, Database, Clock, MemoryStick, AlertTriangle,
-  AlertCircle, Info, Zap, RefreshCw, Filter, ChevronLeft, ChevronRight, Trash2,
+  AlertCircle, Info, Zap, RefreshCw, Filter, ChevronLeft, ChevronRight, Trash2, Copy,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -133,6 +133,23 @@ export default function SystemHealth() {
   }, [clearRange, fetchAll]);
 
   const totalPages = logsRes ? Math.ceil(logsRes.total / logsRes.limit) : 1;
+
+  const handleCopyText = useCallback((text: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success('คัดลอกข้อความแล้ว'))
+      .catch(() => toast.error('คัดลอกไม่สำเร็จ'));
+  }, []);
+
+  const handleCopyAll = useCallback(() => {
+    if (!logsRes?.logs.length) return;
+    const text = logsRes.logs
+      .map(log => {
+        const dt = new Date(log.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'medium' });
+        return `[${dt}] [${log.level}] [${log.module}]: ${log.message}`;
+      })
+      .join('\n');
+    handleCopyText(text);
+  }, [logsRes, handleCopyText]);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -293,14 +310,15 @@ export default function SystemHealth() {
                 <th className="px-4 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wide w-full">Message</th>
                 <th className="px-4 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wide whitespace-nowrap">Tenant</th>
                 <th className="px-4 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wide whitespace-nowrap">เวลา</th>
+                <th className="px-2 py-3 w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading && !logsRes && (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400 text-sm">กำลังโหลด...</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400 text-sm">กำลังโหลด...</td></tr>
               )}
               {!loading && logsRes?.logs.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400 text-sm">ไม่พบ Log</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400 text-sm">ไม่พบ Log</td></tr>
               )}
               {logsRes?.logs.map(log => (
                 <React.Fragment key={log.id}>
@@ -318,10 +336,19 @@ export default function SystemHealth() {
                     <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'medium' })}
                     </td>
+                    <td className="px-2 py-3">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCopyText(log.message); }}
+                        title="คัดลอก message"
+                        className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                   </tr>
                   {expanded === log.id && log.stackTrace && (
                     <tr>
-                      <td colSpan={6} className="px-4 pb-4">
+                      <td colSpan={7} className="px-4 pb-4">
                         <pre className="bg-slate-950 text-emerald-400 text-xs p-4 rounded-xl overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
                           {log.stackTrace}
                         </pre>
@@ -330,7 +357,7 @@ export default function SystemHealth() {
                   )}
                   {expanded === log.id && !log.stackTrace && (
                     <tr>
-                      <td colSpan={6} className="px-4 pb-3">
+                      <td colSpan={7} className="px-4 pb-3">
                         <p className="text-xs text-slate-400 bg-slate-50 rounded-xl px-4 py-3">ไม่มี Stack Trace</p>
                       </td>
                     </tr>
@@ -341,30 +368,48 @@ export default function SystemHealth() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {logsRes && totalPages > 1 && (
-          <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between">
-            <p className="text-xs text-slate-500">
-              หน้า {page} / {totalPages}
-            </p>
-            <div className="flex gap-2">
+        {/* Pagination + Copy All */}
+        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+          {/* Pagination */}
+          {logsRes && totalPages > 1 ? (
+            <p className="text-xs text-slate-500">หน้า {page} / {totalPages}</p>
+          ) : (
+            <span />
+          )}
+
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Copy All */}
+            {logsRes && logsRes.logs.length > 0 && (
               <button
-                disabled={page <= 1}
-                onClick={() => setPage(p => p - 1)}
-                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                onClick={handleCopyAll}
+                className="h-8 flex items-center gap-1.5 px-3 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-xs font-bold hover:bg-slate-100 transition-all"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <Copy className="w-3.5 h-3.5" />
+                คัดลอก Log ทั้งหมด ({logsRes.logs.length})
               </button>
-              <button
-                disabled={page >= totalPages}
-                onClick={() => setPage(p => p + 1)}
-                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            )}
+
+            {/* Prev / Next */}
+            {logsRes && totalPages > 1 && (
+              <>
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => p - 1)}
+                  className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
     </div>
