@@ -587,7 +587,12 @@ export default function CounterService() {
       setReceivedAmount('');
       setIsSubmitting(false);
 
-      // ── Fire-and-forget: Receipt → cut → Kitchen slip → cut ──
+      // ── Fire-and-forget from handleSubmitOrder's perspective (not awaited below,
+      //    so the cashier isn't blocked on printer speed) — but receipt and kitchen
+      //    slip ARE awaited in sequence here, and bluetoothPrinter.ts's job queue
+      //    guarantees this pair never interleaves with another order's print job
+      //    even if the cashier submits a second order before this one finishes
+      //    printing.
       if (printerStatus === 'connected') {
         const printItems = cartSnapshot.map(item => ({
           name:      item.name,
@@ -597,29 +602,34 @@ export default function CounterService() {
           notes:     item.notes,
         }));
 
-        printReceipt({
-          branchName:     branchData?.name ?? 'ChabaPOS',
-          orderNumber:    orderRes.data.orderNumber ?? '-',
-          tableName:      tableSnapshot?.name,
-          dateTime:       now,
-          paymentType:    paymentMode,
-          items:          printItems,
-          subtotal:       totalAmount,
-          discountAmount: discountAmount || undefined,
-          promoName:      selectedPromo?.name,
-          finalTotal,
-          receivedAmount: paymentMode === 'CASH' && receivedAmount ? parseFloat(receivedAmount) : undefined,
-          changeAmount:   paymentMode === 'CASH' ? changeAmount : undefined,
-          memberName:     member?.name,
-          source:         'STAFF',
-        })
-          .then(() => printKitchenSlip({
-            orderNumber: orderRes.data.orderNumber ?? '-',
-            tableName:   tableSnapshot?.name,
-            dateTime:    now,
-            items:       printItems,
-          }))
-          .catch(() => toast.error('พิมพ์ไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ Printer'));
+        (async () => {
+          try {
+            await printReceipt({
+              branchName:     branchData?.name ?? 'ChabaPOS',
+              orderNumber:    orderRes.data.orderNumber ?? '-',
+              tableName:      tableSnapshot?.name,
+              dateTime:       now,
+              paymentType:    paymentMode,
+              items:          printItems,
+              subtotal:       totalAmount,
+              discountAmount: discountAmount || undefined,
+              promoName:      selectedPromo?.name,
+              finalTotal,
+              receivedAmount: paymentMode === 'CASH' && receivedAmount ? parseFloat(receivedAmount) : undefined,
+              changeAmount:   paymentMode === 'CASH' ? changeAmount : undefined,
+              memberName:     member?.name,
+              source:         'STAFF',
+            });
+            await printKitchenSlip({
+              orderNumber: orderRes.data.orderNumber ?? '-',
+              tableName:   tableSnapshot?.name,
+              dateTime:    now,
+              items:       printItems,
+            });
+          } catch {
+            toast.error('พิมพ์ไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ Printer');
+          }
+        })();
       }
 
       setTimeout(() => navigate(`/brands/${brandId}/branches/${branchId}`), 1500);

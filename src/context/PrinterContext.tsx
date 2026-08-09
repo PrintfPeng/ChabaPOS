@@ -5,6 +5,11 @@ import { toast } from 'sonner';
 
 interface PrinterCtx {
   status:       PrinterStatus;
+  /** True while a print job (or a queued one waiting its turn) is in flight.
+   *  Derived from status === 'printing' — the driver's job queue guarantees
+   *  only one job is ever active at a time, so this stays accurate even when
+   *  printReceipt/printKitchenSlip/etc. are called back-to-back. */
+  isPrinting:   boolean;
   deviceName:   string | null;
   isSupported:  boolean;
   connect:      () => Promise<void>;
@@ -24,6 +29,7 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
   const [status,     setStatus]         = useState<PrinterStatus>('disconnected');
   const [deviceName, setDeviceName]     = useState<string | null>(null);
   const isSupported                     = typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+  const isPrinting                      = status === 'printing';
 
   useEffect(() => {
     printerRef.current.onStatusChange = (s, name) => {
@@ -140,7 +146,7 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ status, deviceName, isSupported, connect, disconnect, printReceipt, printKitchenSlip, printShiftSummary, printTableQR, printPurchaseOrder }}>
+    <Ctx.Provider value={{ status, isPrinting, deviceName, isSupported, connect, disconnect, printReceipt, printKitchenSlip, printShiftSummary, printTableQR, printPurchaseOrder }}>
       {children}
     </Ctx.Provider>
   );
