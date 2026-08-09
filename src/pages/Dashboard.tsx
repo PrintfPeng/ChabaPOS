@@ -25,6 +25,7 @@ import { UpgradePlanModal } from '../components/UpgradePlanModal';
 import { FeatureGuard } from '../components/FeatureGuard';
 import { OpenShiftModal } from '../components/shifts/OpenShiftModal';
 import { CloseShiftModal } from '../components/shifts/CloseShiftModal';
+import { OrderRealtimeListener } from '../components/OrderRealtimeListener';
 
 export default function Dashboard() {
   const { brandId, branchId } = useParams<{ brandId: string; branchId: string }>();
@@ -182,6 +183,9 @@ export default function Dashboard() {
         featureName={lockedFeature ?? ''}
         onClose={() => setLockedFeature(null)}
       />
+
+      {/* Realtime listener — auto-prints kitchen slips for QR orders */}
+      <OrderRealtimeListener branchId={branchId} />
 
       {/* Shift modals */}
       {branchId && (

@@ -120,6 +120,15 @@ export class OrdersController {
     return this.ordersService.updateItemStatus(req.user.userId, itemId, status);
   }
 
+  /** ดึงออเดอร์ฉบับเต็ม (items + options + table) สำหรับสั่งพิมพ์จาก POS */
+  @Get(':id')
+  findOne(
+    @Request() req,
+    @Param('id', ParseIntPipe) orderId: number,
+  ) {
+    return this.ordersService.findOneForPrinting(req.user.userId, orderId);
+  }
+
   /** FIX M3: cancel an order and release the table when no orders remain */
   @Delete(':id')
   cancelOrder(

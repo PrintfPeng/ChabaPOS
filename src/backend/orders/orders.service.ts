@@ -647,6 +647,21 @@ export class OrdersService {
     return { success: true };
   }
 
+  /** ดึง Order พร้อม items/options/table สำหรับสั่งพิมพ์ — ตรวจสิทธิ์เจ้าของสาขา */
+  async findOneForPrinting(userId: number, orderId: number) {
+    const order = await this.prisma.order.findUnique({
+      where:   { id: orderId },
+      include: {
+        items:  { include: { options: true } },
+        table:  true,
+        branch: { select: { name: true, brand: { select: { userId: true } } } },
+      },
+    });
+    if (!order) throw new NotFoundException('ไม่พบออเดอร์');
+    if (order.branch.brand.userId !== userId) throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงออเดอร์นี้');
+    return order;
+  }
+
   /** ใช้ภายในเมื่อสร้าง Order ใหม่เพื่อผูกกะอัตโนมัติ */
   async findOpenShiftId(branchId: number): Promise<string | null> {
     return this.shifts.findOpenShiftId(branchId);

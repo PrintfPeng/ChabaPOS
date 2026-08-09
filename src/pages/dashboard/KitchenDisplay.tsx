@@ -7,6 +7,9 @@ import {
   UtensilsCrossed, Printer, RefreshCw, Volume2, VolumeX,
   Clock, CheckCircle2, ChefHat, Loader2, Maximize2, Minimize2, Truck,
 } from 'lucide-react';
+import { usePrinter } from '../../context/PrinterContext';
+import type { KitchenSlip } from '../../lib/escpos';
+import { claimForAutoPrint } from '../../lib/printedOrdersTracker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface OrderItemOption { id: number; name: string; price: number }
@@ -89,6 +92,21 @@ function buildReceiptHTML(group: OrderGroup): string {
       <hr style="border:1px dashed #000;margin:8px 0"/>
     </div>
   `;
+}
+
+function groupToSlip(group: OrderGroup): KitchenSlip {
+  return {
+    orderNumber: group.orderNumber,
+    tableName:   group.tableName,
+    dateTime:    new Date(group.createdAt).toLocaleString('th-TH'),
+    items: group.items.map(item => ({
+      name:      item.name,
+      qty:       item.quantity,
+      unitPrice: 0,
+      options:   item.options.map(o => ({ name: o.name, price: o.price })),
+      notes:     item.notes,
+    })),
+  };
 }
 
 function triggerPrint(group: OrderGroup) {
@@ -385,6 +403,11 @@ export default function KitchenDisplay() {
   const isFirstLoad = useRef(true);
   const pollRef     = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
+  // ── Bluetooth printer (stable ref เพื่อไม่ให้ fetchItems re-create) ─────────
+  const printerCtx    = usePrinter();
+  const printerCtxRef = useRef(printerCtx);
+  useEffect(() => { printerCtxRef.current = printerCtx; }, [printerCtx]);
+
   const now              = useLiveClock();
   const { isFs, toggle: toggleFullscreen } = useFullscreen();
 
@@ -435,7 +458,17 @@ export default function KitchenDisplay() {
           duration: 5000,
         });
         for (const g of toAnnounce) {
-          if (g.source === 'QR') setTimeout(() => triggerPrint(g), 500);
+          // Cross-component dedup — skip if the global OrderRealtimeListener
+          // (mounted at the Dashboard level) already auto-printed this order.
+          if (!branchId || !claimForAutoPrint(branchId, g.orderId)) continue;
+          setTimeout(async () => {
+            if (printerCtxRef.current.status === 'connected') {
+              try { await printerCtxRef.current.printKitchenSlip(groupToSlip(g)); }
+              catch { triggerPrint(g); }
+            } else {
+              triggerPrint(g);
+            }
+          }, 500);
         }
         setNewOrderIds(prev => {
           const next = new Set(prev);
@@ -461,7 +494,7 @@ export default function KitchenDisplay() {
         toast.error('ไม่สามารถโหลดข้อมูลครัวได้');
       }
     }
-  }, [bid, groupItems, soundOn]);
+  }, [bid, branchId, groupItems, soundOn]);
 
   useEffect(() => {
     fetchItems();
@@ -482,6 +515,15 @@ export default function KitchenDisplay() {
       toast.error('Bump ออเดอร์ไม่สำเร็จ');
     }
   };
+
+  // ── Manual print (ปุ่มพิมพ์บน ticket) ───────────────────────────────────
+  const handlePrint = useCallback(async (group: OrderGroup) => {
+    if (printerCtxRef.current.status === 'connected') {
+      try { await printerCtxRef.current.printKitchenSlip(groupToSlip(group)); return; }
+      catch { /* fall through to browser print */ }
+    }
+    triggerPrint(group);
+  }, []);
 
   // ── Stats ────────────────────────────────────────────────────────────────
   const pendingCount = orderGroups.filter(g => g.items.some(i => i.status === 'PENDING')).length;
@@ -580,7 +622,7 @@ export default function KitchenDisplay() {
                 group={g}
                 isNew={newOrderIds.has(g.orderId)}
                 onBump={handleBump}
-                onPrint={triggerPrint}
+                onPrint={handlePrint}
               />
             ))}
           </div>
