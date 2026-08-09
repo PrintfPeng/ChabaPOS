@@ -231,7 +231,10 @@ export default function MembersPage() {
         await api.patch(`/customers/${editing.id}`, { name: form.name, points: Number(form.points) });
         toast.success('แก้ไขข้อมูลสมาชิกสำเร็จ');
       } else {
-        await api.post('/customers', { ...form, branchId: Number(branchId) });
+        // CreateCustomerDto only accepts phone/name/branchId — points always
+        // starts at 0 server-side, so it must not be sent here (the API
+        // rejects unknown properties).
+        await api.post('/customers', { phone: form.phone, name: form.name, branchId: Number(branchId) });
         toast.success(`สมัครสมาชิก "${form.name}" สำเร็จ`);
       }
       setIsDialogOpen(false);
