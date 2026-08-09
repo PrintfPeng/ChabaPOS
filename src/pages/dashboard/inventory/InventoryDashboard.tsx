@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePickerWithRange } from '../../../components/DatePickerWithRange';
+import { usePrinter } from '../../../context/PrinterContext';
+import type { PurchaseOrderSlip } from '../../../lib/escpos';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -399,7 +401,8 @@ export default function InventoryDashboard() {
   });
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [searchQuery,    setSearchQuery]    = useState('');
-  const [printOrder,     setPrintOrder]     = useState<PurchaseOrder | null>(null);
+
+  const { status: printerStatus, printPurchaseOrder } = usePrinter();
 
   // Filters for the Ordered Materials section
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState('all');
@@ -560,23 +563,36 @@ export default function InventoryDashboard() {
   const branchName  = branch?.name ?? `สาขา #${branchId}`;
   const dateStr     = new Date().toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  // ── Print (window.print) handlers — FIXED: visibility approach ───────────
+  // ── Build PO slip payload for the Bluetooth thermal printer ───────────────
+  const buildPoSlip = (order: PurchaseOrder): PurchaseOrderSlip => ({
+    branchName,
+    poNumber:       `PO-${String(order.id).padStart(5, '0')}`,
+    dateTime:       fmtDate(order.createdAt),
+    supplierName:   order.supplier?.name ?? '-',
+    supplierPhone:  order.supplier?.phone,
+    supplierLineId: order.supplier?.lineId,
+    items: (order.items ?? []).map(i => ({
+      name:     i.rawMaterial?.name ?? '-',
+      category: i.rawMaterial?.category?.name,
+      quantity: i.quantity,
+      unit:     i.rawMaterial?.unit ?? '',
+    })),
+  });
+
+  // ── Print (Bluetooth thermal printer) handlers ─────────────────────────────
   const handlePrintSingle = (order: PurchaseOrder) => {
-    setPrintOrder(order);
-    setTimeout(() => {
-      document.body.classList.add('cpos-print-single');
-      window.print();
-      setTimeout(() => document.body.classList.remove('cpos-print-single'), 600);
-    }, 150);
+    printPurchaseOrder(buildPoSlip(order));
   };
 
-  const handlePrintAll = () => {
+  const handlePrintAll = async () => {
     if (!filteredOrders.length) { toast.error('ไม่มีข้อมูลสำหรับพิมพ์'); return; }
-    setTimeout(() => {
-      document.body.classList.add('cpos-print-all');
-      window.print();
-      setTimeout(() => document.body.classList.remove('cpos-print-all'), 600);
-    }, 150);
+    if (printerStatus !== 'connected') {
+      toast.error('กรุณาเชื่อมต่อเครื่องพิมพ์ก่อนพิมพ์ใบสั่งซื้อ');
+      return;
+    }
+    for (const order of filteredOrders) {
+      await printPurchaseOrder(buildPoSlip(order));
+    }
   };
 
   // ── PDF (html-to-image + jsPDF) handlers ─────────────────────────────────
@@ -622,31 +638,6 @@ export default function InventoryDashboard() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Print CSS: FIXED — visibility approach works regardless of nesting ── */}
-      <style>{`
-        @media print {
-          /* ── Single order ── */
-          body.cpos-print-single * { visibility: hidden !important; }
-          body.cpos-print-single #cpos-print-single {
-            visibility: visible !important;
-            display: block !important;
-            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
-          }
-          body.cpos-print-single #cpos-print-single * { visibility: visible !important; }
-
-          /* ── All orders ── */
-          body.cpos-print-all * { visibility: hidden !important; }
-          body.cpos-print-all #cpos-print-all {
-            visibility: visible !important;
-            display: block !important;
-            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
-          }
-          body.cpos-print-all #cpos-print-all * { visibility: visible !important; }
-
-          @page { size: A4; margin: 1.5cm; }
-        }
-      `}</style>
-
       {/* ═══════════════════════ SCREEN UI ══════════════════════════════════ */}
       <div className="space-y-5 print:hidden">
 
@@ -958,227 +949,6 @@ export default function InventoryDashboard() {
             )}
           </CardContent>
         </Card>
-      </div>
-
-      {/* ═══════════════════════ PRINT: SINGLE ORDER ════════════════════════ */}
-      {/*
-          Visibility is controlled by CSS + body class.
-          display:none is overridden by print media query.
-      */}
-      <div id="cpos-print-single" style={{ display: 'none' }}>
-        {printOrder && (
-          <div style={{ padding: 0, background: '#fff' }}>
-            {/* Re-use layout from PDF template (same look) */}
-            <div style={{ width: '100%', backgroundColor: '#fff', padding: '1.5cm 2cm', fontFamily: "'Segoe UI', Arial, sans-serif", color: '#1e293b' }}>
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 14, marginBottom: 18 }}>
-                <div>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CHABAPOS SYSTEM</div>
-                  <div style={{ fontSize: 20, fontWeight: 900 }}>ใบสั่งซื้อวัตถุดิบ</div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
-                    สาขา: <strong>{branchName}</strong>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 8, color: '#94a3b8', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>เลขที่เอกสาร</div>
-                  <div style={{ fontSize: 14, fontWeight: 900, fontFamily: 'monospace', marginTop: 2 }}>PO-{String(printOrder.id).padStart(5, '0')}</div>
-                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{fmtDate(printOrder.createdAt)}</div>
-                  <div style={{ marginTop: 6, display: 'inline-block', fontSize: 9, fontWeight: 700, color: (STATUS_MAP[printOrder.status] ?? STATUS_MAP.PENDING).pdfColor, background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>
-                    {(STATUS_MAP[printOrder.status] ?? STATUS_MAP.PENDING).label}
-                  </div>
-                </div>
-              </div>
-
-              {/* Supplier box */}
-              {(() => {
-                const sup = printOrder.supplier;
-                return (
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', marginBottom: 18 }}>
-                    <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>ข้อมูลคู่ค้า</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '4px 8px', fontSize: 11 }}>
-                      <span style={{ fontWeight: 700 }}>ชื่อร้านค้า:</span>
-                      <span style={{ fontWeight: 700, fontSize: 13 }}>{sup?.name ?? '-'}</span>
-                      {sup?.phone       && <><span style={{ fontWeight: 700 }}>โทรศัพท์:</span><span>{sup.phone}</span></>}
-                      {sup?.lineId      && <><span style={{ fontWeight: 700 }}>Line ID:</span><span>{sup.lineId}</span></>}
-                      {sup?.bankAccount && <><span style={{ fontWeight: 700 }}>บัญชีธนาคาร:</span><span>{sup.bankAccount}{sup.bankName ? ` (${sup.bankName})` : ''}</span></>}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Items table */}
-              {(() => {
-                const isCompleted  = printOrder.status === 'COMPLETED';
-                const printItems   = printOrder.items ?? [];
-                const grandTotal   = printItems.reduce((s, i) => s + i.quantity * (i.price ?? 0), 0);
-                const td: React.CSSProperties = { padding: '7px 10px', fontSize: 11, borderBottom: '1px solid #e2e8f0' };
-                const headers = isCompleted
-                  ? ['#', 'รายการวัตถุดิบ', 'หมวดหมู่', 'จำนวน', 'หน่วย', 'ราคา/หน่วย (฿)', 'ราคารวม (฿)']
-                  : ['#', 'รายการวัตถุดิบ', 'หมวดหมู่', 'จำนวน', 'หน่วย'];
-                return (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24, fontSize: 11 }}>
-                    <thead>
-                      <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #0f172a' }}>
-                        {headers.map((h, i) => (
-                          <th key={i} style={{ padding: '7px 10px', fontSize: 8, fontWeight: 700, color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase', textAlign: i < 3 ? 'left' : 'right' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {printItems.map((item, i) => {
-                        const lineTotal = item.quantity * (item.price ?? 0);
-                        return (
-                          <tr key={item.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
-                            <td style={{ ...td, color: '#94a3b8', textAlign: 'center', width: 28 }}>{i + 1}</td>
-                            <td style={{ ...td, fontWeight: 600 }}>{item.rawMaterial?.name}</td>
-                            <td style={{ ...td, color: '#64748b' }}>{item.rawMaterial?.category?.name ?? '-'}</td>
-                            <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{item.quantity}</td>
-                            <td style={{ ...td, textAlign: 'right', color: '#64748b' }}>{item.rawMaterial?.unit}</td>
-                            {isCompleted && (
-                              <>
-                                <td style={{ ...td, textAlign: 'right' }}>
-                                  ฿{(item.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </td>
-                                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#065f46' }}>
-                                  ฿{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </td>
-                              </>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ borderTop: '2px solid #0f172a', background: '#f8fafc' }}>
-                        {isCompleted ? (
-                          <>
-                            <td colSpan={5} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11 }}>ยอดรวมทั้งสิ้น</td>
-                            <td colSpan={2} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 900, fontSize: 15, color: '#065f46' }}>
-                              ฿{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td colSpan={3} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11 }}>จำนวนรายการทั้งหมด</td>
-                            <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 900, fontSize: 14 }}>{printItems.length}</td>
-                            <td style={{ padding: '8px 10px', color: '#64748b' }}>รายการ</td>
-                          </>
-                        )}
-                      </tr>
-                    </tfoot>
-                  </table>
-                );
-              })()}
-
-              {/* Signatures */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginTop: 40 }}>
-                {['ผู้จัดซื้อ', 'ผู้ตรวจสอบ / อนุมัติ'].map(r => (
-                  <div key={r} style={{ textAlign: 'center' }}>
-                    <div style={{ borderBottom: '1px dashed #0f172a', margin: '0 32px 8px', height: 30 }} />
-                    <div style={{ fontWeight: 700, fontSize: 11 }}>{r}</div>
-                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 4 }}>วันที่ _____/_____/_____</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Footer */}
-              <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8' }}>
-                <span>สร้างโดยระบบ CHABAPOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
-                <span>{dateStr}</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ═══════════════════════ PRINT: ALL ORDERS ══════════════════════════ */}
-      <div id="cpos-print-all" style={{ display: 'none' }}>
-        <div style={{ width: '100%', backgroundColor: '#fff', padding: '1.5cm 2cm', fontFamily: "'Segoe UI', Arial, sans-serif", color: '#1e293b', fontSize: 11 }}>
-          {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #dc2626', paddingBottom: 14, marginBottom: 18 }}>
-            <div>
-              <div style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CHABAPOS SYSTEM</div>
-              <div style={{ fontSize: 20, fontWeight: 900 }}>รายงานการสั่งซื้อวัตถุดิบ</div>
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
-                สาขา: <strong>{branchName}</strong> &nbsp;·&nbsp; ช่วงเวลา: <strong style={{ color: '#dc2626' }}>{periodLabel}</strong>
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 8, color: '#94a3b8', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>วันที่ออกรายงาน</div>
-              <div style={{ fontSize: 12, fontWeight: 800, marginTop: 2 }}>{dateStr}</div>
-            </div>
-          </div>
-
-          {/* KPI row */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
-            {[
-              { label: 'จำนวนบิล', value: `${stats.count} บิล` },
-              { label: 'ยอดรวม',  value: stats.totalAmount > 0 ? `฿${stats.totalAmount.toLocaleString()}` : 'ไม่ระบุ' },
-              { label: 'ร้านค้า', value: `${stats.uniqueSuppliers} แห่ง` },
-            ].map(k => (
-              <div key={k.label} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
-                <div style={{ fontSize: 7, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>{k.label}</div>
-                <div style={{ fontSize: 16, fontWeight: 900, marginTop: 3 }}>{k.value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Table */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
-            <thead>
-              <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #0f172a' }}>
-                {['#', 'เลขที่', 'วันที่', 'ร้านค้า', 'รายการวัตถุดิบ', 'ยอดรวม', 'สถานะ'].map((h, i) => (
-                  <th key={i} style={{ padding: '6px 8px', fontSize: 7, fontWeight: 700, color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase', textAlign: i >= 5 ? 'right' : 'left' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map((o, idx) => {
-                const st = STATUS_MAP[o.status] ?? STATUS_MAP.PENDING;
-                const summary = o.items?.map(i => `${i.rawMaterial?.name} ${i.quantity}${i.rawMaterial?.unit}`).join(', ') ?? '';
-                return (
-                  <tr key={o.id} style={{ background: idx % 2 ? '#f8fafc' : '#fff', borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '5px 8px', color: '#94a3b8', textAlign: 'center', width: 22 }}>{idx + 1}</td>
-                    <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontWeight: 700 }}>PO-{String(o.id).padStart(5, '0')}</td>
-                    <td style={{ padding: '5px 8px', color: '#475569', whiteSpace: 'nowrap' }}>{fmtDateShort(o.createdAt)}</td>
-                    <td style={{ padding: '5px 8px', fontWeight: 600 }}>{o.supplier?.name}</td>
-                    <td style={{ padding: '5px 8px', color: '#64748b' }}>{summary}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: o.totalAmount > 0 ? '#0f172a' : '#94a3b8' }}>
-                      {o.totalAmount > 0 ? `฿${Number(o.totalAmount).toLocaleString()}` : '-'}
-                    </td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: st.pdfColor }}>{st.label}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr style={{ borderTop: '2px solid #0f172a', background: '#f8fafc' }}>
-                <td colSpan={5} style={{ padding: '8px', textAlign: 'right', fontWeight: 700 }}>ยอดรวมทั้งสิ้น</td>
-                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, fontSize: 13 }}>
-                  {stats.totalAmount > 0 ? `฿${stats.totalAmount.toLocaleString()}` : '-'}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-
-          {/* Signatures */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 32, marginTop: 40 }}>
-            {['ผู้จัดทำรายงาน', 'ผู้ตรวจสอบ', 'ผู้อนุมัติ'].map(r => (
-              <div key={r} style={{ textAlign: 'center' }}>
-                <div style={{ borderBottom: '1px dashed #0f172a', margin: '0 24px 8px', height: 28 }} />
-                <div style={{ fontWeight: 700, fontSize: 10 }}>{r}</div>
-                <div style={{ fontSize: 8, color: '#94a3b8', marginTop: 3 }}>วันที่ _____/_____/_____</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Footer */}
-          <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: 7, color: '#94a3b8' }}>
-            <span>สร้างโดยระบบ CHABAPOS • เอกสารนี้สร้างโดยอัตโนมัติ</span>
-            <span>หน้า 1 / 1 &nbsp;·&nbsp; {dateStr}</span>
-          </div>
-        </div>
       </div>
     </>
   );

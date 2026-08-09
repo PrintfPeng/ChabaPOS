@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { BluetoothPrinter, PrinterStatus } from '../lib/bluetoothPrinter';
-import { buildOrderReceipt, buildTableQRSlip, PrintReceipt, buildShiftSummaryReceipt, ShiftSummaryReceipt, buildKitchenSlip, KitchenSlip } from '../lib/escpos';
+import { buildOrderReceipt, buildTableQRSlip, PrintReceipt, buildShiftSummaryReceipt, ShiftSummaryReceipt, buildKitchenSlip, KitchenSlip, buildPurchaseOrderSlip, PurchaseOrderSlip } from '../lib/escpos';
 import { toast } from 'sonner';
 
 interface PrinterCtx {
@@ -12,6 +12,7 @@ interface PrinterCtx {
   printReceipt:      (receipt: PrintReceipt) => Promise<void>;
   printKitchenSlip:  (slip: KitchenSlip) => Promise<void>;
   printShiftSummary: (receipt: ShiftSummaryReceipt) => Promise<void>;
+  printPurchaseOrder: (po: PurchaseOrderSlip) => Promise<void>;
   /** Print a table QR Code slip. Pass silent=true to suppress per-table toasts (bulk printing). */
   printTableQR: (qrDataUrl: string, tableName: string, branchName: string, silent?: boolean) => Promise<void>;
 }
@@ -84,6 +85,22 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const printPurchaseOrder = useCallback(async (po: PurchaseOrderSlip) => {
+    if (!printerRef.current.isConnected) {
+      toast.error('กรุณาเชื่อมต่อเครื่องพิมพ์ก่อนพิมพ์ใบสั่งซื้อ');
+      return;
+    }
+    try {
+      const data = buildPurchaseOrderSlip(po);
+      await printerRef.current.print(data);
+      toast.success('ส่งคำสั่งพิมพ์ใบสั่งซื้อแล้ว');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'พิมพ์ใบสั่งซื้อไม่สำเร็จ');
+      setStatus('disconnected');
+      setDeviceName(null);
+    }
+  }, []);
+
   const printShiftSummary = useCallback(async (receipt: ShiftSummaryReceipt) => {
     if (!printerRef.current.isConnected) {
       toast.warning('กรุณาเชื่อมต่อ printer ก่อน');
@@ -123,7 +140,7 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ status, deviceName, isSupported, connect, disconnect, printReceipt, printKitchenSlip, printShiftSummary, printTableQR }}>
+    <Ctx.Provider value={{ status, deviceName, isSupported, connect, disconnect, printReceipt, printKitchenSlip, printShiftSummary, printTableQR, printPurchaseOrder }}>
       {children}
     </Ctx.Provider>
   );
@@ -135,4 +152,4 @@ export function usePrinter(): PrinterCtx {
   return ctx;
 }
 
-export type { PrintReceipt, ShiftSummaryReceipt, KitchenSlip };
+export type { PrintReceipt, ShiftSummaryReceipt, KitchenSlip, PurchaseOrderSlip };

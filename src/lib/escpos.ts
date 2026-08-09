@@ -688,3 +688,136 @@ function buildKitchenSlipCanvas(slip: KitchenSlip): HTMLCanvasElement {
 export function buildKitchenSlip(slip: KitchenSlip): Uint8Array {
   return canvasToEscPos(buildKitchenSlipCanvas(slip));
 }
+
+// ── Purchase order slip — supplier info + material checklist for procurement ──
+export interface PurchaseOrderPrintItem {
+  name:      string;
+  category?: string;
+  quantity:  number;
+  unit:      string;
+}
+export interface PurchaseOrderSlip {
+  branchName:      string;
+  poNumber:        string;
+  dateTime:        string;
+  supplierName:    string;
+  supplierPhone?:  string;
+  supplierLineId?: string;
+  items:           PurchaseOrderPrintItem[];
+}
+
+function buildPurchaseOrderCanvas(po: PurchaseOrderSlip): HTMLCanvasElement {
+  const mc = document.createElement('canvas').getContext('2d')!;
+
+  function wrap(text: string, font: string, maxW: number): string[] {
+    mc.font = font;
+    if (mc.measureText(text).width <= maxW) return [text];
+    const chars = [...text];
+    const lines: string[] = [];
+    let line = '';
+    for (const ch of chars) {
+      if (mc.measureText(line + ch).width <= maxW) { line += ch; }
+      else { if (line) lines.push(line); line = ch; }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [text];
+  }
+
+  const cmds: Cmd[] = [];
+  let cy = 46;
+
+  const addT = (font: string, text: string, x: number, align: CanvasTextAlign, lh: number) => {
+    cmds.push({ t: 'txt', font, text, x, y: cy, align });
+    cy += lh;
+  };
+  const C  = (t: string, f = F_NOR, lh = LH_NOR) => addT(f, t, PW / 2, 'center', lh);
+  const LR = (l: string, r: string, f = F_NOR, lh = LH_NOR) => {
+    cmds.push({ t: 'txt', font: f, text: l, x: M,      y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: f, text: r, x: PW - M, y: cy, align: 'right' });
+    cy += lh;
+  };
+  const sep = (dashed = false) => { cy += 15; cmds.push({ t: 'sep', y: cy, dashed }); cy += 33; };
+  const sp  = (h = 8) => { cy += h; };
+
+  // ── Zone 1: Header ──────────────────────────────────────────────────────────
+  C(po.branchName, F_BOLD, 46);
+  sp(4);
+  C('ใบสั่งซื้อวัตถุดิบ', F_BOLD, LH_NOR);
+  C('Purchase Order', F_SM, LH_SM);
+  sp(4);
+  sep();
+
+  // ── Zone 2: Doc info ────────────────────────────────────────────────────────
+  LR(`เลขที่: ${po.poNumber}`, po.dateTime, F_MONO, LH_NOR);
+  sep();
+
+  // ── Zone 3: Supplier info ───────────────────────────────────────────────────
+  C('ข้อมูลร้านค้า / Supplier', F_BOLD, LH_NOR);
+  sp(4);
+  for (const line of wrap(po.supplierName, F_BOLD, PW - 2 * M)) {
+    addT(F_BOLD, line, M, 'left', LH_NOR);
+  }
+  if (po.supplierPhone)  addT(F_SM, `โทร: ${po.supplierPhone}`, M, 'left', LH_SM);
+  if (po.supplierLineId) addT(F_SM, `LINE ID: ${po.supplierLineId}`, M, 'left', LH_SM);
+  sep();
+
+  // ── Zone 4: Items table (รายการ | หมวดหมู่ | จำนวน | หน่วย) ─────────────────
+  C(`รายการวัตถุดิบ (${po.items.length} รายการ)`, F_BOLD, LH_NOR);
+  sp(4);
+
+  po.items.forEach((item, idx) => {
+    const nameLines = wrap(`${idx + 1}. ${item.name}`, F_BOLD, PW - 2 * M);
+    for (const line of nameLines) {
+      addT(F_BOLD, line, M, 'left', LH_NOR);
+    }
+    LR(`   หมวดหมู่: ${item.category ?? '-'}`, `${item.quantity} ${item.unit}`, F_SM, LH_SM);
+    sp(6);
+  });
+
+  sep();
+
+  // ── Zone 5: Summary ─────────────────────────────────────────────────────────
+  LR('จำนวนรายการทั้งหมด:', `${po.items.length} รายการ`, F_BOLD, LH_NOR);
+  sep();
+
+  // ── Zone 6: Footer — signatures ─────────────────────────────────────────────
+  sp(40);
+  addT(F_NOR, 'ผู้จัดซื้อ ...........................................', M, 'left', LH_NOR);
+  sp(36);
+  addT(F_NOR, 'ผู้ตรวจสอบ ...........................................', M, 'left', LH_NOR);
+  cy += 72;  // paper feed space before auto-cut
+
+  // ── Render command list to canvas ─────────────────────────────────────────
+  const canvas = document.createElement('canvas');
+  canvas.width  = PW;
+  canvas.height = cy;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, PW, cy);
+
+  for (const cmd of cmds) {
+    if (cmd.t === 'sep') {
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash(cmd.dashed ? [4, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(M, cmd.y);
+      ctx.lineTo(PW - M, cmd.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.font         = cmd.font;
+      ctx.textAlign    = cmd.align;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle    = '#000000';
+      ctx.fillText(cmd.text, cmd.x, cmd.y);
+    }
+  }
+
+  return canvas;
+}
+
+export function buildPurchaseOrderSlip(po: PurchaseOrderSlip): Uint8Array {
+  return canvasToEscPos(buildPurchaseOrderCanvas(po));
+}
