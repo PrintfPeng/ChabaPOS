@@ -695,6 +695,7 @@ export interface PurchaseOrderPrintItem {
   category?: string;
   quantity:  number;
   unit:      string;
+  unitPrice: number;
 }
 export interface PurchaseOrderSlip {
   branchName:      string;
@@ -761,23 +762,35 @@ function buildPurchaseOrderCanvas(po: PurchaseOrderSlip): HTMLCanvasElement {
   if (po.supplierLineId) addT(F_SM, `LINE ID: ${po.supplierLineId}`, M, 'left', LH_SM);
   sep();
 
-  // ── Zone 4: Items table (รายการ | หมวดหมู่ | จำนวน | หน่วย) ─────────────────
+  // ── Zone 4: Items list — 2 lines/item: name, then qty @ unit price → line total
   C(`รายการวัตถุดิบ (${po.items.length} รายการ)`, F_BOLD, LH_NOR);
   sp(4);
 
+  let grandTotal = 0;
   po.items.forEach((item, idx) => {
     const nameLines = wrap(`${idx + 1}. ${item.name}`, F_BOLD, PW - 2 * M);
     for (const line of nameLines) {
       addT(F_BOLD, line, M, 'left', LH_NOR);
     }
-    LR(`   หมวดหมู่: ${item.category ?? '-'}`, `${item.quantity} ${item.unit}`, F_SM, LH_SM);
+
+    const lineTotal = item.quantity * item.unitPrice;
+    grandTotal += lineTotal;
+
+    cmds.push({ t: 'txt', font: F_SM, text: `${item.quantity} ${item.unit} @ ${fmt(item.unitPrice)}`, x: NAME_X,  y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: F_SM, text: fmt(lineTotal),                                           x: PRICE_X, y: cy, align: 'right' });
+    cy += LH_SM;
+
     sp(6);
   });
 
   sep();
 
-  // ── Zone 5: Summary ─────────────────────────────────────────────────────────
+  // ── Zone 5: Summary — item count + grand total ────────────────────────────
   LR('จำนวนรายการทั้งหมด:', `${po.items.length} รายการ`, F_BOLD, LH_NOR);
+  sp(6);
+  C('ยอดรวมทั้งสิ้น (Grand Total)', F_BOLD, LH_NOR);
+  sp(2);
+  addT(`bold 40px ${THAI}`, `฿${fmt(grandTotal)}`, PW - M, 'right', LH_NOR + 16);
   sep();
 
   // ── Zone 6: Footer — signatures ─────────────────────────────────────────────

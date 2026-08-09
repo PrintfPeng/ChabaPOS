@@ -572,10 +572,11 @@ export default function InventoryDashboard() {
     supplierPhone:  order.supplier?.phone,
     supplierLineId: order.supplier?.lineId,
     items: (order.items ?? []).map(i => ({
-      name:     i.rawMaterial?.name ?? '-',
-      category: i.rawMaterial?.category?.name,
-      quantity: i.quantity,
-      unit:     i.rawMaterial?.unit ?? '',
+      name:      i.rawMaterial?.name ?? '-',
+      category:  i.rawMaterial?.category?.name,
+      quantity:  i.quantity,
+      unit:      i.rawMaterial?.unit ?? '',
+      unitPrice: i.price ?? 0,
     })),
   });
 
