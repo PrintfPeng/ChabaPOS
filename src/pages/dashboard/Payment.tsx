@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetHeader, SheetFooter, SheetTitle } from '../..
 import { Badge } from '../../components/ui/badge';
 import { useBranch } from '../../hooks/useBranches';
 import { cn } from '../../lib/utils';
+import { usePrinter } from '../../context/PrinterContext';
 
 /* ─── Types ─────────────────────────────────────────── */
 interface CustomerInfo {
@@ -420,9 +421,39 @@ function BillCard({ order, onClick }: { order: PaidOrder; onClick: () => void })
 }
 
 /* ─── Bill Detail Sheet ───────────────────────────────── */
-function BillDetailSheet({ order, open, onClose }: { order: PaidOrder | null; open: boolean; onClose: () => void }) {
+function BillDetailSheet({
+  order, open, onClose, branchName,
+}: {
+  order: PaidOrder | null; open: boolean; onClose: () => void; branchName?: string;
+}) {
+  const { printReceipt } = usePrinter();
   if (!order) return null;
   const subtotal = order.totalAmount + order.discountAmount;
+
+  const handlePrint = () => {
+    const printItems = order.items.map(item => ({
+      name:      item.name,
+      qty:       item.quantity,
+      unitPrice: item.price,
+      options:   Array.isArray(item.options) ? item.options.map(o => ({ name: o.name, price: o.price })) : undefined,
+      notes:     item.notes ?? undefined,
+    }));
+
+    printReceipt({
+      branchName:     branchName ?? 'ChabaPOS',
+      orderNumber:    order.orderNumber,
+      tableName:      order.table?.name,
+      dateTime:       new Date(order.createdAt).toLocaleString('th-TH', {
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      }),
+      paymentType:    order.paymentType === 'TRANSFER' ? 'TRANSFER' : 'CASH',
+      items:          printItems,
+      subtotal,
+      discountAmount: order.discountAmount || undefined,
+      finalTotal:     order.totalAmount,
+      source:         order.source,
+    }).catch(() => toast.error('พิมพ์ใบเสร็จไม่สำเร็จ — กรุณาตรวจสอบเครื่องพิมพ์'));
+  };
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -509,7 +540,7 @@ function BillDetailSheet({ order, open, onClose }: { order: PaidOrder | null; op
           </div>
           <Button
             className="w-full h-11 rounded-xl font-bold gap-2"
-            onClick={() => { toast.success('ส่งคำสั่งพิมพ์แล้ว'); onClose(); }}
+            onClick={handlePrint}
           >
             <Printer className="w-4 h-4" />
             พิมพ์ใบเสร็จ
@@ -524,6 +555,7 @@ function BillDetailSheet({ order, open, onClose }: { order: PaidOrder | null; op
 export default function Payment() {
   const { branchId } = useParams<{ branchId: string }>();
   const { branch } = useBranch(Number(branchId));
+  const { printReceipt } = usePrinter();
 
   /* Pending tab state */
   const [unpaidBills,         setUnpaidBills]         = useState<any[]>([]);
@@ -619,6 +651,21 @@ export default function Payment() {
           ? `ชำระเงินเสร็จสิ้น — ${memberInfo.name} ได้รับ +${pointsEarned} แต้ม`
           : 'ชำระเงินเสร็จสิ้น',
       );
+
+      // ── Snapshot everything the receipt needs before state resets below.
+      // /orders/table/:id/pay only returns { success: true } — no order data —
+      // so the receipt is assembled from what's already on screen.
+      const billSnapshot     = selectedBill;
+      const paymentSnapshot  = paymentMode;
+      const receivedSnapshot = paymentSnapshot === 'CASH' && receivedAmount ? parseFloat(receivedAmount) : undefined;
+      const changeSnapshot   = paymentSnapshot === 'CASH' ? change : undefined;
+      const memberSnapshot   = memberInfo;
+      const finalTotalSnapshot = finalTotal;
+      const now = new Date().toLocaleString('th-TH', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      });
+
       setSelectedBill(null);
       setPaymentMode(null);
       setReceivedAmount('');
@@ -627,6 +674,37 @@ export default function Payment() {
       setPreAppliedDiscount(0);
       setActivePromoId(null);
       fetchUnpaidBills();
+
+      // ── Fire-and-forget receipt print — never blocks bill closure.
+      // printReceipt() itself toasts if the printer isn't connected or the
+      // print fails, so the cashier is always notified either way.
+      if (paymentSnapshot) {
+        const printItems = billSnapshot.orders.flatMap((order: any) =>
+          order.items.map((item: any) => ({
+            name:      item.name,
+            qty:       item.quantity,
+            unitPrice: item.price,
+            options:   Array.isArray(item.options) ? item.options.map((o: any) => ({ name: o.name, price: o.price })) : undefined,
+            notes:     item.notes ?? undefined,
+          })),
+        );
+
+        printReceipt({
+          branchName:     branch?.name ?? 'ChabaPOS',
+          orderNumber:    billSnapshot.orders.map((o: any) => o.orderNumber).join(', '),
+          tableName:      billSnapshot.table?.name,
+          dateTime:       now,
+          paymentType:    paymentSnapshot,
+          items:          printItems,
+          subtotal:       billSnapshot.totalAmount,
+          discountAmount: totalDiscount || undefined,
+          finalTotal:     finalTotalSnapshot,
+          receivedAmount: receivedSnapshot,
+          changeAmount:   changeSnapshot,
+          memberName:     memberSnapshot?.name,
+          source:         'STAFF',
+        }).catch(() => toast.error('พิมพ์ใบเสร็จไม่สำเร็จ — กรุณาตรวจสอบเครื่องพิมพ์'));
+      }
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'ชำระเงินไม่สำเร็จ');
     } finally {
@@ -1093,6 +1171,7 @@ export default function Payment() {
         order={selectedHistoryOrder}
         open={!!selectedHistoryOrder}
         onClose={() => setSelectedHistoryOrder(null)}
+        branchName={branch?.name}
       />
     </div>
   );
