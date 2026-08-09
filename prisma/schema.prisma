@@ -287,6 +287,7 @@ model Shift {
   closedBy     User?       @relation("ShiftClosedBy", fields: [closedById], references: [id])
   notes        String?     @db.Text
   orders       Order[]
+  expenses     Expense[]
 
   @@index([branchId])
   @@index([openedById])
@@ -423,14 +424,18 @@ model Expense {
   id              Int            @id @default(autoincrement())
   amount          Float
   description     String?
+  paymentMethod   String         @default("CASH") // "CASH" | "TRANSFER"
   branchId        Int
   branch          Branch         @relation(fields: [branchId], references: [id])
   purchaseOrderId Int?           @unique
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  shiftId         String?
+  shift           Shift?         @relation(fields: [shiftId], references: [id])
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   @@index([branchId])
+  @@index([shiftId])
 }
 
 model PurchaseOrderItem {

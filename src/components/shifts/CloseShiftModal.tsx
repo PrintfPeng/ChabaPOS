@@ -26,30 +26,28 @@ export function CloseShiftModal({ open, branchId, shift, onClose }: Props) {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cashSales, setCashSales] = useState<number | null>(null);
+  const [cashExpenses, setCashExpenses] = useState<number | null>(null);
   const [loadingSales, setLoadingSales] = useState(false);
 
-  // โหลดยอดขายเงินสดของกะนี้
+  // โหลดยอดขายเงินสด + รายจ่ายเงินสดของกะนี้ (คำนวณสดจาก backend — สูตรเดียวกับตอนปิดกะจริง)
   useEffect(() => {
     if (!open) return;
     setLoadingSales(true);
-    api.get(`/branches/${branchId}/shifts/current`)
-      .then(() => {
-        // ใช้ข้อมูลจาก shift และดึงยอดขายเงินสดเพิ่มเติม
-        api.get(`/orders?branchId=${branchId}`)
-          .then(res => {
-            const orders: any[] = res.data ?? [];
-            const shiftCash = orders
-              .filter((o: any) => o.shiftId === shift.id && o.paymentType === 'CASH' && o.status === 'PAID')
-              .reduce((sum: number, o: any) => sum + o.totalAmount - (o.discountAmount ?? 0), 0);
-            setCashSales(shiftCash);
-          })
-          .catch(() => setCashSales(null))
-          .finally(() => setLoadingSales(false));
+    api.get(`/branches/${branchId}/shifts/${shift.id}/summary`)
+      .then(res => {
+        setCashSales(res.data?.totalCashSales ?? 0);
+        setCashExpenses(res.data?.totalCashExpenses ?? 0);
       })
-      .catch(() => setLoadingSales(false));
+      .catch(() => {
+        setCashSales(null);
+        setCashExpenses(null);
+      })
+      .finally(() => setLoadingSales(false));
   }, [open, branchId, shift.id]);
 
-  const expectedCash = cashSales !== null ? shift.startingCash + cashSales : null;
+  const expectedCash = cashSales !== null
+    ? shift.startingCash + cashSales - (cashExpenses ?? 0)
+    : null;
   const actual = parseFloat(actualCash) || 0;
   const diff = expectedCash !== null ? actual - expectedCash : null;
 
@@ -106,6 +104,14 @@ export function CloseShiftModal({ open, branchId, shift, onClose }: Props) {
               value={cashSales}
               loading={loadingSales}
             />
+            {!loadingSales && cashExpenses !== null && cashExpenses > 0 && (
+              <Row
+                label="รายจ่ายเงินสด (กะนี้)"
+                value={cashExpenses}
+                loading={loadingSales}
+                negative
+              />
+            )}
             <div className="border-t border-slate-200 pt-2 mt-2">
               <Row
                 label="ยอดที่ควรมีในลิ้นชัก"
@@ -134,22 +140,22 @@ export function CloseShiftModal({ open, branchId, shift, onClose }: Props) {
             />
           </div>
 
-          {/* ผลต่าง */}
+          {/* ผลต่าง — คำนวณ real-time ทันทีที่พิมพ์ */}
           {actualCash && diff !== null && (
             <div className={cn(
               'flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold',
-              diff === 0 && 'bg-green-50 text-green-700',
-              diff > 0  && 'bg-blue-50 text-blue-700',
+              diff === 0 && 'bg-blue-50 text-blue-700',
+              diff > 0  && 'bg-green-50 text-green-700',
               diff < 0  && 'bg-red-50 text-red-700',
             )}>
               {diff === 0 && <Minus className="w-4 h-4" />}
               {diff > 0  && <TrendingUp className="w-4 h-4" />}
               {diff < 0  && <TrendingDown className="w-4 h-4" />}
               {diff === 0
-                ? 'ยอดตรง — ไม่มีผลต่าง'
+                ? 'ยอดเงินตรงพอดี'
                 : diff > 0
                 ? `เงินเกิน ฿${diff.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                : `เงินขาด ฿${Math.abs(diff).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                : `ขาดอีก ฿${Math.abs(diff).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             </div>
           )}
 
@@ -185,21 +191,23 @@ export function CloseShiftModal({ open, branchId, shift, onClose }: Props) {
 }
 
 function Row({
-  label, value, loading, bold,
+  label, value, loading, bold, negative,
 }: {
   label: string;
   value: number | null;
   loading?: boolean;
   bold?: boolean;
+  /** แสดงเป็นตัวเลขติดลบสีแดง — ใช้กับรายการที่หักออกจากยอด เช่น รายจ่ายเงินสด */
+  negative?: boolean;
 }) {
   return (
     <div className={cn('flex justify-between', bold && 'font-bold text-slate-800')}>
       <span className="text-slate-500">{label}</span>
-      <span>
+      <span className={cn(negative && 'text-red-600 font-semibold')}>
         {loading
           ? '...'
           : value !== null
-          ? `฿${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+          ? `${negative && value > 0 ? '-' : ''}฿${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
           : '-'}
       </span>
     </div>

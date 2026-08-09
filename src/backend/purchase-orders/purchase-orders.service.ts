@@ -2,6 +2,7 @@ import { Injectable, Inject, NotFoundException, BadRequestException } from '@nes
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderStatusDto, ReceivePurchaseOrderDto } from './dto/purchase-order.dto';
 import { assertBranchAccess } from '../common/branch-access.helper';
+import { ShiftsService } from '../shifts/shifts.service';
 
 // A1-11: valid state-machine transitions for purchase orders
 const PO_TRANSITIONS: Record<string, string[]> = {
@@ -12,7 +13,10 @@ const PO_TRANSITIONS: Record<string, string[]> = {
 
 @Injectable()
 export class PurchaseOrdersService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(ShiftsService)  private readonly shifts: ShiftsService,
+  ) {}
 
   async create(userId: number, dto: CreatePurchaseOrderDto) {
     // A2-2: assertBranchAccess allows owner AND assigned staff
@@ -140,6 +144,10 @@ export class PurchaseOrdersService {
     // A2-2
     await assertBranchAccess(this.prisma, userId, order.branchId);
 
+    // ผูกรายจ่ายกับกะที่กำลังเปิดอยู่ (ถ้ามี) เพื่อให้หักลบเงินสดตอนปิดกะได้ถูกต้อง
+    const shiftId = await this.shifts.findOpenShiftId(order.branchId);
+    const paymentMethod = dto.paymentMethod ?? 'CASH';
+
     return this.prisma.$transaction(async (tx) => {
       // Atomic status guard — update ONLY if still PENDING to prevent double-processing
       const { count } = await tx.purchaseOrder.updateMany({
@@ -181,8 +189,10 @@ export class PurchaseOrdersService {
         data: {
           amount:          dto.totalAmount,
           description:     `รับเข้าวัตถุดิบจากใบสั่งซื้อ PO-${String(order.id).padStart(5, '0')} (${order.supplier.name})`,
+          paymentMethod,
           branchId:        order.branchId,
           purchaseOrderId: order.id,
+          shiftId,
         },
       });
 

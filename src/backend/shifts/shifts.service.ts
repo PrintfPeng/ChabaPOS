@@ -74,7 +74,14 @@ export class ShiftsService {
 
     const totalCashSales =
       (cashAgg._sum.totalAmount ?? 0) - (cashAgg._sum.discountAmount ?? 0);
-    const expectedCash = shift.startingCash + totalCashSales;
+
+    const expenseAgg = await this.prisma.expense.aggregate({
+      where: { shiftId: shift.id, paymentMethod: 'CASH' },
+      _sum:  { amount: true },
+    });
+    const totalCashExpenses = expenseAgg._sum.amount ?? 0;
+
+    const expectedCash = shift.startingCash + totalCashSales - totalCashExpenses;
 
     return this.prisma.shift.update({
       where: { id: shift.id },
@@ -132,6 +139,17 @@ export class ShiftsService {
       totalPrice: data.totalPrice,
     }));
 
+    // รายจ่ายเงินสดที่ผูกกับกะนี้ (ใบรับเข้าสินค้าที่จ่ายเป็นเงินสด)
+    const expenseAgg = await this.prisma.expense.aggregate({
+      where: { shiftId: shift.id, paymentMethod: 'CASH' },
+      _sum:  { amount: true },
+    });
+    const totalCashExpenses = expenseAgg._sum.amount ?? 0;
+
+    // คำนวณสดจากสูตรเดียวกับ closeShift() เสมอ — ทำให้ endpoint นี้ใช้พรีวิวยอด
+    // ระหว่างกะยังเปิดอยู่ได้ด้วย (ไม่ต้องรอให้ shift.expectedCash ถูกบันทึกตอนปิดกะ)
+    const expectedCash = shift.startingCash + totalCashSales - totalCashExpenses;
+
     return {
       branchName:  shift.branch.name,
       openedAt:    shift.openedAt,
@@ -142,11 +160,12 @@ export class ShiftsService {
         : null,
       startingCash: shift.startingCash,
       actualCash:   shift.actualCash,
-      expectedCash: shift.expectedCash,
-      shortOver:    shift.actualCash !== null && shift.expectedCash !== null
-        ? shift.actualCash - shift.expectedCash
+      expectedCash,
+      shortOver:    shift.actualCash !== null
+        ? shift.actualCash - expectedCash
         : null,
       totalCashSales,
+      totalCashExpenses,
       aggregatedItems,
     };
   }

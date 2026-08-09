@@ -14,8 +14,10 @@ import {
   SelectTrigger, SelectValue,
 } from '../../../components/ui/select';
 import {
-  Loader2, Printer, CheckCircle, Download, AlertCircle, ShoppingCart, RefreshCw, ClipboardList
+  Loader2, Printer, CheckCircle, Download, AlertCircle, ShoppingCart, RefreshCw, ClipboardList,
+  Banknote, QrCode,
 } from 'lucide-react';
+import { cn } from '../../../lib/utils';
 import { toast } from 'sonner';
 import { createRoot } from 'react-dom/client';
 import { toPng } from 'html-to-image';
@@ -236,6 +238,7 @@ export default function Expenses() {
   const [isLoading,     setIsLoading]     = useState(true);
   const [isSubmitting,  setIsSubmitting]  = useState(false);
   const [receiptItems,  setReceiptItems]  = useState<Record<number, ReceiptItemState>>({});
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'TRANSFER'>('CASH');
 
   const branchName  = branch?.name ?? `สาขา #${branchId}`;
 
@@ -362,6 +365,7 @@ export default function Expenses() {
       // POST payload to process Goods Receipt & Expenses
       await api.post(`/purchase-orders/${selectedPo.id}/receive`, {
         totalAmount: grandTotal,
+        paymentMethod,
         items: itemsArray.map(i => ({
           rawMaterialId: i.rawMaterialId,
           actualQuantity: i.actualQuantity,
@@ -371,6 +375,7 @@ export default function Expenses() {
 
       toast.success('บันทึกรับเข้าคลังและบันทึกรายจ่ายเสร็จสมบูรณ์!');
       setSelectedPoId('');
+      setPaymentMethod('CASH');
       fetchPendingOrders();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึกรายจ่าย');
@@ -565,14 +570,48 @@ export default function Expenses() {
               </div>
 
               {/* Bottom Summary Bar */}
-              <div className="p-5 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+              <div className="p-5 border-t border-slate-100 flex flex-col gap-4 bg-slate-50/50">
+                {/* Payment method */}
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">ช่องทางการชำระเงิน</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('CASH')}
+                      className={cn(
+                        'flex items-center gap-1.5 px-4 h-9 rounded-xl text-sm font-bold border-2 transition-all',
+                        paymentMethod === 'CASH'
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300',
+                      )}
+                    >
+                      <Banknote className="w-4 h-4" />
+                      เงินสด
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('TRANSFER')}
+                      className={cn(
+                        'flex items-center gap-1.5 px-4 h-9 rounded-xl text-sm font-bold border-2 transition-all',
+                        paymentMethod === 'TRANSFER'
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300',
+                      )}
+                    >
+                      <QrCode className="w-4 h-4" />
+                      โอน / สแกน
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex gap-4">
                   <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
                     ยอดรวมรายการทั้งหมด
                     <p className="text-slate-800 text-lg font-black mt-0.5">{selectedPo.items.length} รายการ</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-6">
                   <div className="text-right">
                     <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">ยอดจ่ายรวมสุทธิ</span>
@@ -595,6 +634,7 @@ export default function Expenses() {
                       </>
                     )}
                   </Button>
+                </div>
                 </div>
               </div>
             </CardContent>

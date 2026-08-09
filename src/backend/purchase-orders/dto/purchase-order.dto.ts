@@ -49,6 +49,12 @@ export class ReceivePurchaseOrderDto {
   @IsNumber()
   totalAmount: number;
 
+  /** How this expense was paid — defaults to CASH when omitted (matches the schema default) */
+  @IsOptional()
+  @IsString()
+  @IsIn(['CASH', 'TRANSFER'])
+  paymentMethod?: 'CASH' | 'TRANSFER';
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ReceivePurchaseOrderItemDto)

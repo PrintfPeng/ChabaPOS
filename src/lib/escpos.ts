@@ -79,6 +79,7 @@ export interface ShiftSummaryReceipt {
   expectedCash: number | null;
   shortOver: number | null;
   totalCashSales: number;
+  totalCashExpenses: number;
   aggregatedItems: { name: string; qty: number; totalPrice: number }[];
 }
 
@@ -513,6 +514,9 @@ function buildShiftSummaryCanvas(r: ShiftSummaryReceipt): HTMLCanvasElement {
   
   LR('เงินทอนเริ่มต้น:', `฿${fmt(r.startingCash)}`);
   LR('ยอดขายเงินสดทั้งหมด:', `฿${fmt(r.totalCashSales)}`);
+  if (r.totalCashExpenses > 0) {
+    LR('รายจ่ายเงินสด:', `-฿${fmt(r.totalCashExpenses)}`);
+  }
   if (r.expectedCash !== null) {
     LR('ยอดที่ควรมีในลิ้นชัก:', `฿${fmt(r.expectedCash)}`, F_BOLD);
   }
