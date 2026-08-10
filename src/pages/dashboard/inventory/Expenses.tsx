@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { createRoot } from 'react-dom/client';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { usePrinter } from '../../../context/PrinterContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface RawMaterial {
@@ -240,6 +241,8 @@ export default function Expenses() {
   const [receiptItems,  setReceiptItems]  = useState<Record<number, ReceiptItemState>>({});
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'TRANSFER'>('CASH');
 
+  const { status: printerStatus, printPurchaseReceipt } = usePrinter();
+
   const branchName  = branch?.name ?? `สาขา #${branchId}`;
 
   // ── Fetch Pending POs ──────────────────────────────────────────────────────
@@ -314,14 +317,32 @@ export default function Expenses() {
     }));
   };
 
-  // ── Print receipt ─────────────────────────────────────────────────────────
+  // ── Print receipt (Bluetooth thermal 80mm) ──────────────────────────────────
   const handlePrint = () => {
     if (!selectedPo) return;
-    setTimeout(() => {
-      document.body.classList.add('cpos-print-receipt');
-      window.print();
-      setTimeout(() => document.body.classList.remove('cpos-print-receipt'), 600);
-    }, 150);
+    if (printerStatus !== 'connected') {
+      toast.error('กรุณาเชื่อมต่อเครื่องพิมพ์ก่อนพิมพ์ใบจ่ายเงิน');
+      return;
+    }
+    const items = (Object.values(receiptItems) as ReceiptItemState[]).map(it => {
+      const poItem = selectedPo.items.find(p => p.rawMaterialId === it.rawMaterialId);
+      return {
+        name:      poItem?.rawMaterial?.name ?? '-',
+        quantity:  it.actualQuantity,
+        unit:      poItem?.rawMaterial?.unit ?? '',
+        unitPrice: it.pricePerUnit,
+      };
+    });
+    printPurchaseReceipt({
+      branchName,
+      poNumber:      `PO-${String(selectedPo.id).padStart(5, '0')}`,
+      dateTime:      new Date().toLocaleString('th-TH'),
+      supplierName:  selectedPo.supplier?.name ?? '-',
+      supplierPhone: selectedPo.supplier?.phone,
+      paymentMethod,
+      items,
+      grandTotal,
+    });
   };
 
   // ── PDF Download ──────────────────────────────────────────────────────────
@@ -394,20 +415,6 @@ export default function Expenses() {
 
   return (
     <>
-      {/* ── Print Media CSS ── */}
-      <style>{`
-        @media print {
-          body.cpos-print-receipt * { visibility: hidden !important; }
-          body.cpos-print-receipt #cpos-print-receipt {
-            visibility: visible !important;
-            display: block !important;
-            position: absolute; left: 0; top: 0; width: 100%; z-index: 9999;
-          }
-          body.cpos-print-receipt #cpos-print-receipt * { visibility: visible !important; }
-          @page { size: A4; margin: 1.5cm; }
-        }
-      `}</style>
-
       {/* ═══════════════════════ SCREEN UI ══════════════════════════════════ */}
       <div className="space-y-5 print:hidden">
         
@@ -639,20 +646,6 @@ export default function Expenses() {
               </div>
             </CardContent>
           </Card>
-        )}
-      </div>
-
-      {/* ═══════════════════════ PRINT CONTAINER ════════════════════════════ */}
-      <div id="cpos-print-receipt" style={{ display: 'none' }}>
-        {selectedPo && (
-          <div style={{ padding: 0, background: '#fff' }}>
-            <PdfReceiptTemplate
-              po={selectedPo}
-              receiptItems={receiptItems}
-              grandTotal={grandTotal}
-              branchName={branchName}
-            />
-          </div>
         )}
       </div>
     </>

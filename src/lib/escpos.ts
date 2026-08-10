@@ -841,3 +841,142 @@ function buildPurchaseOrderCanvas(po: PurchaseOrderSlip): HTMLCanvasElement {
 export function buildPurchaseOrderSlip(po: PurchaseOrderSlip): Uint8Array {
   return canvasToEscPos(buildPurchaseOrderCanvas(po));
 }
+
+// ── Purchase receipt / expense slip — goods received + amount actually paid ──
+export interface PurchaseReceiptPrintItem {
+  name:      string;
+  quantity:  number;
+  unit:      string;
+  unitPrice: number;
+}
+export interface PurchaseReceiptSlip {
+  branchName:     string;
+  poNumber:       string;
+  dateTime:       string;
+  supplierName:   string;
+  supplierPhone?: string;
+  paymentMethod:  'CASH' | 'TRANSFER';
+  items:          PurchaseReceiptPrintItem[];
+  grandTotal:     number;
+}
+
+function buildPurchaseReceiptCanvas(r: PurchaseReceiptSlip): HTMLCanvasElement {
+  const mc = document.createElement('canvas').getContext('2d')!;
+
+  function wrap(text: string, font: string, maxW: number): string[] {
+    mc.font = font;
+    if (mc.measureText(text).width <= maxW) return [text];
+    const chars = [...text];
+    const lines: string[] = [];
+    let line = '';
+    for (const ch of chars) {
+      if (mc.measureText(line + ch).width <= maxW) { line += ch; }
+      else { if (line) lines.push(line); line = ch; }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [text];
+  }
+
+  const cmds: Cmd[] = [];
+  let cy = 46;
+
+  const addT = (font: string, text: string, x: number, align: CanvasTextAlign, lh: number) => {
+    cmds.push({ t: 'txt', font, text, x, y: cy, align });
+    cy += lh;
+  };
+  const C  = (t: string, f = F_NOR, lh = LH_NOR) => addT(f, t, PW / 2, 'center', lh);
+  const LR = (l: string, r2: string, f = F_NOR, lh = LH_NOR) => {
+    cmds.push({ t: 'txt', font: f, text: l, x: M,      y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: f, text: r2, x: PW - M, y: cy, align: 'right' });
+    cy += lh;
+  };
+  const sep = (dashed = false) => { cy += 15; cmds.push({ t: 'sep', y: cy, dashed }); cy += 33; };
+  const sp  = (h = 8) => { cy += h; };
+
+  // ── Zone 1: Header ──────────────────────────────────────────────────────────
+  C(r.branchName, F_BOLD, 46);
+  sp(4);
+  C('ใบรับเข้าสินค้า / ใบจ่ายเงิน', F_BOLD, LH_NOR);
+  C('Goods Receipt / Expense', F_SM, LH_SM);
+  sp(4);
+  sep();
+
+  // ── Zone 2: Doc info ────────────────────────────────────────────────────────
+  LR(`เลขที่: ${r.poNumber}`, r.dateTime, F_MONO, LH_NOR);
+  sep();
+
+  // ── Zone 3: Supplier info ───────────────────────────────────────────────────
+  C('ข้อมูลร้านค้า / Supplier', F_BOLD, LH_NOR);
+  sp(4);
+  for (const line of wrap(r.supplierName, F_BOLD, PW - 2 * M)) {
+    addT(F_BOLD, line, M, 'left', LH_NOR);
+  }
+  if (r.supplierPhone) addT(F_SM, `โทร: ${r.supplierPhone}`, M, 'left', LH_SM);
+  sep();
+
+  // ── Zone 4: Items — name, then qty @ unit price → line total ────────────────
+  C(`รายการที่รับเข้า (${r.items.length} รายการ)`, F_BOLD, LH_NOR);
+  sp(4);
+
+  r.items.forEach((item, idx) => {
+    for (const line of wrap(`${idx + 1}. ${item.name}`, F_BOLD, PW - 2 * M)) {
+      addT(F_BOLD, line, M, 'left', LH_NOR);
+    }
+    const lineTotal = item.quantity * item.unitPrice;
+    cmds.push({ t: 'txt', font: F_SM, text: `${item.quantity} ${item.unit} @ ${fmt(item.unitPrice)}`, x: NAME_X,  y: cy, align: 'left'  });
+    cmds.push({ t: 'txt', font: F_SM, text: fmt(lineTotal),                                           x: PRICE_X, y: cy, align: 'right' });
+    cy += LH_SM;
+    sp(6);
+  });
+
+  sep();
+
+  // ── Zone 5: Summary — grand total + payment method ──────────────────────────
+  C('ยอดจ่ายรวมทั้งสิ้น (Grand Total)', F_BOLD, LH_NOR);
+  sp(2);
+  addT(`bold 40px ${THAI}`, `฿${fmt(r.grandTotal)}`, PW - M, 'right', LH_NOR + 16);
+  sp(4);
+  LR('ชำระโดย:', r.paymentMethod === 'CASH' ? 'เงินสด' : 'เงินโอน / สแกน', F_BOLD, LH_NOR);
+  sep();
+
+  // ── Zone 6: Footer — signatures ─────────────────────────────────────────────
+  sp(40);
+  addT(F_NOR, 'ผู้รับของ ...........................................', M, 'left', LH_NOR);
+  sp(36);
+  addT(F_NOR, 'ผู้จ่ายเงิน ...........................................', M, 'left', LH_NOR);
+  cy += 72;  // paper feed space before auto-cut
+
+  // ── Render command list to canvas ─────────────────────────────────────────
+  const canvas = document.createElement('canvas');
+  canvas.width  = PW;
+  canvas.height = cy;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, PW, cy);
+
+  for (const cmd of cmds) {
+    if (cmd.t === 'sep') {
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash(cmd.dashed ? [4, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(M, cmd.y);
+      ctx.lineTo(PW - M, cmd.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.font         = cmd.font;
+      ctx.textAlign    = cmd.align;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle    = '#000000';
+      ctx.fillText(cmd.text, cmd.x, cmd.y);
+    }
+  }
+
+  return canvas;
+}
+
+export function buildPurchaseReceiptSlip(r: PurchaseReceiptSlip): Uint8Array {
+  return canvasToEscPos(buildPurchaseReceiptCanvas(r));
+}

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { BluetoothPrinter, PrinterStatus } from '../lib/bluetoothPrinter';
-import { buildOrderReceipt, buildTableQRSlip, PrintReceipt, buildShiftSummaryReceipt, ShiftSummaryReceipt, buildKitchenSlip, KitchenSlip, buildPurchaseOrderSlip, PurchaseOrderSlip } from '../lib/escpos';
+import { buildOrderReceipt, buildTableQRSlip, PrintReceipt, buildShiftSummaryReceipt, ShiftSummaryReceipt, buildKitchenSlip, KitchenSlip, buildPurchaseOrderSlip, PurchaseOrderSlip, buildPurchaseReceiptSlip, PurchaseReceiptSlip } from '../lib/escpos';
 import { toast } from 'sonner';
 
 // Forced gap between two queued jobs so the printer hardware can drain its own
@@ -30,6 +30,7 @@ interface PrinterCtx {
   printKitchenSlip:  (slip: KitchenSlip) => Promise<void>;
   printShiftSummary: (receipt: ShiftSummaryReceipt) => Promise<void>;
   printPurchaseOrder: (po: PurchaseOrderSlip) => Promise<void>;
+  printPurchaseReceipt: (r: PurchaseReceiptSlip) => Promise<void>;
   /** FIFO enqueue for fire-and-forget prints triggered by concurrent events
    *  (e.g. multiple QR tables ordering at once). Jobs are drained one at a
    *  time with a forced gap between them. Prefer this over calling
@@ -172,6 +173,22 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const printPurchaseReceipt = useCallback(async (r: PurchaseReceiptSlip) => {
+    if (!printerRef.current.isConnected) {
+      toast.error('กรุณาเชื่อมต่อเครื่องพิมพ์ก่อนพิมพ์ใบจ่ายเงิน');
+      return;
+    }
+    try {
+      const data = buildPurchaseReceiptSlip(r);
+      await printerRef.current.print(data);
+      toast.success('ส่งคำสั่งพิมพ์ใบจ่ายเงินแล้ว');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'พิมพ์ใบจ่ายเงินไม่สำเร็จ');
+      setStatus('disconnected');
+      setDeviceName(null);
+    }
+  }, []);
+
   const printShiftSummary = useCallback(async (receipt: ShiftSummaryReceipt) => {
     if (!printerRef.current.isConnected) {
       toast.warning('กรุณาเชื่อมต่อ printer ก่อน');
@@ -211,7 +228,7 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ status, isPrinting, deviceName, isSupported, connect, disconnect, printReceipt, printKitchenSlip, printShiftSummary, printTableQR, printPurchaseOrder, enqueuePrintJob }}>
+    <Ctx.Provider value={{ status, isPrinting, deviceName, isSupported, connect, disconnect, printReceipt, printKitchenSlip, printShiftSummary, printTableQR, printPurchaseOrder, printPurchaseReceipt, enqueuePrintJob }}>
       {children}
     </Ctx.Provider>
   );
@@ -223,4 +240,4 @@ export function usePrinter(): PrinterCtx {
   return ctx;
 }
 
-export type { PrintReceipt, ShiftSummaryReceipt, KitchenSlip, PurchaseOrderSlip };
+export type { PrintReceipt, ShiftSummaryReceipt, KitchenSlip, PurchaseOrderSlip, PurchaseReceiptSlip };
