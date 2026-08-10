@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
-import { Loader2, ShoppingCart, Plus, Minus, X, ChevronLeft, Search, UtensilsCrossed } from 'lucide-react';
+import { Loader2, ShoppingCart, Plus, Minus, X, ChevronLeft, Search, UtensilsCrossed, Phone, UserCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { toast } from 'sonner';
@@ -37,6 +37,13 @@ interface Category {
   items: MenuItem[];
 }
 
+interface CustomerInfo {
+  id: number;
+  name: string;
+  phone: string;
+  points: number;
+}
+
 export default function StaffOrdering() {
   const { branchId, tableId } = useParams<{ branchId: string; tableId: string }>();
   const navigate = useNavigate();
@@ -54,6 +61,36 @@ export default function StaffOrdering() {
   const [quantity, setQuantity] = useState(1);
   const [itemNotes, setItemNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ── Member (customer lookup so the order earns reward points) ──
+  const [member,         setMember]         = useState<CustomerInfo | null>(null);
+  const [memberPhone,    setMemberPhone]    = useState('');
+  const [isSearching,    setIsSearching]    = useState(false);
+  const [memberNotFound, setMemberNotFound] = useState(false);
+
+  const searchMember = async () => {
+    if (memberPhone.length < 9) return toast.error('กรอกเบอร์โทร 9-10 หลัก');
+    setIsSearching(true); setMemberNotFound(false); setMember(null);
+    try {
+      const res = await api.get(`/customers/lookup?phone=${memberPhone}&branchId=${branchId}`);
+      if (res.data) {
+        setMember(res.data);
+        toast.success(`พบสมาชิก "${res.data.name}" — ${res.data.points} แต้ม`);
+      } else {
+        setMemberNotFound(true);
+      }
+    } catch {
+      setMemberNotFound(true);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const clearMember = () => {
+    setMember(null);
+    setMemberPhone('');
+    setMemberNotFound(false);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -155,6 +192,7 @@ export default function StaffOrdering() {
         branchId: Number(branchId),
         tableId: tId && !isNaN(tId) ? tId : null,
         source: 'STAFF',
+        ...(member ? { customerId: member.id } : {}),
         items: cart.map(item => ({
           menuItemId: item.menuItemId,
           quantity: item.quantity,
@@ -303,13 +341,20 @@ export default function StaffOrdering() {
               <span className="font-bold text-lg">฿{totalAmount.toLocaleString()}</span>
             </SheetTrigger>
             <SheetContent side="bottom" className="h-[80vh] rounded-t-[32px] p-0 overflow-hidden border-none shadow-2xl">
-              <CartSummaryContent 
-                cart={cart} 
-                updateCartQuantity={updateCartQuantity} 
-                removeFromCart={removeFromCart} 
-                totalAmount={totalAmount} 
-                handleSubmitOrder={handleSubmitOrder} 
-                isSubmitting={isSubmitting} 
+              <CartSummaryContent
+                cart={cart}
+                updateCartQuantity={updateCartQuantity}
+                removeFromCart={removeFromCart}
+                totalAmount={totalAmount}
+                handleSubmitOrder={handleSubmitOrder}
+                isSubmitting={isSubmitting}
+                member={member}
+                memberPhone={memberPhone}
+                setMemberPhone={setMemberPhone}
+                isSearching={isSearching}
+                memberNotFound={memberNotFound}
+                searchMember={searchMember}
+                clearMember={clearMember}
               />
             </SheetContent>
           </Sheet>
@@ -318,13 +363,20 @@ export default function StaffOrdering() {
 
       {/* Right: Cart Summary (Desktop Only) */}
       <div className="hidden lg:flex w-[320px] xl:w-[380px] bg-white rounded-[32px] border border-slate-100 flex-col shadow-xl shadow-slate-200/50 overflow-hidden shrink-0">
-        <CartSummaryContent 
-          cart={cart} 
-          updateCartQuantity={updateCartQuantity} 
-          removeFromCart={removeFromCart} 
-          totalAmount={totalAmount} 
-          handleSubmitOrder={handleSubmitOrder} 
-          isSubmitting={isSubmitting} 
+        <CartSummaryContent
+          cart={cart}
+          updateCartQuantity={updateCartQuantity}
+          removeFromCart={removeFromCart}
+          totalAmount={totalAmount}
+          handleSubmitOrder={handleSubmitOrder}
+          isSubmitting={isSubmitting}
+          member={member}
+          memberPhone={memberPhone}
+          setMemberPhone={setMemberPhone}
+          isSearching={isSearching}
+          memberNotFound={memberNotFound}
+          searchMember={searchMember}
+          clearMember={clearMember}
         />
       </div>
 
@@ -454,7 +506,10 @@ export default function StaffOrdering() {
   );
 }
 
-function CartSummaryContent({ cart, updateCartQuantity, removeFromCart, totalAmount, handleSubmitOrder, isSubmitting }: any) {
+function CartSummaryContent({
+  cart, updateCartQuantity, removeFromCart, totalAmount, handleSubmitOrder, isSubmitting,
+  member, memberPhone, setMemberPhone, isSearching, memberNotFound, searchMember, clearMember,
+}: any) {
   return (
     <div className="flex flex-col h-full overflow-hidden w-full">
       <div className="p-6 border-b flex justify-between items-center bg-white shrink-0 capitalize">
@@ -512,6 +567,57 @@ function CartSummaryContent({ cart, updateCartQuantity, removeFromCart, totalAmo
       </div>
 
       <div className="p-6 bg-white border-t border-slate-100 space-y-4 shadow-[0_-15px_30px_rgba(0,0,0,0.02)] shrink-0">
+        {/* ── Member lookup (so the order earns reward points) ── */}
+        <div className="space-y-2">
+          {!member ? (
+            <>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <Input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="เบอร์โทรสมาชิก (ถ้ามี)"
+                    value={memberPhone}
+                    onChange={(e: any) => setMemberPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onKeyDown={(e: any) => e.key === 'Enter' && searchMember()}
+                    className="pl-9 h-10 rounded-xl text-sm border-slate-200"
+                    maxLength={10}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={searchMember}
+                  disabled={isSearching || memberPhone.length < 9}
+                  className="h-10 rounded-xl font-bold shrink-0 px-4"
+                >
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : 'ค้นหา'}
+                </Button>
+              </div>
+              {memberNotFound && (
+                <p className="text-xs font-semibold text-red-500 px-1">ไม่พบข้อมูลสมาชิก</p>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
+              <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0">
+                <UserCheck className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-emerald-800 truncate">สมาชิก: {member.name}</p>
+                <p className="text-[10px] text-emerald-600">{member.points.toLocaleString()} แต้ม</p>
+              </div>
+              <button
+                type="button"
+                onClick={clearMember}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-emerald-400 hover:text-emerald-700 hover:bg-emerald-100 shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-between items-center px-2">
           <span className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">ราคารวมทั้งสิ้น</span>
           <span className="text-3xl font-black text-slate-900 tracking-tighter italic">฿{totalAmount.toLocaleString()}</span>
