@@ -55,14 +55,14 @@ interface Props {
  * Printer: uses PrinterContext (Bluetooth). Falls back silently when not connected.
  */
 export function OrderRealtimeListener({ branchId }: Props) {
-  const { printKitchenSlip } = usePrinter();
+  const { enqueuePrintJob } = usePrinter();
 
-  // Stable ref — avoids fetchItems needing printKitchenSlip in deps
-  const printRef    = useRef(printKitchenSlip);
+  // Stable ref — avoids the effect needing enqueuePrintJob in deps
+  const enqueueRef  = useRef(enqueuePrintJob);
   const seenIds     = useRef<Set<number>>(new Set());
   const isFirstPoll = useRef(true);
 
-  useEffect(() => { printRef.current = printKitchenSlip; }, [printKitchenSlip]);
+  useEffect(() => { enqueueRef.current = enqueuePrintJob; }, [enqueuePrintJob]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -81,11 +81,10 @@ export function OrderRealtimeListener({ branchId }: Props) {
         duration: 5_000,
       });
 
-      try {
-        await printRef.current(orderToSlip(order));
-      } catch (err) {
-        console.error('[OrderRealtimeListener] print error:', err);
-      }
+      // Enqueue instead of printing directly — when several tables order within
+      // the same few milliseconds, the FIFO queue in PrinterContext drains them
+      // one at a time so their raster streams never overlap on the printer.
+      enqueueRef.current(orderToSlip(order), 'KITCHEN_SLIP');
     };
 
     // ── Polling (primary — no Supabase needed) ────────────────────────────
