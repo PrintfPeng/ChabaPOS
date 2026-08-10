@@ -11,6 +11,7 @@ import { ScrollArea } from '../../components/ui/scroll-area';
 import { Badge } from '../../components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../../components/ui/sheet';
 import { cn } from '../../lib/utils';
+import { usePrinter } from '../../context/PrinterContext';
 
 interface MenuItem {
   id: number;
@@ -39,7 +40,8 @@ interface Category {
 export default function StaffOrdering() {
   const { branchId, tableId } = useParams<{ branchId: string; tableId: string }>();
   const navigate = useNavigate();
-  
+  const { status: printerStatus, printKitchenSlip } = usePrinter();
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [branchName, setBranchName] = useState('');
   const [tableName, setTableName] = useState('');
@@ -149,7 +151,7 @@ export default function StaffOrdering() {
     setIsSubmitting(true);
     try {
       const tId = tableId ? Number(tableId) : null;
-      await api.post('/orders', {
+      const orderRes = await api.post('/orders', {
         branchId: Number(branchId),
         tableId: tId && !isNaN(tId) ? tId : null,
         source: 'STAFF',
@@ -162,6 +164,37 @@ export default function StaffOrdering() {
       });
 
       toast.success('บันทึกออเดอร์สำเร็จ');
+
+      // ── Print kitchen slip — non-blocking. A printer failure must never stop
+      //    the order from completing or the navigation back to table management.
+      //    The /orders response only returns order metadata (orderNumber), not
+      //    the KitchenSlip-shaped item list, so the slip is assembled from the
+      //    cart still on screen.
+      if (printerStatus === 'connected') {
+        try {
+          const now = new Date().toLocaleString('th-TH', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+          });
+          await printKitchenSlip({
+            orderNumber: orderRes.data?.orderNumber ?? '-',
+            tableName,
+            dateTime: now,
+            items: cart.map(item => ({
+              name: item.name,
+              qty: item.quantity,
+              unitPrice: item.price + item.options.reduce((s: number, o: any) => s + o.price, 0),
+              options: item.options.map((o: any) => ({ name: o.name, price: o.price })),
+              notes: item.notes,
+            })),
+          });
+        } catch {
+          toast.error('ออเดอร์เข้าครัวแล้ว แต่เครื่องพิมพ์ไม่ได้เชื่อมต่อ');
+        }
+      } else {
+        toast.error('ออเดอร์เข้าครัวแล้ว แต่เครื่องพิมพ์ไม่ได้เชื่อมต่อ');
+      }
+
       navigate(-1);
     } catch (error) {
       toast.error('สั่งอาหารไม่สำเร็จ กรุณาลองใหม่');
