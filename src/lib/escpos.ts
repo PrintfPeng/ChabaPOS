@@ -221,7 +221,10 @@ function buildCanvas(r: PrintReceipt): HTMLCanvasElement {
                   : r.tableName             ? 'กินที่ร้าน'
                   :                           'Take Away';
 
-  LR(`ออเดอร์: #${r.orderNumber}`, `โต๊ะ: ${r.tableName ?? 'Take Away'}`);
+  // ออเดอร์และโต๊ะแยกกันคนละบรรทัด — เลขออเดอร์ยาวพอที่จะชนข้อความ "โต๊ะ:"
+  // ที่ชิดขวาได้ถ้าอยู่บรรทัดเดียวกัน (LR ไม่มีการตรวจชนกัน)
+  addT(F_NOR, `ออเดอร์: #${r.orderNumber}`, M, 'left', LH_NOR);
+  addT(F_NOR, `โต๊ะ: ${r.tableName ?? 'Take Away'}`, M, 'left', LH_NOR);
   if (r.staffName) LR(`พนักงาน: ${r.staffName}`, `ประเภท: ${orderType}`);
   LR(`วันที่: ${datePart}`, `เวลา: ${timePart}`, F_MONO);
 
