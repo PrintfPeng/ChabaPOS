@@ -3,9 +3,7 @@ import { Routes, Route, Link, useLocation, useParams } from 'react-router-dom';
 import { cn } from '../../../lib/utils';
 
 import InventoryDashboard from './InventoryDashboard';
-import Suppliers from './Suppliers';
-import Categories from './Categories';
-import Materials from './Materials';
+import InventorySettings from './InventorySettings';
 import MaterialStock from './MaterialStock';
 import CreatePurchaseOrder from './CreatePurchaseOrder';
 import Expenses from './Expenses';
@@ -17,11 +15,9 @@ export default function InventoryLayout() {
 
   const tabs = [
     { name: 'ภาพรวม', path: '' },
+    { name: 'ตั้งค่าจัดการคลังสินค้า', path: '/settings' },
     { name: 'สั่งซื้อวัตถุดิบ', path: '/purchase-orders/create' },
-    { name: 'วัตถุดิบ', path: '/materials' },
     { name: 'ยอดวัตถุดิบคงเหลือ', path: '/material-stock' },
-    { name: 'หมวดหมู่', path: '/categories' },
-    { name: 'ซัพพลายเออร์', path: '/suppliers' },
     { name: 'รายจ่าย', path: '/expenses' },
   ];
 
@@ -37,7 +33,11 @@ export default function InventoryLayout() {
         <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
           {tabs.map((tab) => {
             const fullPath = `${basePath}${tab.path}`;
-            const isActive = location.pathname === fullPath || location.pathname === fullPath + '/';
+            // Index tab: exact match only. Other tabs: also match nested paths
+            // (e.g. the settings tab stays active on /settings/categories).
+            const isActive = tab.path === ''
+              ? location.pathname === basePath || location.pathname === basePath + '/'
+              : location.pathname === fullPath || location.pathname.startsWith(fullPath + '/');
             return (
               <Link
                 key={tab.name}
@@ -59,9 +59,7 @@ export default function InventoryLayout() {
       <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
         <Routes>
           <Route index element={<InventoryDashboard />} />
-          <Route path="suppliers" element={<Suppliers />} />
-          <Route path="categories" element={<Categories />} />
-          <Route path="materials" element={<Materials />} />
+          <Route path="settings/*" element={<InventorySettings />} />
           <Route path="material-stock" element={<MaterialStock />} />
           <Route path="purchase-orders/create" element={<CreatePurchaseOrder />} />
           <Route path="expenses" element={<Expenses />} />
