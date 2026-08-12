@@ -20,8 +20,21 @@ export class PromotionsService {
     const { branchId } = await this.tableAccess.resolve(qrCode);
     return this.prisma.promotion.findMany({
       where: { branchId, isActive: true },
+      include: { applicableItems: { select: { id: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /** Validate that every menu id belongs to the branch (prevents cross-branch targeting). */
+  private async assertMenuIdsInBranch(branchId: number, menuIds: number[]) {
+    if (!menuIds.length) return;
+    const found = await this.prisma.menuItem.findMany({
+      where:  { id: { in: menuIds }, branchId },
+      select: { id: true },
+    });
+    if (found.length !== menuIds.length) {
+      throw new BadRequestException('เมนูบางรายการไม่ได้อยู่ในสาขานี้');
+    }
   }
 
   // A2-2: delegates to shared helper — allows both owner and assigned staff
@@ -36,24 +49,37 @@ export class PromotionsService {
         branchId,
         ...(activeOnly ? { isActive: true } : {}),
       },
+      include: { applicableItems: { select: { id: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(id: number) {
-    const promo = await this.prisma.promotion.findUnique({ where: { id } });
+    const promo = await this.prisma.promotion.findUnique({
+      where: { id },
+      include: { applicableItems: { select: { id: true } } },
+    });
     if (!promo) throw new NotFoundException('Promotion not found');
     return promo;
   }
 
   async create(userId: number, dto: CreatePromotionDto) {
     await this.assertBranchOwner(userId, dto.branchId);
+
+    const targetType = dto.targetType ?? 'ENTIRE_ORDER';
+    const menuIds    = targetType === 'SPECIFIC_ITEMS' ? (dto.menuIds ?? []) : [];
+    if (targetType === 'SPECIFIC_ITEMS') {
+      if (!menuIds.length) throw new BadRequestException('กรุณาเลือกเมนูอย่างน้อย 1 รายการ');
+      await this.assertMenuIdsInBranch(dto.branchId, menuIds);
+    }
+
     return this.prisma.promotion.create({
       data: {
         name:         dto.name,
         code:         dto.code ?? null,
         type:         dto.type,
         value:        dto.value,
+        targetType,
         minSpend:     dto.minSpend ?? 0,
         pointsNeeded: dto.pointsNeeded ?? 0,
         memberOnly:   dto.memberOnly ?? false,
@@ -61,20 +87,34 @@ export class PromotionsService {
         startDate:    dto.startDate ? new Date(dto.startDate) : null,
         endDate:      dto.endDate   ? new Date(dto.endDate)   : null,
         branchId:     dto.branchId,
+        ...(menuIds.length ? { applicableItems: { connect: menuIds.map(mid => ({ id: mid })) } } : {}),
       },
+      include: { applicableItems: { select: { id: true } } },
     });
   }
 
   async update(userId: number, id: number, dto: UpdatePromotionDto) {
     const promo = await this.findOne(id);
     await this.assertBranchOwner(userId, promo.branchId);
+
+    // menuIds is a relation, not a scalar column — pull it out of the spread
+    const { menuIds, startDate, endDate, ...rest } = dto;
+
+    let applicableItems: { set: { id: number }[] } | undefined;
+    if (menuIds !== undefined) {
+      await this.assertMenuIdsInBranch(promo.branchId, menuIds);
+      applicableItems = { set: menuIds.map(mid => ({ id: mid })) };   // replaces the whole set
+    }
+
     return this.prisma.promotion.update({
       where: { id },
       data: {
-        ...dto,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate:   dto.endDate   ? new Date(dto.endDate)   : undefined,
+        ...rest,
+        ...(startDate ? { startDate: new Date(startDate) } : {}),
+        ...(endDate   ? { endDate:   new Date(endDate) }   : {}),
+        ...(applicableItems ? { applicableItems } : {}),
       },
+      include: { applicableItems: { select: { id: true } } },
     });
   }
 
@@ -99,13 +139,19 @@ export class PromotionsService {
    */
   async validate(userId: number, dto: ValidatePromotionDto) {
     await this.assertBranchOwner(userId, dto.branchId);
-    return this.checkAndPrice(dto.branchId, dto.promotionId, dto.totalAmount, dto.customerId);
+    return this.checkAndPrice(dto.branchId, dto.promotionId, dto.totalAmount, dto.customerId, dto.items);
   }
 
   /** Same check, reached from the QR page — scoped by the table's QR code. */
-  async validateAtTable(qrCode: string, promotionId: number, totalAmount: number, customerId?: number) {
+  async validateAtTable(
+    qrCode: string,
+    promotionId: number,
+    totalAmount: number,
+    customerId?: number,
+    lineItems?: { menuItemId: number; lineTotal: number }[],
+  ) {
     const { branchId } = await this.tableAccess.resolve(qrCode);
-    return this.checkAndPrice(branchId, promotionId, totalAmount, customerId);
+    return this.checkAndPrice(branchId, promotionId, totalAmount, customerId, lineItems);
   }
 
   /**
@@ -118,9 +164,13 @@ export class PromotionsService {
     promotionId: number,
     totalAmount: number,
     customerId?: number,
+    /** Order line items (menuItemId + line total incl. options) — required to price
+     *  a SPECIFIC_ITEMS promotion; ignored for ENTIRE_ORDER promotions. */
+    lineItems?: { menuItemId: number; lineTotal: number }[],
   ) {
     const promo = await this.prisma.promotion.findFirst({
       where: { id: promotionId, branchId, isActive: true },
+      include: { applicableItems: { select: { id: true } } },
     });
     if (!promo) throw new NotFoundException('โปรโมชั่นนี้ไม่พบหรือถูกปิดใช้งานแล้ว');
 
@@ -151,12 +201,28 @@ export class PromotionsService {
         );
     }
 
+    // ── Discount base ──────────────────────────────────────────────────────
+    // ENTIRE_ORDER: discount the whole bill. SPECIFIC_ITEMS: discount only the
+    // sum of the applicable menu items' line totals present in this order.
+    let base = totalAmount;
+    if (promo.targetType === 'SPECIFIC_ITEMS') {
+      const applicableIds = new Set(promo.applicableItems.map(m => m.id));
+      base = (lineItems ?? [])
+        .filter(li => applicableIds.has(li.menuItemId))
+        .reduce((sum, li) => sum + li.lineTotal, 0);
+      if (base <= 0) {
+        throw new BadRequestException('ออเดอร์นี้ไม่มีเมนูที่เข้าร่วมโปรโมชั่น');
+      }
+    }
+
     let discountAmount = 0;
     if (promo.type === 'PERCENT')
-      discountAmount = (totalAmount * promo.value) / 100;
+      discountAmount = (base * promo.value) / 100;
     else
       discountAmount = promo.value;
 
+    // Cap to the applicable base, then never let it exceed the whole bill.
+    discountAmount = Math.min(discountAmount, base);
     discountAmount = Math.min(discountAmount, totalAmount);
 
     return {

@@ -5,11 +5,14 @@ import { Input } from '../../../components/ui/input';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '../../../components/ui/dialog';
-import { Loader2, Percent, BadgeDollarSign, Coins } from 'lucide-react';
+import { Loader2, Percent, BadgeDollarSign, Coins, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../../lib/utils';
 
-type PromotionType = 'PERCENT' | 'FIXED' | 'POINTS_REDEMPTION';
+type PromotionType   = 'PERCENT' | 'FIXED' | 'POINTS_REDEMPTION';
+type PromotionTarget = 'ENTIRE_ORDER' | 'SPECIFIC_ITEMS';
+
+interface MenuOption { id: number; name: string; categoryName?: string }
 
 interface Props {
   open: boolean;
@@ -45,6 +48,8 @@ const EMPTY = {
   code:         '',
   type:         'PERCENT' as PromotionType,
   value:        10,
+  targetType:   'ENTIRE_ORDER' as PromotionTarget,
+  menuIds:      [] as number[],
   minSpend:     0,
   pointsNeeded: 0,
   memberOnly:   false,
@@ -56,6 +61,7 @@ const EMPTY = {
 export default function PromotionBuilder({ open, onClose, editing, branchId, onSaved }: Props) {
   const [form, setForm]     = useState({ ...EMPTY });
   const [isSaving, setIsSaving] = useState(false);
+  const [menuItems, setMenuItems] = useState<MenuOption[]>([]);
 
   useEffect(() => {
     if (editing) {
@@ -64,6 +70,8 @@ export default function PromotionBuilder({ open, onClose, editing, branchId, onS
         code:         editing.code         ?? '',
         type:         editing.type         ?? 'PERCENT',
         value:        editing.value        ?? 0,
+        targetType:   editing.targetType   ?? 'ENTIRE_ORDER',
+        menuIds:      Array.isArray(editing.applicableItems) ? editing.applicableItems.map((m: any) => m.id) : [],
         minSpend:     editing.minSpend     ?? 0,
         pointsNeeded: editing.pointsNeeded ?? 0,
         memberOnly:   editing.memberOnly   ?? false,
@@ -76,6 +84,19 @@ export default function PromotionBuilder({ open, onClose, editing, branchId, onS
     }
   }, [editing, open]);
 
+  // Load this branch's menu items for the "specific items" picker
+  useEffect(() => {
+    if (!open) return;
+    api.get(`/branches/${branchId}/menu`)
+      .then((res) => {
+        const cats: any[] = res.data?.categories ?? [];
+        setMenuItems(
+          cats.flatMap((c) => (c.items ?? []).map((it: any) => ({ id: it.id, name: it.name, categoryName: c.name }))),
+        );
+      })
+      .catch(() => setMenuItems([]));
+  }, [open, branchId]);
+
   const set = (k: keyof typeof form, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
@@ -83,6 +104,8 @@ export default function PromotionBuilder({ open, onClose, editing, branchId, onS
     if (form.value <= 0) return toast.error('กรุณากรอกมูลค่าส่วนลด');
     if (form.type === 'PERCENT' && form.value > 100)
       return toast.error('ส่วนลดแบบ % ต้องไม่เกิน 100');
+    if (form.targetType === 'SPECIFIC_ITEMS' && form.menuIds.length === 0)
+      return toast.error('กรุณาเลือกเมนูอย่างน้อย 1 รายการ');
 
     setIsSaving(true);
     const payload = {
@@ -164,6 +187,83 @@ export default function PromotionBuilder({ open, onClose, editing, branchId, onS
               {TYPE_OPTIONS.find((t) => t.value === form.type)?.desc}
             </p>
           </div>
+
+          {/* ขอบเขตส่วนลด (ทั้งบิล / เฉพาะเมนู) */}
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-600">ใช้ส่วนลดกับ *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { value: 'ENTIRE_ORDER',   label: 'ทั้งบิล',      desc: 'ลดจากยอดรวมทั้งออเดอร์' },
+                { value: 'SPECIFIC_ITEMS', label: 'เฉพาะบางเมนู', desc: 'ลดเฉพาะเมนูที่เลือก' },
+              ] as const).map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => set('targetType', o.value)}
+                  className={cn(
+                    'flex flex-col items-start gap-0.5 p-3 rounded-xl border-2 text-left transition-all',
+                    form.targetType === o.value ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-slate-200',
+                  )}
+                >
+                  <span className={cn('text-sm font-bold', form.targetType === o.value ? 'text-primary' : 'text-slate-600')}>
+                    {o.label}
+                  </span>
+                  <span className="text-[11px] text-slate-400 leading-tight">{o.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* เลือกเมนูที่เข้าร่วม (เฉพาะ SPECIFIC_ITEMS) */}
+          {form.targetType === 'SPECIFIC_ITEMS' && (
+            <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-bold text-slate-600">
+                  เลือกเมนูที่เข้าร่วม ({form.menuIds.length})
+                </label>
+                {menuItems.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs font-bold text-primary"
+                    onClick={() => set('menuIds', form.menuIds.length === menuItems.length ? [] : menuItems.map((m) => m.id))}
+                  >
+                    {form.menuIds.length === menuItems.length ? 'ล้างทั้งหมด' : 'เลือกทั้งหมด'}
+                  </button>
+                )}
+              </div>
+              {menuItems.length === 0 ? (
+                <p className="text-xs text-slate-400 py-2">ยังไม่มีเมนูในสาขานี้</p>
+              ) : (
+                <div className="max-h-52 overflow-y-auto space-y-1 pr-1">
+                  {menuItems.map((m) => {
+                    const checked = form.menuIds.includes(m.id);
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => set('menuIds', checked
+                          ? form.menuIds.filter((id) => id !== m.id)
+                          : [...form.menuIds, m.id])}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 p-2 rounded-lg text-left transition-colors',
+                          checked ? 'bg-primary/10' : 'hover:bg-white',
+                        )}
+                      >
+                        <span className={cn(
+                          'w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
+                          checked ? 'bg-primary border-primary text-white' : 'border-slate-300',
+                        )}>
+                          {checked && <Check className="w-3 h-3" />}
+                        </span>
+                        <span className="text-sm font-medium text-slate-700 flex-1 truncate">{m.name}</span>
+                        {m.categoryName && <span className="text-[10px] text-slate-400 shrink-0">{m.categoryName}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* มูลค่า */}
           <div className="grid grid-cols-2 gap-3">

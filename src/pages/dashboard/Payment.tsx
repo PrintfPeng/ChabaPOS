@@ -64,11 +64,14 @@ interface PaidOrder {
 function CustomerPromoPanel({
   branchId,
   grossTotal,
+  items,
   onCustomerChange,
   onDiscountChange,
 }: {
   branchId: string;
   grossTotal: number;
+  /** Bill line items — lets a SPECIFIC_ITEMS promo be priced on the applicable lines */
+  items: { menuItemId: number; lineTotal: number }[];
   onCustomerChange: (c: CustomerInfo | null) => void;
   onDiscountChange: (discount: number, promotionId: number | null) => void;
 }) {
@@ -149,6 +152,7 @@ function CustomerPromoPanel({
         branchId:    Number(branchId),
         totalAmount: grossTotal,
         customerId:  customer?.id,
+        items,
       });
       setSelectedPromo(promo);
       setDiscount(res.data.discountAmount);
@@ -999,6 +1003,12 @@ export default function Payment() {
                     <CustomerPromoPanel
                       branchId={branchId!}
                       grossTotal={selectedBill.totalAmount}
+                      items={(selectedBill.orders as any[]).flatMap((o: any) =>
+                        (o.items as any[]).map((it: any) => ({
+                          menuItemId: it.menuItemId,
+                          lineTotal:  (it.price + (Array.isArray(it.options) ? it.options.reduce((s: number, op: any) => s + op.price, 0) : 0)) * it.quantity,
+                        })),
+                      )}
                       onCustomerChange={setMemberInfo}
                       onDiscountChange={(d, pid) => { setDiscountAmount(d); setActivePromoId(pid); }}
                     />

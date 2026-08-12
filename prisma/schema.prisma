@@ -134,6 +134,7 @@ model MenuItem {
   optionGroups        OptionGroup[]
   orderItems          OrderItem[]
   deliveryPrices      MenuDeliveryPrice[]
+  promotions          Promotion[]         @relation("PromotionItems")
   isDeliveryAvailable Boolean             @default(true)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
@@ -237,6 +238,12 @@ enum PromotionType {
   PERCENT
   FIXED
   POINTS_REDEMPTION
+}
+
+// Whether a promotion discounts the whole bill or only specific menu items.
+enum PromotionTarget {
+  ENTIRE_ORDER
+  SPECIFIC_ITEMS
 }
 
 model Order {
@@ -480,6 +487,7 @@ model Promotion {
   code         String?
   type         PromotionType
   value        Float
+  targetType   PromotionTarget     @default(ENTIRE_ORDER)
   minSpend     Float               @default(0)
   pointsNeeded Int                 @default(0)
   memberOnly   Boolean             @default(false)
@@ -488,6 +496,8 @@ model Promotion {
   endDate      DateTime?
   branchId     Int
   branch       Branch              @relation(fields: [branchId], references: [id])
+  // Only used when targetType = SPECIFIC_ITEMS — the menu items the discount applies to
+  applicableItems MenuItem[]       @relation("PromotionItems")
   orders       Order[]
   redemptions  RedemptionHistory[]
   createdAt    DateTime            @default(now())

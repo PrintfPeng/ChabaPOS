@@ -1,12 +1,28 @@
 import {
   IsString, IsNumber, IsBoolean, IsOptional,
-  IsEnum, Min, IsDateString,
+  IsEnum, Min, IsDateString, IsArray, IsInt, ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum PromotionType {
   PERCENT = 'PERCENT',
   FIXED = 'FIXED',
   POINTS_REDEMPTION = 'POINTS_REDEMPTION',
+}
+
+export enum PromotionTarget {
+  ENTIRE_ORDER = 'ENTIRE_ORDER',
+  SPECIFIC_ITEMS = 'SPECIFIC_ITEMS',
+}
+
+/** One order line for pricing a SPECIFIC_ITEMS promotion (server recomputes the base). */
+export class PromoLineItemDto {
+  @IsInt()
+  menuItemId: number;
+
+  @IsNumber()
+  @Min(0)
+  lineTotal: number;
 }
 
 export class CreatePromotionDto {
@@ -23,6 +39,16 @@ export class CreatePromotionDto {
   @IsNumber()
   @Min(0)
   value: number;
+
+  @IsEnum(PromotionTarget)
+  @IsOptional()
+  targetType?: PromotionTarget;
+
+  /** Menu item ids the discount applies to — required when targetType = SPECIFIC_ITEMS */
+  @IsArray()
+  @IsInt({ each: true })
+  @IsOptional()
+  menuIds?: number[];
 
   @IsNumber()
   @Min(0)
@@ -72,6 +98,16 @@ export class UpdatePromotionDto {
   @IsOptional()
   value?: number;
 
+  @IsEnum(PromotionTarget)
+  @IsOptional()
+  targetType?: PromotionTarget;
+
+  /** When provided, replaces the promotion's applicable menu items entirely */
+  @IsArray()
+  @IsInt({ each: true })
+  @IsOptional()
+  menuIds?: number[];
+
   @IsNumber()
   @Min(0)
   @IsOptional()
@@ -114,6 +150,13 @@ export class ValidatePromotionDto {
   @IsNumber()
   @IsOptional()
   customerId?: number;
+
+  /** Cart line items — needed to price a SPECIFIC_ITEMS promotion correctly */
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PromoLineItemDto)
+  @IsOptional()
+  items?: PromoLineItemDto[];
 }
 
 /**
@@ -134,4 +177,11 @@ export class ValidateAtTableDto {
   @IsNumber()
   @IsOptional()
   customerId?: number;
+
+  /** Cart line items — needed to price a SPECIFIC_ITEMS promotion correctly */
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PromoLineItemDto)
+  @IsOptional()
+  items?: PromoLineItemDto[];
 }

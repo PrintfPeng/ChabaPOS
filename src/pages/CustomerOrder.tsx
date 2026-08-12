@@ -28,6 +28,30 @@ interface MenuItem {
 }
 interface Category { id: number; name: string; items: MenuItem[] }
 
+// ─────────────────────────────────────────────
+// Item-specific promo helper — returns the discounted unit price for a menu
+// item if a non-member, currently-active SPECIFIC_ITEMS promo applies to it.
+// (Display hint only; the actual charge is priced server-side at checkout.)
+// ─────────────────────────────────────────────
+function itemDiscount(item: MenuItem, promos: PromoInfo[]): { discountedPrice: number; label: string } | null {
+  const now = Date.now();
+  for (const p of promos) {
+    if (p.targetType !== 'SPECIFIC_ITEMS') continue;
+    if (p.memberOnly) continue;                 // members get it in-cart, not as an auto price cut
+    if (p.type === 'POINTS_REDEMPTION') continue;
+    if (p.startDate && now < new Date(p.startDate).getTime()) continue;
+    if (p.endDate   && now > new Date(p.endDate).getTime())   continue;
+    if (!p.applicableItems?.some(a => a.id === item.id)) continue;
+
+    const disc = p.type === 'PERCENT' ? (item.price * p.value) / 100 : Math.min(p.value, item.price);
+    return {
+      discountedPrice: Math.max(0, Math.round((item.price - disc) * 100) / 100),
+      label:           p.type === 'PERCENT' ? `-${p.value}%` : `-฿${p.value.toLocaleString()}`,
+    };
+  }
+  return null;
+}
+
 const PROMO_GRADIENTS = [
   'from-orange-500 via-red-500 to-rose-600',
   'from-violet-600 via-purple-500 to-pink-500',
@@ -121,8 +145,9 @@ function PromoBanner({ promotions }: { promotions: PromoInfo[] }) {
 // ─────────────────────────────────────────────
 // Food Card — same style as CounterService
 // ─────────────────────────────────────────────
-function FoodCard({ item, cartCount, onClick }: {
+function FoodCard({ item, cartCount, onClick, discount }: {
   item: MenuItem; cartCount: number; onClick: () => void;
+  discount?: { discountedPrice: number; label: string } | null;
 }) {
   return (
     <Card
@@ -143,11 +168,29 @@ function FoodCard({ item, cartCount, onClick }: {
               <UtensilsCrossed className="w-8 h-8 text-slate-300" />
             </div>
           )}
-          <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10">
-            <Badge className="bg-white/95 text-primary border-none font-black shadow-sm text-[10px] sm:text-xs">
-              ฿{item.price.toLocaleString()}
-            </Badge>
+          <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 flex flex-col items-end gap-0.5">
+            {discount ? (
+              <>
+                <Badge className="bg-primary text-white border-none font-black shadow-sm text-[10px] sm:text-xs">
+                  ฿{discount.discountedPrice.toLocaleString()}
+                </Badge>
+                <span className="text-[9px] font-bold text-white bg-black/45 px-1 rounded line-through leading-tight">
+                  ฿{item.price.toLocaleString()}
+                </span>
+              </>
+            ) : (
+              <Badge className="bg-white/95 text-primary border-none font-black shadow-sm text-[10px] sm:text-xs">
+                ฿{item.price.toLocaleString()}
+              </Badge>
+            )}
           </div>
+          {discount && (
+            <div className="absolute bottom-1.5 left-1.5 sm:bottom-2 sm:left-2 z-10">
+              <Badge className="bg-red-500 text-white border-none font-black shadow-sm text-[9px] sm:text-[10px]">
+                {discount.label}
+              </Badge>
+            </div>
+          )}
           {cartCount > 0 && (
             <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-10 w-5 h-5 bg-primary text-white text-[9px] font-black rounded-full flex items-center justify-center shadow">
               {cartCount}
@@ -610,6 +653,7 @@ export default function CustomerOrder() {
                     item={item}
                     cartCount={inCart}
                     onClick={() => handleSelectItem(item)}
+                    discount={itemDiscount(item, promotions)}
                   />
                 );
               })}

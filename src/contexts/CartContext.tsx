@@ -44,6 +44,11 @@ export interface PromoInfo {
   minSpend: number;
   pointsNeeded: number;
   memberOnly: boolean;
+  // Item-specific promotions (returned by /promotions/at-table)
+  targetType?: 'ENTIRE_ORDER' | 'SPECIFIC_ITEMS';
+  applicableItems?: { id: number }[];
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 // ─────────────────────────────────────────────
@@ -147,11 +152,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
       try {
         // Branch is derived from the scanned table, not sent from here.
+        // items → lets the server price a SPECIFIC_ITEMS promo on the applicable lines only.
         const res = await api.post('/promotions/validate-at-table', {
           qrCode,
           promotionId: promo.id,
           totalAmount: subtotal,
           customerId:  customer?.id,
+          items: cart.map(i => ({
+            menuItemId: i.menuItemId,
+            lineTotal:  (i.price + i.options.reduce((s, o) => s + o.price, 0)) * i.quantity,
+          })),
         });
         setAppliedPromotion(promo);
         setDiscountAmount(res.data.discountAmount);
@@ -160,7 +170,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
     },
-    [appliedPromotion?.id, subtotal, customer?.id],
+    [appliedPromotion?.id, subtotal, customer?.id, cart],
   );
 
   const clearPromotion = () => {

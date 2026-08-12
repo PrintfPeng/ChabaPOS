@@ -474,6 +474,10 @@ export default function CounterService() {
         branchId:    Number(branchId),
         totalAmount,
         customerId:  member?.id,
+        items: cart.map((i: any) => ({
+          menuItemId: i.menuItemId,
+          lineTotal:  (i.price + i.options.reduce((s: number, o: any) => s + o.price, 0)) * i.quantity,
+        })),
       });
       setSelectedPromo(promo);
       setDiscountAmount(res.data.discountAmount);

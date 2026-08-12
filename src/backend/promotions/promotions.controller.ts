@@ -26,7 +26,7 @@ export class PromotionsController {
   @HttpCode(HttpStatus.OK) // a price check, not a creation
   validateAtTable(@Body(validateBody(ValidateAtTableDto)) dto: ValidateAtTableDto) {
     return this.promotionsService.validateAtTable(
-      dto.qrCode, dto.promotionId, dto.totalAmount, dto.customerId,
+      dto.qrCode, dto.promotionId, dto.totalAmount, dto.customerId, dto.items,
     );
   }
 

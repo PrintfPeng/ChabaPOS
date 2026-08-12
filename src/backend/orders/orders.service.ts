@@ -65,6 +65,9 @@ export class OrdersService {
 
     let totalAmount = 0;
     const orderItemsData: any[] = [];
+    // Per-line totals (incl. options) keyed by menuItemId — used to price
+    // SPECIFIC_ITEMS promotions server-side.
+    const lineItems: { menuItemId: number; lineTotal: number }[] = [];
 
     for (const itemDto of items) {
       const menuItem = menuMap.get(itemDto.menuItemId);
@@ -84,7 +87,9 @@ export class OrdersService {
         }
       }
 
-      totalAmount += itemPrice * itemDto.quantity;
+      const lineTotal = itemPrice * itemDto.quantity;
+      totalAmount += lineTotal;
+      lineItems.push({ menuItemId: menuItem.id, lineTotal });
       orderItemsData.push({
         menuItemId: menuItem.id,
         name:       menuItem.name,
@@ -96,7 +101,7 @@ export class OrdersService {
       });
     }
 
-    return { totalAmount, orderItemsData };
+    return { totalAmount, orderItemsData, lineItems };
   }
 
   // ─── Staff order ───────────────────────────────────────────────────────────
@@ -114,7 +119,7 @@ export class OrdersService {
     if (dto.promotionId) {
       // A4-5: server re-validates — client cannot inflate the discount
       const promoResult = await this.promotions.checkAndPrice(
-        dto.branchId, dto.promotionId, pricing.totalAmount, dto.customerId,
+        dto.branchId, dto.promotionId, pricing.totalAmount, dto.customerId, pricing.lineItems,
       );
       authorizedDiscount = promoResult.discountAmount;
     } else {
@@ -154,7 +159,7 @@ export class OrdersService {
     let discountAmount = 0;
     if (dto.promotionId) {
       const priced = await this.promotions.checkAndPrice(
-        branchId, dto.promotionId, pricing.totalAmount, customerId,
+        branchId, dto.promotionId, pricing.totalAmount, customerId, pricing.lineItems,
       );
       discountAmount = priced.discountAmount;
     }
@@ -530,10 +535,20 @@ export class OrdersService {
         tableId: tableId === 0 ? null : tableId,
         status:  { notIn: ['PAID', 'CANCELLED'] },
       },
-      select: { id: true, totalAmount: true, customerId: true },
+      select: {
+        id: true, totalAmount: true, customerId: true,
+        // items → line totals so a SPECIFIC_ITEMS promo can be priced correctly here too
+        items: { select: { menuItemId: true, price: true, quantity: true, options: { select: { price: true } } } },
+      },
     });
 
     const grossTotalEstimate = unpaidPrecheck.reduce((s, o) => s + o.totalAmount, 0);
+    const promoLineItems = unpaidPrecheck.flatMap(o =>
+      o.items.map(it => ({
+        menuItemId: it.menuItemId,
+        lineTotal:  (it.price + it.options.reduce((s, op) => s + op.price, 0)) * it.quantity,
+      })),
+    );
     const customerId = opts?.customerId
       ?? unpaidPrecheck.find(o => o.customerId)?.customerId
       ?? undefined;
@@ -552,7 +567,7 @@ export class OrdersService {
     let authorizedDiscount = 0;
     if (opts?.promotionId) {
       const promoResult = await this.promotions.checkAndPrice(
-        branchId, opts.promotionId, grossTotalEstimate, customerId,
+        branchId, opts.promotionId, grossTotalEstimate, customerId, promoLineItems,
       );
       authorizedDiscount = promoResult.discountAmount;
     } else {
