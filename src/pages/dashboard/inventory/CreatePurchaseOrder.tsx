@@ -7,6 +7,7 @@ import {
   SelectTrigger, SelectValue,
 } from '../../../components/ui/select';
 import { ScrollArea } from '../../../components/ui/scroll-area';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../../components/ui/sheet';
 import { Plus, Minus, Trash2, ShoppingCart, Loader2, ArrowRight, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,6 +31,7 @@ export default function CreatePurchaseOrder() {
   const [selectedSupplier,  setSelectedSupplier]  = useState('');
   const [selectedCategory,  setSelectedCategory]  = useState<number | null>(null);
   const [cart,               setCart]              = useState<CartItem[]>([]);
+  const [isCartOpen,         setIsCartOpen]        = useState(false);   // mobile cart sheet
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => { if (branchId) fetchData(); }, [branchId]);
@@ -171,7 +173,7 @@ export default function CreatePurchaseOrder() {
         </div>
 
         {/* ── Materials grid ──────────────────────────────────────────────── */}
-        <ScrollArea className="flex-1 p-4 bg-slate-50">
+        <ScrollArea className="flex-1 p-4 pb-24 lg:pb-4 bg-slate-50">
           {!filteredMaterials.length ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-400">
               <Tag className="w-10 h-10 mb-3 opacity-20" />
@@ -223,120 +225,214 @@ export default function CreatePurchaseOrder() {
         </ScrollArea>
       </div>
 
-      {/* ══════════════════════ RIGHT: Cart panel ═════════════════════════ */}
-      <div className="w-full lg:w-[380px] xl:w-[420px] shrink-0 bg-white rounded-2xl shadow-sm
-                       border border-slate-200 flex flex-col overflow-hidden min-h-0">
+      {/* ══════════════ RIGHT: Cart panel (desktop sidebar only) ═══════════ */}
+      <div className="hidden lg:flex w-[380px] xl:w-[420px] shrink-0 bg-white rounded-2xl shadow-sm
+                       border border-slate-200 flex-col overflow-hidden min-h-0">
+        <CartPanel
+          suppliers={suppliers}
+          selectedSupplier={selectedSupplier}
+          setSelectedSupplier={setSelectedSupplier}
+          cart={cart}
+          updateQuantity={updateQuantity}
+          removeFromCart={removeFromCart}
+          totalItems={totalItems}
+          isSubmitting={isSubmitting}
+          handleSubmit={handleSubmit}
+        />
+      </div>
 
-        {/* Cart header */}
-        <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
-          <h2 className="font-bold">รายการที่เลือก</h2>
+      {/* ══════════════ Mobile: floating cart button (opens sheet) ═════════ */}
+      <div className="lg:hidden fixed bottom-4 inset-x-4 z-40">
+        <button
+          onClick={() => setIsCartOpen(true)}
+          className="w-full h-14 rounded-2xl bg-primary text-white shadow-2xl shadow-primary/30
+                     flex items-center justify-between px-5 active:scale-[0.99] transition-transform"
+        >
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <ShoppingCart className="w-5 h-5" />
+              {totalItems > 0 && (
+                <span className="absolute -top-2 -right-2 bg-white text-primary text-[10px] font-black
+                                 w-5 h-5 rounded-full flex items-center justify-center border-2 border-primary">
+                  {totalItems}
+                </span>
+              )}
+            </div>
+            <span className="font-bold text-sm">รายการที่เลือก ({cart.length})</span>
+          </div>
+          <span className="font-black text-sm">ดูรายการ</span>
+        </button>
+      </div>
+
+      {/* ══════════════ Mobile: cart bottom sheet ══════════════════════════ */}
+      <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="rounded-t-3xl h-[88vh] max-h-[88vh] flex flex-col p-0 gap-0 border-0 lg:hidden"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>รายการที่เลือก</SheetTitle>
+          </SheetHeader>
+          <CartPanel
+            suppliers={suppliers}
+            selectedSupplier={selectedSupplier}
+            setSelectedSupplier={setSelectedSupplier}
+            cart={cart}
+            updateQuantity={updateQuantity}
+            removeFromCart={removeFromCart}
+            totalItems={totalItems}
+            isSubmitting={isSubmitting}
+            handleSubmit={handleSubmit}
+            onClose={() => setIsCartOpen(false)}
+          />
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+// ─── Cart panel — shared by desktop sidebar & mobile bottom sheet ──────────────
+interface CartPanelProps {
+  suppliers:           Supplier[];
+  selectedSupplier:    string;
+  setSelectedSupplier: (v: string) => void;
+  cart:                CartItem[];
+  updateQuantity:      (id: number, delta: number) => void;
+  removeFromCart:      (id: number) => void;
+  totalItems:          number;
+  isSubmitting:        boolean;
+  handleSubmit:        () => void;
+  /** Mobile only — renders a close control in the header when provided. */
+  onClose?:            () => void;
+}
+
+function CartPanel({
+  suppliers, selectedSupplier, setSelectedSupplier, cart,
+  updateQuantity, removeFromCart, totalItems, isSubmitting, handleSubmit, onClose,
+}: CartPanelProps) {
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Cart header */}
+      <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+        <h2 className="font-bold">รายการที่เลือก</h2>
+        <div className="flex items-center gap-2">
           <span className="bg-white/20 px-2.5 py-1 rounded-lg text-xs font-bold">
             {cart.length} รายการ
           </span>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="lg:hidden w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              aria-label="ปิด"
+            >
+              <ArrowRight className="w-4 h-4 rotate-90" />
+            </button>
+          )}
         </div>
+      </div>
 
-        {/* Supplier selector */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50 shrink-0 space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-slate-500">ร้านค้า (Supplier)</label>
-          <Select
-            value={selectedSupplier !== '' ? selectedSupplier : undefined}
-            onValueChange={setSelectedSupplier}
-          >
-            <SelectTrigger className="h-11 rounded-xl bg-white border-slate-200">
-              <SelectValue placeholder="เลือกร้านค้า...">
-                {selectedSupplier !== ''
-                  ? (suppliers.find(s => s.id.toString() === selectedSupplier)?.name ?? null)
-                  : null}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {suppliers.map(s => (
-                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Supplier selector */}
+      <div className="p-4 border-b border-slate-100 bg-slate-50 shrink-0 space-y-2">
+        <label className="text-xs font-bold uppercase tracking-widest text-slate-500">ร้านค้า (Supplier)</label>
+        <Select
+          value={selectedSupplier !== '' ? selectedSupplier : undefined}
+          onValueChange={setSelectedSupplier}
+        >
+          <SelectTrigger className="h-11 rounded-xl bg-white border-slate-200">
+            <SelectValue placeholder="เลือกร้านค้า...">
+              {selectedSupplier !== ''
+                ? (suppliers.find(s => s.id.toString() === selectedSupplier)?.name ?? null)
+                : null}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {suppliers.map(s => (
+              <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-        {/* Cart items */}
-        <ScrollArea className="flex-1 p-4">
-          {!cart.length ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-              <ShoppingCart className="w-12 h-12 mb-4 opacity-20" />
-              <p className="font-semibold">ยังไม่มีรายการวัตถุดิบ</p>
-              <p className="text-xs mt-1">คลิกที่วัตถุดิบด้านซ้ายเพื่อเพิ่ม</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {cart.map(item => (
-                <div
-                  key={item.rawMaterialId}
-                  className="p-3 border border-slate-100 rounded-xl bg-white shadow-sm"
-                >
-                  {/* Item name + remove */}
-                  <div className="flex justify-between items-start gap-2 mb-3">
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-800 leading-snug">{item.name}</h4>
-                      <span className="text-xs text-slate-400 font-medium">{item.unit}</span>
-                    </div>
+      {/* Cart items */}
+      <ScrollArea className="flex-1 p-4">
+        {!cart.length ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <ShoppingCart className="w-12 h-12 mb-4 opacity-20" />
+            <p className="font-semibold">ยังไม่มีรายการวัตถุดิบ</p>
+            <p className="text-xs mt-1">คลิกที่วัตถุดิบเพื่อเพิ่ม</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {cart.map(item => (
+              <div
+                key={item.rawMaterialId}
+                className="p-3 border border-slate-100 rounded-xl bg-white shadow-sm"
+              >
+                {/* Item name + remove */}
+                <div className="flex justify-between items-start gap-2 mb-3">
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-800 leading-snug">{item.name}</h4>
+                    <span className="text-xs text-slate-400 font-medium">{item.unit}</span>
+                  </div>
+                  <button
+                    onClick={() => removeFromCart(item.rawMaterialId)}
+                    className="text-slate-300 hover:text-red-500 transition-colors shrink-0 mt-0.5"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Quantity stepper */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-bold">จำนวน</span>
+                  <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-100">
                     <button
-                      onClick={() => removeFromCart(item.rawMaterialId)}
-                      className="text-slate-300 hover:text-red-500 transition-colors shrink-0 mt-0.5"
+                      onClick={() => updateQuantity(item.rawMaterialId, -1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm
+                                 text-slate-600 hover:text-primary transition-colors"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="w-10 text-center font-black text-sm text-slate-800">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => updateQuantity(item.rawMaterialId, 1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm
+                                 text-slate-600 hover:text-primary transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
                     </button>
                   </div>
-
-                  {/* Quantity stepper */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500 font-bold">จำนวน</span>
-                    <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-100">
-                      <button
-                        onClick={() => updateQuantity(item.rawMaterialId, -1)}
-                        className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm
-                                   text-slate-600 hover:text-primary transition-colors"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="w-10 text-center font-black text-sm text-slate-800">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateQuantity(item.rawMaterialId, 1)}
-                        className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm
-                                   text-slate-600 hover:text-primary transition-colors"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-
-        {/* Footer / submit */}
-        <div className="p-4 bg-white border-t border-slate-100 shrink-0 space-y-3">
-          {/* Summary */}
-          <div className="flex justify-between items-center text-sm px-1">
-            <span className="text-slate-500 font-semibold">รวม</span>
-            <div className="text-right">
-              <p className="font-black text-2xl text-slate-900 leading-none">{totalItems}</p>
-              <p className="text-xs text-slate-400">หน่วยทั้งหมด</p>
-            </div>
+              </div>
+            ))}
           </div>
+        )}
+      </ScrollArea>
 
-          <Button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !cart.length}
-            className="w-full h-13 rounded-xl text-base font-bold bg-primary hover:bg-primary/90 gap-2"
-          >
-            {isSubmitting
-              ? <Loader2 className="w-5 h-5 animate-spin" />
-              : <>ยืนยันการสั่งซื้อ <ArrowRight className="w-5 h-5" /></>
-            }
-          </Button>
+      {/* Footer / submit */}
+      <div className="p-4 bg-white border-t border-slate-100 shrink-0 space-y-3">
+        {/* Summary */}
+        <div className="flex justify-between items-center text-sm px-1">
+          <span className="text-slate-500 font-semibold">รวม</span>
+          <div className="text-right">
+            <p className="font-black text-2xl text-slate-900 leading-none">{totalItems}</p>
+            <p className="text-xs text-slate-400">หน่วยทั้งหมด</p>
+          </div>
         </div>
+
+        <Button
+          onClick={handleSubmit}
+          disabled={isSubmitting || !cart.length}
+          className="w-full h-13 rounded-xl text-base font-bold bg-primary hover:bg-primary/90 gap-2"
+        >
+          {isSubmitting
+            ? <Loader2 className="w-5 h-5 animate-spin" />
+            : <>ยืนยันการสั่งซื้อ <ArrowRight className="w-5 h-5" /></>
+          }
+        </Button>
       </div>
     </div>
   );
