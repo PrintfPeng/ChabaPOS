@@ -10,6 +10,15 @@ export interface Branch {
   /** Staff PIN for the branch. Write-only from the UI; `null` clears it. */
   pin?: string | null;
   rewardPointRate?: number;
+  // Contact / location — returned by GET /branches/:id (findOne)
+  address?: string | null;
+  phone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  // Scan-to-pay account — "PromptPay" or a bank, its number, and holder name
+  bankType?: string | null;
+  bankAccountNo?: string | null;
+  bankAccountName?: string | null;
   brand?: {
     id: number;
     name: string;

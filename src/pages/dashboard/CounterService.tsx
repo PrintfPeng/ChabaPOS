@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { usePrinter } from '../../context/PrinterContext';
 import { useShift } from '../../contexts/ShiftContext';
+import { useBranch } from '../../hooks/useBranches';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import {
@@ -335,6 +336,7 @@ export default function CounterService() {
   const navigate = useNavigate();
   const { status: printerStatus, printReceipt, printKitchenSlip } = usePrinter();
   const { currentShift } = useShift();
+  const { branch } = useBranch(Number(branchId));   // full row incl. qrCodeUrl + bank account
   const isShiftOpen = currentShift?.status === 'OPEN';
 
   // ── Menu & table data ──
@@ -1057,13 +1059,54 @@ export default function CounterService() {
                   )}
 
                   {paymentMode === 'TRANSFER' && (
-                    <div className="flex flex-row items-center justify-center gap-3 p-3 bg-white rounded-xl border border-dashed border-slate-200 animate-in zoom-in-95">
-                      <div className="p-2 bg-slate-50 rounded-lg">
-                        <QrCode className="w-6 h-6 text-primary opacity-50" />
-                      </div>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                        สแกน QR บนใบแจ้งหนี้<br />หรือแสดง QR ประจำสาขา
-                      </p>
+                    <div className="flex flex-col items-center justify-center gap-3 p-4 bg-white rounded-xl border border-dashed border-slate-200 animate-in zoom-in-95">
+                      {branch?.qrCodeUrl ? (
+                        <div className="relative w-40 h-40 sm:w-48 sm:h-48 bg-white rounded-2xl p-3 shadow-md overflow-hidden">
+                          <img
+                            src={branch.qrCodeUrl}
+                            alt="QR พร้อมเพย์"
+                            className="absolute inset-2 w-[calc(100%-16px)] h-[calc(100%-16px)] object-contain"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 py-4 text-center">
+                          <div className="p-3 bg-slate-50 rounded-xl">
+                            <QrCode className="w-8 h-8 text-slate-300" />
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-400">
+                            ยังไม่ได้ตั้งค่า QR สแกนจ่าย<br />ไปที่ตั้งค่าสาขาเพื่อเพิ่ม QR พร้อมเพย์
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Bank / PromptPay account details */}
+                      {(branch?.bankType || branch?.bankAccountNo || branch?.bankAccountName) && (
+                        <div className="w-full space-y-1 pt-1">
+                          {branch?.bankType && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-400 font-medium">ธนาคาร / ประเภท</span>
+                              <span className="font-bold text-slate-700">{branch.bankType}</span>
+                            </div>
+                          )}
+                          {branch?.bankAccountNo && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-400 font-medium">เลขบัญชี / พร้อมเพย์</span>
+                              <span className="font-bold text-slate-700 tabular-nums">{branch.bankAccountNo}</span>
+                            </div>
+                          )}
+                          {branch?.bankAccountName && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-400 font-medium">ชื่อบัญชี</span>
+                              <span className="font-bold text-slate-700">{branch.bankAccountName}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <Badge variant="secondary" className="text-[9px] text-slate-400 font-black uppercase tracking-widest px-3 py-1 bg-slate-50 rounded-full border-none">
+                        สแกนเพื่อชำระเงิน
+                      </Badge>
                     </div>
                   )}
                 </div>
